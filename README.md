@@ -12,16 +12,34 @@ in a fresh git worktree, then opens a PR via `gh`.
 task-orchestrator/
 ├── bin/
 │   ├── task-run            # one-shot dispatch: worktree + agents + PR
+│   ├── task-dispatch       # solidb-driven dispatcher (live-query loop)
 │   ├── task-watch          # inotify daemon, one per repo
-│   ├── task-queue          # convenience: mv tasks/todo/X.md → tasks/queued/
+│   ├── task-queue          # convenience: flips tasks/todo/X.md → queued
 │   ├── task-dashboard      # cross-repo status (CLI table)
-│   └── install-watcher     # registers + starts the systemd-user unit
+│   ├── ingest-todos        # backfills filesystem todos into solidb
+│   ├── install-watcher     # registers + starts the systemd-user unit
+│   └── install-skills      # syncs the `/do-task` + `/review-task` skills
 ├── systemd/user/
 │   └── task-watch@.service # template unit (instance = path-encoded repo)
-├── app/                    # Soli web UI (paused; see "Status" below)
+├── app/                    # Soli web UI — kanban, task editor, run viewer
+│   ├── controllers/        # home, projects, tasks, runs, debug
+│   ├── helpers/            # view + run-state helpers
+│   ├── middleware/
+│   ├── models/             # Task < Model (solidb-backed)
+│   └── views/              # ERB-style .html.slv templates
 ├── config/
+│   ├── application.sl      # boot-time framework toggles
+│   └── routes.sl           # / · /projects/:name · /docs · …
+├── db/
+│   └── migrations/         # solidb migrations
+├── tests/                  # *_spec.sl, run with `soli test`
+├── public/                 # compiled CSS/JS
 └── README.md               # this file
 ```
+
+> Browsing the app live? Run `soli serve . --dev` and open
+> [`/docs`](http://localhost:5011/docs) for a rendered Getting Started
+> tour of the same material.
 
 ## How a task flows
 
@@ -46,9 +64,11 @@ task-orchestrator/
                                 └─────► state log ◄┘
 ```
 
-The web UI (planned) lets you do the `mv` and edit task md content from a
-browser. Until BUG-001 is resolved (see Status), use `bin/task-queue` or a
-plain `mv` from the shell.
+The web UI is the recommended way to drive this loop: open a project's
+kanban, draft or edit a task spec, and click `Queue → agent` to flip the
+row to `queued` (HTMX swaps the kanban in place). The CLI flow with
+`bin/task-queue` and a plain `mv` keeps working for keybindings and
+scripts.
 
 ## Setup
 
@@ -112,12 +132,19 @@ Environment variables read by the scripts:
 
 ## Status
 
-**Web UI is paused.** The Soli serve loader rejects multi-statement bodies in
-the new `soli new` scaffold despite the same files parsing cleanly via
-`soli <file.sl>`. Filed as `lang/tasks/todo/BUG-001-serve-loader-parse-error.md`
-with a minimal reproducer. Resume `app/controllers/*` + `app/views/*` once
-that lands.
+**Web UI is live.** The Soli MVC scaffold under `app/` runs end-to-end
+under `soli serve . --dev`: the home page lists every project under
+`TASK_ORCH_ROOT`, each project has a five-column kanban (`todo / queued
+/ in-progress / review / done`), tasks are editable as markdown, and
+the run viewer streams the dispatcher's log fragment via HTMX polling.
+The historical `BUG-001-serve-loader-parse-error.md` blocker is no
+longer relevant.
 
-**Working today:** `bin/task-run`, `bin/task-watch`, `bin/task-queue`,
-`bin/task-dashboard`, and the systemd unit. The full dispatch loop functions
-end-to-end from CLI; the web UI is the only piece blocked.
+**Working today:** `bin/task-run`, `bin/task-dispatch`, `bin/task-watch`,
+`bin/task-queue`, `bin/task-dashboard`, the systemd-user unit, and the
+full Soli web UI under `app/`. The dispatch loop runs end-to-end from
+either the browser (preferred) or the CLI.
+
+**In-app docs.** Run `soli serve . --dev` and open
+[`/docs`](http://localhost:5011/docs) for a rendered Getting Started
+tour of this README aimed at first-time users landing on the app.

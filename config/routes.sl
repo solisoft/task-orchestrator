@@ -2,6 +2,7 @@
 
 get("/", "home#index")
 get("/health", "home#health")
+get("/docs", "docs#index")
 
 # Settings — global config (active agent + per-agent run caps)
 get("/settings", "settings#show")
