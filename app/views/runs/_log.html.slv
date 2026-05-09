@@ -47,23 +47,28 @@
       <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in tail.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
     <% end %>
   </div>
+
+  <!-- Inside #run-panel so the outerHTML swap re-executes the script
+       on every poll. (When this lived outside the panel, htmx ran it
+       once on initial render, then never again — leaving every
+       post-swap #run-log stuck with the `invisible` class.) -->
+  <script>
+  (function () {
+    var el = document.getElementById('run-log');
+    if (!el) return;
+    // window.__taskOrchScroll is captured by hx-on::before-swap on
+    // #run-panel before the swap replaces this element. Initial page
+    // load: it's undefined → snap to bottom. Subsequent polls: if
+    // the user was within 24 px of the bottom we re-snap; otherwise
+    // we restore their distance-from-bottom so reading older lines
+    // isn't yanked.
+    var s = window.__taskOrchScroll;
+    if (s == null || s.fromBottom < 24) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTop = el.scrollHeight - el.clientHeight - s.fromBottom;
+    }
+    el.classList.remove('invisible');
+  })();
+  </script>
 </div>
-<script>
-(function () {
-  var el = document.getElementById('run-log');
-  if (!el) return;
-  // window.__taskOrchScroll is captured by hx-on::before-swap on the
-  // outer #run-panel before the swap replaces this element. Initial
-  // page load: it's undefined → snap to bottom.
-  // Subsequent polls: if the user was within 24 px of the bottom we
-  // re-snap; otherwise we restore their distance-from-bottom so
-  // reading older lines isn't yanked.
-  var s = window.__taskOrchScroll;
-  if (s == null || s.fromBottom < 24) {
-    el.scrollTop = el.scrollHeight;
-  } else {
-    el.scrollTop = el.scrollHeight - el.clientHeight - s.fromBottom;
-  }
-  el.classList.remove('invisible');
-})();
-</script>
