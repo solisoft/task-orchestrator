@@ -8,6 +8,38 @@
             <a href="/docs" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors">📖 Docs</a>
         </header>
 
+        <!-- Agent usage tile: today's & this-week's run counts per agent,
+             with a progress bar when a limit is configured. -->
+        <section class="mb-10 rounded-2xl border border-white/10 bg-white/5 p-6">
+            <div class="flex items-baseline justify-between mb-4">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Agent usage</h2>
+                <span class="text-xs text-slate-500">rolling 24h / 7d</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <% for a in agents %>
+                    <% let daily_used = usage_day[a] ?? 0 %>
+                    <% let daily_cap = limits[a]["daily"] %>
+                    <% let weekly_used = usage_week[a] ?? 0 %>
+                    <% let weekly_cap = limits[a]["weekly"] %>
+                    <article class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+                        <header class="flex items-baseline justify-between mb-3">
+                            <h3 class="font-mono text-sm text-slate-100"><%= a %></h3>
+                        </header>
+                        <%= partial("home/agent_usage_row", {
+                            "label": "today",
+                            "used":  daily_used,
+                            "cap":   daily_cap
+                        }) %>
+                        <%= partial("home/agent_usage_row", {
+                            "label": "this week",
+                            "used":  weekly_used,
+                            "cap":   weekly_cap
+                        }) %>
+                    </article>
+                <% end %>
+            </div>
+        </section>
+
         <% if projects.length == 0 %>
             <div class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-8 text-center">
                 <p class="text-amber-300 font-medium">No projects with a <code>tasks/</code> folder under <code><%= root %></code>.</p>
