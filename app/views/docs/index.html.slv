@@ -1,0 +1,117 @@
+<div class="min-h-screen bg-slate-950 text-white">
+  <div class="max-w-4xl mx-auto px-6 py-12">
+    <nav class="text-sm text-slate-500 mb-4">
+      <a href="/" class="hover:text-slate-300">&larr; All projects</a>
+    </nav>
+
+    <header class="mb-10">
+      <h1 class="text-4xl font-bold tracking-tight">Getting Started</h1>
+      <p class="mt-2 text-slate-400">
+        Drop a task spec, queue it, watch a Claude Code agent dispatch it end-to-end.
+      </p>
+    </header>
+
+    <article class="task-md text-sm">
+      <h2>Overview</h2>
+      <p>
+        <strong>task-orchestrator</strong> is a per-repo task queue plus a
+        Claude Code dispatcher. You drop a markdown task spec into a
+        project's <code>tasks/todo/</code>, flip it to <code>queued</code>
+        from this UI (or with <code>bin/task-queue</code>), and a watcher
+        fires a headless Claude Code agent that runs <code>/do-task</code>
+        and <code>/review-task</code> end-to-end inside a fresh git
+        worktree, then opens a PR with <code>gh</code>.
+      </p>
+      <p>
+        The web UI in front of you (the project list, kanban, and
+        task editor) drives the same loop: every task row lives in
+        solidb, and the watcher reacts to status changes there as well
+        as to plain <code>mv</code> operations against the filesystem.
+      </p>
+
+      <h2>Setup</h2>
+      <p>You need three system-level dependencies on the host running the watcher:</p>
+      <pre><code>sudo apt install inotify-tools                # provides inotifywait
+gh auth login                                 # gh CLI authenticated against your fork
+claude --version                              # Claude Code CLI in PATH</code></pre>
+      <p>
+        Then enable a watcher per repo. Re-running is safe — the script
+        is idempotent and only refreshes the systemd-user unit:
+      </p>
+      <pre><code>~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/lang
+~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/db
+# ... one per repo ...</code></pre>
+      <p>Inspect the running watchers and tail their journal:</p>
+      <pre><code>systemctl --user list-units 'task-watch@*'
+journalctl --user -u 'task-watch@*' -f</code></pre>
+
+      <h2>Daily use</h2>
+      <p>The browser flow:</p>
+      <ol>
+        <li>From <a href="/">the project list</a>, pick a project. The kanban shows <code>todo / queued / in-progress / review / done</code>.</li>
+        <li>Click <strong>+ New task</strong>, type a title and a markdown body (or paste rough notes and let <em>Plan with agent</em> structure them).</li>
+        <li>Hit <strong>Queue → agent</strong> on the task page. The watcher picks the row up immediately; the kanban swaps it into <code>queued</code> in place via HTMX.</li>
+        <li>Open <strong>View run log</strong> to follow the live tail. The page polls every second until the agent settles.</li>
+      </ol>
+      <p>The CLI flow (equivalent, useful for keybindings):</p>
+      <pre><code># 1. Draft a task spec
+$EDITOR ~/workspace/soli/lang/tasks/todo/SEC-095-foo.md
+
+# 2. Validate + queue (fires the agent)
+~/workspace/soli/task-orchestrator/bin/task-queue \
+  ~/workspace/soli/lang/tasks/todo/SEC-095-foo.md
+
+# 3. Watch progress
+tail -f ~/.local/state/task-orchestrator/lang/SEC-095-foo.log
+
+# 4. See backlog across every repo
+~/workspace/soli/task-orchestrator/bin/task-dashboard</code></pre>
+
+      <h2>Configuration</h2>
+      <p>Environment variables read by the dispatcher scripts:</p>
+      <table>
+        <thead>
+          <tr><th>Var</th><th>Default</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>TASK_ORCH_ROOT</code></td>
+            <td><code>~/workspace/soli</code></td>
+            <td>Where the dashboard scans for projects with <code>tasks/</code> folders.</td>
+          </tr>
+          <tr>
+            <td><code>TASK_ORCH_STATE</code></td>
+            <td><code>~/.local/state/task-orchestrator</code></td>
+            <td>Per-task log + status + PR-URL files written during a run.</td>
+          </tr>
+          <tr>
+            <td><code>TASK_ORCH_WORKTREES</code></td>
+            <td><code>~/.cache/task-orchestrator/worktrees</code></td>
+            <td>Where agents check out an isolated copy of the repo. Cleaned up on success.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Failure mode</h2>
+      <p>If <code>/review-task</code> rejects the fix or the agent exits non-zero:</p>
+      <ul>
+        <li>The task row is moved to <strong>failed</strong> (out of <code>queued</code> so it can't re-trigger).</li>
+        <li>The full log is preserved at <code>~/.local/state/task-orchestrator/&lt;repo&gt;/&lt;task&gt;.log</code>.</li>
+        <li>The git worktree is removed; the local branch may still exist for inspection (no PR was opened).</li>
+      </ul>
+      <p>To retry, edit the task spec from this UI (or move it back to <code>todo</code>) and queue again.</p>
+
+      <h2>State files &amp; worktrees</h2>
+      <p>Two paths the dispatcher owns, both safe to inspect or delete between runs:</p>
+      <ul>
+        <li><code>~/.local/state/task-orchestrator/&lt;repo&gt;/&lt;task&gt;.{log,status,pr}</code> — per-task run artefacts, surfaced live in the run viewer.</li>
+        <li><code>~/.cache/task-orchestrator/worktrees/&lt;repo&gt;/&lt;task&gt;/</code> — the git worktree the agent runs in, removed on a successful run.</li>
+      </ul>
+      <p>
+        Stuck on something? Hit <a href="/debug">/debug</a> for the
+        live model + state-root snapshot, or read <code>README.md</code>
+        in the repo for the source-of-truth reference.
+      </p>
+    </article>
+  </div>
+</div>
