@@ -67,6 +67,7 @@ resp=$(curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
 n=$(printf '%s' "$resp" | jq -r '.result | length // 0')
 if [[ "$n" == "1" ]]; then
   echo "queued: $project/$slug"
+  "$script_dir/ensure-dispatcher"
 else
   cur=$(curl -s -u "$USER:$PASS" "$HOST/_api/database/$DB/document/tasks/$key" | jq -r '.status // "missing"')
   echo "task-queue: nothing changed for $project/$slug (current status: $cur)" >&2

@@ -35,11 +35,14 @@
           <% if indicators[task.slug] != nil %>
             <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/run" title="View run log" class="px-2 py-1 text-sm text-slate-400 hover:text-indigo-300 hover:bg-indigo-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity">📜</a>
           <% end %>
+          <% if task.agent_type != nil %>
+            <span title="Agent: <%= task.agent_type %>" class="text-xs px-2 py-0.5 rounded bg-slate-700/60 text-slate-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity"><%= task.agent_type %></span>
+          <% end %>
           <% if active_tab == "todo" %>
             <button title="Queue → fires agent" hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue" hx-target="#board" hx-swap="outerHTML" class="px-3 py-1 text-sm text-emerald-400 hover:bg-emerald-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity" type="button">▶ Queue</button>
           <% end %>
-          <% if active_tab == "queued" or active_tab == "review" %>
-            <button title="Move back to todo" hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/unqueue" hx-target="#board" hx-swap="outerHTML" class="px-3 py-1 text-sm text-amber-400 hover:bg-amber-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity" type="button">↩ Cancel</button>
+          <% if active_tab == "queued" or active_tab == "review" or active_tab == "failed" %>
+            <button title="Retry" hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/unqueue" hx-target="#board" hx-swap="outerHTML" class="px-3 py-1 text-sm text-amber-400 hover:bg-amber-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity" type="button">↩ Retry</button>
           <% end %>
         </li>
       <% end %>

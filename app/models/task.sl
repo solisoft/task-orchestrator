@@ -10,6 +10,8 @@ class Task < Model
                          "format": "^[A-Za-z0-9][A-Za-z0-9._-]*$" })
   validates("status",  { "presence": true,
                          "format": "^(todo|queued|inprogress|review|done|failed)$" })
+  validates("agent_type", { "presence": false,
+                            "format": "^(claude|opencode|opencode-sdk)$" })
   validates("title",   { "presence": true })
 
   before_save("touch_timestamps")
@@ -18,10 +20,9 @@ class Task < Model
     ["todo", "queued", "inprogress", "review", "done", "failed"]
   end
 
-  # Status columns shown on the kanban (skips "failed", which is rendered
-  # as a banner on the project page when a run blew up).
+  # Status columns shown on the kanban.
   static def kanban_statuses()
-    ["todo", "queued", "inprogress", "review", "done"]
+    ["todo", "queued", "inprogress", "review", "done", "failed"]
   end
 
   static def key_for(project, slug)
@@ -50,6 +51,8 @@ class Task < Model
     for t in Task.for_project(project)
       if cols[t.status] != nil
         cols[t.status].push(t)
+      else
+        cols["failed"].push(t)
       end
     end
     cols

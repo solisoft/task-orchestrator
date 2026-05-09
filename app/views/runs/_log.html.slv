@@ -3,17 +3,16 @@
 <% let polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
 <% let elapsed = status == nil ? "" : task_format_elapsed(status["at"]) %>
 
-<div id="run-panel"
-  <% if polling %>
-    hx-get="/projects/<%= project["name"] %>/tasks/<%= slug %>/run/log"
-    hx-trigger="every 2s"
-    hx-swap="outerHTML"
-    hx-on::before-swap="window.__taskOrchSticky = (function(p){ if(!p) return true; return (p.scrollHeight - p.scrollTop - p.clientHeight) < 24; })(document.querySelector('#run-log'))"
-    hx-on::after-swap="(function(p){ if(p && window.__taskOrchSticky !== false) p.scrollTop = p.scrollHeight; })(document.querySelector('#run-log'))"
-  <% end %>
->
-  <!-- status pill row -->
-  <div class="flex items-center gap-3 mb-4 flex-wrap">
+<% let pq = (task != nil ? task.pending_question : nil) %>
+
+<div id="run-panel">
+  <div id="run-status" class="flex items-center gap-3 mb-4 flex-wrap"
+    <% if polling %>
+      hx-get="/projects/<%= project["name"] %>/tasks/<%= slug %>/run/log"
+      hx-trigger="every 2s"
+      hx-swap="outerHTML"
+    <% end %>
+  >
     <span class="inline-flex items-center gap-2 rounded-full border <%= task_status_pill_classes(pill["tone"]) %> px-3 py-1 text-sm font-medium">
       <% if pill["tone"] == "amber" %>
         <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
@@ -35,12 +34,76 @@
     <% end %>
   </div>
 
-  <!-- log body -->
-  <div id="run-log" class="rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto">
-    <% if tail == "" %>
-      <p class="font-mono text-xs text-slate-600 p-6 text-center italic">no log yet — task hasn't been queued</p>
-    <% else %>
-      <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in tail.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
+  <!-- Human-in-the-loop question. Empty when the agent has nothing
+       pending; the polling response always sends a fresh #run-question
+       (OOB-swapped from _log_poll), so the form appears/disappears
+       reactively without rerendering the rest of the panel. -->
+  <div id="run-question" class="<% if pq != nil %>mb-4<% end %>">
+    <% if pq != nil %>
+      <% let q = pq["input"]["questions"][0] %>
+      <div class="rounded-xl bg-amber-400/10 border border-amber-400/30 p-4">
+        <div class="text-xs text-amber-300/80 font-mono mb-1">human-in-the-loop · <%= pq["tool"] %></div>
+        <div class="text-sm text-amber-100 mb-3"><%= h(q["question"]) %></div>
+        <form hx-post="/projects/<%= project["name"] %>/tasks/<%= slug %>/answer"
+              hx-target="#run-panel" hx-swap="outerHTML">
+          <input type="hidden" name="qid" value="<%= h(pq["id"]) %>">
+          <% for opt in q["options"] %>
+            <button type="submit" name="value" value="<%= h(opt["label"]) %>"
+                    class="block w-full text-left mb-1 px-3 py-2 rounded bg-amber-400/5 hover:bg-amber-400/15 text-sm text-amber-100 transition-colors">
+              <span class="font-medium"><%= h(opt["label"]) %></span>
+              <% if opt["description"] != nil and opt["description"] != "" %>
+                <span class="text-amber-300/60 text-xs ml-2">— <%= h(opt["description"]) %></span>
+              <% end %>
+            </button>
+          <% end %>
+        </form>
+      </div>
     <% end %>
   </div>
+
+  <!-- The scroll container is intentionally stable across polls — only its
+       inner <pre> is OOB-swapped. Browsers preserve scrollTop on the same
+       element across child mutations, so there's no flash. The `invisible`
+       class hides the first paint until the inline script below has snapped
+       us to the bottom. -->
+  <div id="run-log"
+    class="invisible rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto"
+  >
+    <pre id="run-log-pre" class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% if tail == "" %><span class="text-slate-600 italic">no log yet — task hasn't been queued</span><% else %><% for line in tail.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %><% end %></pre>
+  </div>
 </div>
+
+<script>
+(function () {
+  var log = document.getElementById('run-log');
+  if (!log || log.dataset.tailInit) return;
+  log.dataset.tailInit = '1';
+
+  // Snap to the bottom synchronously, then unhide. Doing this before the
+  // first paint is what kills the "loaded at top, jumped to bottom" flash.
+  log.scrollTop = log.scrollHeight;
+  log.classList.remove('invisible');
+
+  // Sticky = the user is parked within 24px of the bottom. We re-snap on
+  // poll updates only when sticky; if they scrolled up to read history,
+  // we leave them alone.
+  var sticky = true;
+  log.addEventListener('scroll', function () {
+    sticky = (log.scrollHeight - log.scrollTop - log.clientHeight) < 24;
+  }, { passive: true });
+
+  // Capture distance-from-bottom before each swap so we can preserve the
+  // user's reading position when not sticky.
+  var fromBottom = 0;
+  document.body.addEventListener('htmx:beforeSwap', function () {
+    fromBottom = log.scrollHeight - log.scrollTop - log.clientHeight;
+  });
+  document.body.addEventListener('htmx:afterSwap', function () {
+    if (sticky) {
+      log.scrollTop = log.scrollHeight;
+    } else {
+      log.scrollTop = log.scrollHeight - log.clientHeight - fromBottom;
+    }
+  });
+})();
+</script>

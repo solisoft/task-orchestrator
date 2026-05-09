@@ -23,7 +23,7 @@
         <label class="block text-sm font-medium text-slate-300">Title</label>
         <button type="button"
                 hx-post="/projects/<%= project["name"] %>/tasks/plan"
-                hx-include="textarea[name=body_md]"
+                hx-include="textarea[name=body_md],select[name=agent_type]"
                 hx-target="#body-md-wrapper"
                 hx-swap="outerHTML"
                 hx-indicator="#plan-spinner"
@@ -44,6 +44,21 @@
       <div class="mt-3 flex justify-end gap-2">
         <a href="/projects/<%= project["name"] %>" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
         <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Create</button>
+      </div>
+
+      <div class="mt-6 pt-6 border-t border-white/10">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <label for="agent_type" class="block text-sm font-medium text-slate-300">Agent</label>
+            <p class="text-xs text-slate-500 mt-0.5">Which agent should run this task</p>
+          </div>
+          <select name="agent_type" id="agent_type" class="rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+            <option value="">Default (from settings)</option>
+            <option value="claude">claude CLI</option>
+            <option value="opencode">opencode CLI</option>
+            <option value="opencode-sdk">opencode SDK</option>
+          </select>
+        </div>
       </div>
     </form>
   </div>

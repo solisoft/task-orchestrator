@@ -37,7 +37,8 @@ fn create(req)
     "slug":    slug,
     "title":   title,
     "body_md": body,
-    "status":  "todo"
+    "status":  "todo",
+    "agent_type": (req["form"]["agent_type"] ?? "") != "" ? req["form"]["agent_type"] : nil
   })
   if task._errors
     return render("tasks/new", {
@@ -102,14 +103,16 @@ fn save(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "todo"
-    return {"status": 422, "body": "Can only edit tasks in todo (current: " + task.status + ")"}
+  if task.status != "todo" and task.status != "failed"
+    return {"status": 422, "body": "Can only edit tasks in todo or failed (current: " + task.status + ")"}
   end
   task.body_md = req["form"]["body_md"] ?? ""
   let title = (req["form"]["title"] ?? "").trim()
   if title != ""
     task.title = title
   end
+  let agent_type = (req["form"]["agent_type"] ?? "").trim()
+  task.agent_type = agent_type != "" ? agent_type : nil
   task.save()
   if task._errors
     return render("tasks/show", {
@@ -122,14 +125,94 @@ fn save(req)
 end
 
 fn queue(req)
-  move_response(req, fn(t) t.queue!())
+  move_response(req, fn(t) {
+    t.queue!()
+    ensure_dispatcher_running()
+  })
 end
 
-fn unqueue(req)
-  move_response(req, fn(t) {
-    t.unqueue!()
-    clear_run_state(t.project, t.slug)
-  })
+# Fire-and-forget: the script exits fast whether or not it spawns. Without
+# this, queueing succeeds in the DB but a dead dispatcher means nothing
+# claims the row and the task sits forever.
+fn ensure_dispatcher_running()
+  System.run_sync(["./bin/ensure-dispatcher"]) rescue null
+end
+
+  fn unqueue(req)
+    move_response(req, fn(t) {
+      t.unqueue!()
+      clear_run_state(t.project, t.slug)
+    })
+  end
+
+  fn destroy(req)
+    let project = find_project(req["params"]["name"])
+    if project == nil
+      return {"status": 404, "body": "Unknown project"}
+    end
+    let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+    if task == nil
+      return {"status": 404, "body": "Task not found"}
+    end
+    if task.status != "todo"
+      return {"status": 422, "body": "Can only delete tasks in todo (current: " + task.status + ")"}
+    end
+    task.delete()
+    if req["headers"]["hx-request"] == "true"
+      let columns = Task.board_for(project["name"])
+      let active = req["params"]["tab"] ?? "todo"
+      if columns[active] == nil
+        active = "todo"
+      end
+      return {
+        "status": 200,
+        "headers": {"Content-Type": "text/html; charset=utf-8"},
+        "body": render_partial("projects/board", {
+          "project": project,
+          "columns": columns,
+          "indicators": indicators_for(project["name"], columns),
+          "statuses": Task.kanban_statuses(),
+          "active_tab": active
+        })
+      }
+    end
+    redirect("/projects/" + project["name"])
+  end
+
+# Receive a human's reply to an in-flight AskUserQuestion / ExitPlanMode
+# from the agent runner (bin/task-run-agent.ts). We only persist the
+# answer; the runner is polling the row and will pick it up on its next
+# tick. Response is the same run-log fragment runs#log returns, so the
+# form's hx-swap drops back to a refreshed panel without the question UI.
+fn answer(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let slug = req["params"]["slug"]
+  let task = Task.find_by_slug(project["name"], slug)
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  let qid = (req["form"]["qid"] ?? "").trim()
+  let value = (req["form"]["value"] ?? "").trim()
+  if qid == "" or value == ""
+    return {"status": 422, "body": "qid and value required"}
+  end
+  task.pending_answer = { "id": qid, "value": value }
+  task.save()
+  {
+    "status": 200,
+    "headers": {"Content-Type": "text/html; charset=utf-8"},
+    "body": render_partial("runs/log_poll", {
+      "project": project,
+      "slug":    slug,
+      "task":    Task.find_by_slug(project["name"], slug),
+      "status":  run_current_status(project["name"], slug),
+      "pr_url":  run_pr_url(project["name"], slug),
+      "tail":    run_log_tail(project["name"], slug, 16384)
+    })
+  }
 end
 
 # Shared dispatch for queue/unqueue. HTMX requests get the live board
@@ -147,7 +230,8 @@ fn plan(req)
   if notes == ""
     return {"status": 422, "body": "Notes required — type a few lines first"}
   end
-  let result = run_plan_agent(notes)
+  let agent_type = (req["form"]["agent_type"] ?? "").trim()
+  let result = run_plan_agent(notes, agent_type)
   if result["error"] != nil
     return {
       "status": 502,
@@ -166,24 +250,30 @@ fn plan(req)
   }
 end
 
-# Spawn `claude -p "/plan-task <tmpfile>"`. The skill is at
-# .claude/skills/plan-task/SKILL.md in this repo, so claude finds it
-# because the dev server's cwd is the project root. Returns either
-# `{ "body": <markdown> }` or `{ "error": <reason> }`.
-fn run_plan_agent(notes)
+# Spawn the planning agent. agent_type is "claude", "opencode", or "" (default).
+# Uses a persistent session so subsequent plan calls can build on context.
+# Returns either `{ "body": <markdown> }` or `{ "error": <reason> }`.
+fn run_plan_agent(notes, agent_type)
   let nonce = str(DateTime.now().to_unix() rescue 0)
   let path = "/tmp/plan-task-" + nonce + ".md"
+  let session_id = "plan-" + nonce
   Trusted.write(path, notes)
-  let res = System.run_sync([
-    "claude", "--dangerously-skip-permissions", "-p", "/plan-task " + path
-  ])
+  let cmd
+  let res
+  if agent_type == "opencode" or agent_type == "opencode-sdk"
+    cmd = ["opencode", "run", "--dangerously-skip-permissions", "/plan-task", path]
+    res = System.run_sync(cmd)
+  else
+    cmd = ["claude", "--dangerously-skip-permissions", "-p", "/plan-task " + path]
+    res = System.run_sync(cmd)
+  end
   System.run_sync(["rm", "-f", path])
   if res["exit_code"] != 0
-    return { "error": "claude exit=" + str(res["exit_code"]) + " stderr=" + res["stderr"] }
+    return { "error": cmd[0] + " exit=" + str(res["exit_code"]) + " stderr=" + res["stderr"] }
   end
   let body = strip_code_fences(res["stdout"].trim())
   if body == ""
-    return { "error": "claude returned empty output" }
+    return { "error": cmd[0] + " returned empty output" }
   end
   { "body": body }
 end

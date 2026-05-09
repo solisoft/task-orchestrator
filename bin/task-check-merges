@@ -1,0 +1,119 @@
+#!/usr/bin/env bun
+//
+// task-check-merges
+//
+// Background job that polls GitHub for merged PRs and marks the
+// corresponding tasks as `done`. Runs every 30 seconds.
+//
+// For each task in `review` status with a `pr_url`, checks if the PR
+// has been merged via `gh` CLI. On merge, updates the task to `done`
+// and writes the status file.
+//
+// Environment (loaded from .env at the project root):
+//   SOLIDB_HOST, SOLIDB_DATABASE, SOLIDB_USERNAME, SOLIDB_PASSWORD
+//   TASK_ORCH_STATE — where dispatcher logs land
+
+import { existsSync, appendFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+const SCRIPT_DIR = dirname(import.meta.path);
+const PROJECT_ROOT = dirname(SCRIPT_DIR);
+const ENV_FILE = join(PROJECT_ROOT, ".env");
+
+if (existsSync(ENV_FILE)) {
+  const lines = (await Bun.file(ENV_FILE).text()).split("\n");
+  for (const line of lines) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+  }
+}
+
+const HOST = process.env.SOLIDB_HOST ?? "http://localhost:6745";
+const DB = process.env.SOLIDB_DATABASE ?? "tasks";
+const USER = process.env.SOLIDB_USERNAME ?? "admin";
+const PASS = process.env.SOLIDB_PASSWORD ?? "admin";
+const STATE_ROOT = process.env.TASK_ORCH_STATE
+  ?? join(process.env.HOME ?? "/tmp", ".local/state/task-orchestrator");
+const LOG_FILE = join(STATE_ROOT, "check-merges.log");
+
+const BASIC = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
+const FETCH_URL = `${HOST}/_api/database/${DB}/cursor`;
+
+function log(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  appendFileSync(LOG_FILE, line);
+}
+
+async function queryTasks(): Promise<Array<{ _key: string; project: string; slug: string; pr_url: string }>> {
+  const query = `
+    FOR doc IN tasks
+      FILTER doc.status == "review" AND doc.pr_url != null
+      RETURN { _key: doc._key, project: doc.project, slug: doc.slug, pr_url: doc.pr_url }
+  `;
+  const resp = await fetch(FETCH_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: BASIC },
+    body: JSON.stringify({ query }),
+  });
+  if (!resp.ok) {
+    log(`query failed: ${resp.status} ${await resp.text()}`);
+    return [];
+  }
+  const json = await resp.json() as { result: Array<{ _key: string; project: string; slug: string; pr_url: string }> };
+  return json.result ?? [];
+}
+
+function checkMerged(prUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const proc = Bun.spawn({
+      cmd: ["gh", "pr", "view", prUrl, "--json", "state,mergedAt", "--jq", ".state + \" \" + (.mergedAt // \"null\")"],
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    let output = "";
+    proc.stdout.ondata = (chunk) => { output += chunk; };
+    proc.exited.then((code) => {
+      const state = output.trim().split(" ")[0];
+      resolve(state === "closed");
+    });
+  });
+}
+
+async function markDone(key: string, project: string, slug: string): Promise<void> {
+  const stateDir = join(STATE_ROOT, project);
+  const statusFile = join(stateDir, `${slug}.status`);
+  const iso = new Date().toISOString();
+  const patch = JSON.stringify({ status: "done", finished_at: iso });
+
+  const body = {
+    query: `UPDATE @key WITH @patch IN tasks RETURN NEW`,
+    bindVars: { key, patch: { status: "done", finished_at: iso } },
+  };
+  const resp = await fetch(FETCH_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: BASIC },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    log(`markDone failed for ${key}: ${resp.status}`);
+    return;
+  }
+  appendFileSync(statusFile, `[${iso}] done\n`);
+  log(`marked done: ${project}/${slug}`);
+}
+
+async function run() {
+  log("checking merged PRs...");
+  const tasks = await queryTasks();
+  for (const task of tasks) {
+    const merged = await checkMerged(task.pr_url);
+    if (merged) {
+      await markDone(task._key, task.project, task.slug);
+    }
+  }
+}
+
+while (true) {
+  await run();
+  await new Promise((r) => setTimeout(r, 30000));
+}

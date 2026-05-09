@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#
+# ensure-check-merges
+#
+# Idempotent: if no `bin/task-check-merges` process is running, start one
+# detached. Returns immediately either way. Safe to call on startup.
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+log_file="$state_root/check-merges.log"
+
+if pgrep -f "bin/task-check-merges( |$)" >/dev/null 2>&1; then
+  exit 0
+fi
+
+mkdir -p "$state_root"
+echo "[$(date -Iseconds)] ensure-check-merges: no task-check-merges running, starting" >> "$log_file"
+nohup "$script_dir/task-check-merges" >> "$log_file" 2>&1 </dev/null &
+disown

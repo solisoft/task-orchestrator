@@ -112,10 +112,25 @@ log "project=$project_path slug=$slug branch=$branch"
 # 1. Pull the body from solidb.
 write_status "fetching task body"
 body_url="$HOST/_api/database/$DB/document/tasks/$key"
-body_md=$(curl -s -u "$USER:$PASS" "$body_url" | jq -r '.body_md // empty')
+task_row=$(curl -s -u "$USER:$PASS" "$body_url")
+body_md=$(echo "$task_row" | jq -r '.body_md // empty')
 if [[ -z "$body_md" ]]; then
   fail "task body empty or row not found ($key)"
 fi
+
+# Per-task agent_type overrides the global setting.
+task_agent_type=$(echo "$task_row" | jq -r '.agent_type // empty')
+setting_url="$HOST/_api/database/$DB/cursor"
+global_agent_type=$(curl -s -u "$USER:$PASS" -X POST "$setting_url" \
+  -H 'content-type: application/json' \
+  -d '{"query":"FOR s IN settings FILTER s.key == @k RETURN s.value","bindVars":{"k":"agent_type"}}' \
+  | jq -r '.result[0] // empty')
+global_agent_path=$(curl -s -u "$USER:$PASS" -X POST "$setting_url" \
+  -H 'content-type: application/json' \
+  -d '{"query":"FOR s IN settings FILTER s.key == @k RETURN s.value","bindVars":{"k":"agent_path"}}' \
+  | jq -r '.result[0] // empty')
+AGENT_TYPE=${task_agent_type:-${global_agent_type:-claude}}
+AGENT_PATH=${global_agent_path:-}
 
 # 2. Refresh origin/main and build a fresh worktree from it.
 write_status "preparing worktree"
@@ -136,13 +151,19 @@ mkdir -p "$worktree_dir/tasks/todo"
 printf '%s' "$body_md" > "$worktree_dir/tasks/todo/$md_name"
 log "seeded worktree's tasks/todo/$md_name (${#body_md} bytes)"
 
-# 3a. Make sure the do-task / review-task skills are present.
+# 3a. Make sure the do-task / review-task skills are present. Both
+# claude and opencode read the same SKILL.md frontmatter shape, so we
+# canonicalize on the .claude/ tree and mirror it under .opencode/skills/
+# so opencode's `/do-task` slash command resolves regardless of which
+# AGENT_TYPE this run is using.
 canonical_skills="$HOME/workspace/soli/lang/.claude/skills"
 if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; then
-  mkdir -p "$worktree_dir/.claude/skills"
+  mkdir -p "$worktree_dir/.claude/skills" "$worktree_dir/.opencode/skills"
   cp -r "$canonical_skills/do-task" "$worktree_dir/.claude/skills/"
   cp -r "$canonical_skills/review-task" "$worktree_dir/.claude/skills/"
-  log "seeded worktree's .claude/skills/{do-task,review-task}"
+  cp -r "$canonical_skills/do-task" "$worktree_dir/.opencode/skills/"
+  cp -r "$canonical_skills/review-task" "$worktree_dir/.opencode/skills/"
+  log "seeded worktree's .{claude,opencode}/skills/{do-task,review-task}"
 fi
 
 # 4. Run /do-task and /review-task headlessly.
@@ -151,14 +172,41 @@ claude_jq="$script_dir/_stream-format.jq"
 run_claude() {
   local prompt="$1" phase="$2"
   write_status "$phase"
-  log "running claude $prompt"
+
+  # AGENT_TYPE controls which agent is used:
+  #   claude       → claude CLI (legacy)
+  #   opencode     → opencode CLI
+  #   opencode-sdk → embedded SDK via task-run-agent.ts
   set +e
-  (
-    cd "$worktree_dir"
-    claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
-      < /dev/null "$prompt" 2>>"$log_file"
-  ) | tee -a "$log_file.jsonl" \
-    | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  if [[ "$AGENT_TYPE" == "opencode-sdk" ]]; then
+    log "running agent (opencode-sdk) $prompt"
+    (
+      bun "$script_dir/task-run-agent.ts" \
+        --project "$repo_name" --slug "$slug" \
+        --worktree "$worktree_dir" --prompt "$prompt" 2>>"$log_file"
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  elif [[ "$AGENT_TYPE" == "opencode" ]]; then
+    log "running opencode CLI $prompt"
+    # `--dangerously-skip-permissions` matches the claude branch; without
+    # it opencode silently waits on permission prompts and emits zero
+    # events on stdout (so .log.jsonl is empty and .log shows no activity).
+    # `< /dev/null` detaches stdin so opencode doesn't block on TTY input.
+    (
+      cd "$worktree_dir"
+      opencode run --format json --dangerously-skip-permissions \
+        < /dev/null "$prompt" 2>>"$log_file"
+    ) | tee -a "$log_file.jsonl" \
+      | stdbuf -oL jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  else
+    log "running claude CLI $prompt"
+    (
+      cd "$worktree_dir"
+      claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
+        < /dev/null "$prompt" 2>>"$log_file"
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  fi
   local rc=${PIPESTATUS[0]}
   set -e
   if [[ $rc -ne 0 ]]; then

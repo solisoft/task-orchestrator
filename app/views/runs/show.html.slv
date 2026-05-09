@@ -15,6 +15,7 @@
     <%- render_partial("runs/log", {
       "project": project,
       "slug": slug,
+      "task": task,
       "status": status,
       "pr_url": pr_url,
       "tail": tail

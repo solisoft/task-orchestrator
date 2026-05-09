@@ -2,6 +2,8 @@
 
 get("/", "home#index")
 get("/health", "home#health")
+get("/settings", "settings#show")
+post("/settings", "settings#update")
 
 # Project kanban
 get("/projects/:name", "projects#show")
@@ -18,6 +20,8 @@ get("/projects/:name/tasks/:slug", "tasks#show")
 post("/projects/:name/tasks/:slug/save", "tasks#save")
 post("/projects/:name/tasks/:slug/queue", "tasks#queue")
 post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
+post("/projects/:name/tasks/:slug/destroy", "tasks#destroy")
+post("/projects/:name/tasks/:slug/answer", "tasks#answer")
 
 # Live agent-run viewer (status + log tail, HTMX-polled)
 get("/projects/:name/tasks/:slug/run", "runs#show")

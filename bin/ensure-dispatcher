@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# ensure-dispatcher
+#
+# Idempotent: if no `bin/task-dispatch` process is running, start one
+# detached. Returns immediately either way. Safe to call on every queue.
+#
+# Called from:
+#   - bin/task-queue           (after a successful todo→queued flip)
+#   - tasks_controller.sl      (after t.queue!() succeeds)
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+log_file="$state_root/dispatcher.log"
+
+# Match the bin/task-dispatch suffix — covers both relative ("./bin/...")
+# and absolute argvs without false-matching other host dispatchers like
+# solid-queue-dispatcher.
+if pgrep -f "bin/task-dispatch( |$)" >/dev/null 2>&1; then
+  exit 0
+fi
+
+mkdir -p "$state_root"
+echo "[$(date -Iseconds)] ensure-dispatcher: no task-dispatch running, starting" >> "$log_file"
+nohup "$script_dir/task-dispatch" >> "$log_file" 2>&1 </dev/null &
+disown
