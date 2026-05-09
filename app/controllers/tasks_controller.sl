@@ -122,6 +122,18 @@ fn save(req)
 end
 
 fn queue(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  let denied = _queue_limit_denial(task)
+  if denied != nil
+    return _queue_limit_response(req, project, denied)
+  end
   move_response(req, fn(t) t.queue!())
 end
 
@@ -205,6 +217,60 @@ fn strip_code_fences(s)
     inner = inner.substring(0, inner.length - 3).trim()
   end
   inner
+end
+
+# Returns nil if the task is within its daily AND weekly cap for the
+# effective agent, otherwise a hash describing the breach:
+#   { "agent": "claude", "window": "day", "used": N, "cap": M }
+# A cap of 0 means unlimited (the dashboard convention) — that branch
+# always returns within-limit.
+fn _queue_limit_denial(task)
+  let agent = Task.effective_agent(task)
+  let daily_cap  = Setting.get_or("limit_daily_"  + agent, 0)
+  let weekly_cap = Setting.get_or("limit_weekly_" + agent, 0)
+  if daily_cap > 0
+    let used_day = Task.usage_by_agent("day")[agent] ?? 0
+    if used_day >= daily_cap
+      return { "agent": agent, "window": "day",
+               "used": used_day, "cap": daily_cap }
+    end
+  end
+  if weekly_cap > 0
+    let used_week = Task.usage_by_agent("week")[agent] ?? 0
+    if used_week >= weekly_cap
+      return { "agent": agent, "window": "week",
+               "used": used_week, "cap": weekly_cap }
+    end
+  end
+  return nil
+end
+
+# Build the 422 response for a denied queue. HTMX requests get an
+# inline error fragment that renders inside the existing `#board`
+# target; plain form posts get a plain text 422 the browser shows
+# directly.
+fn _queue_limit_response(req, project, denied)
+  let msg = "agent " + denied["agent"] + " is at its " +
+            denied["window"] + " limit (" +
+            str(denied["used"]) + "/" + str(denied["cap"]) +
+            "). Adjust caps in /settings."
+  if req["headers"]["hx-request"] == "true"
+    let columns = Task.board_for(project["name"])
+    let active = "todo"
+    return {
+      "status": 422,
+      "headers": {"Content-Type": "text/html; charset=utf-8"},
+      "body": render_partial("projects/board", {
+        "project": project,
+        "columns": columns,
+        "indicators": indicators_for(project["name"], columns),
+        "statuses": Task.kanban_statuses(),
+        "active_tab": active,
+        "limit_error": msg
+      })
+    }
+  end
+  return {"status": 422, "body": msg}
 end
 
 fn move_response(req, action)

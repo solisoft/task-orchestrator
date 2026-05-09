@@ -16,6 +16,7 @@ logs/
 # Environment
 .env
 .env.local
+.env.test
 .env.*.local
 
 # IDE

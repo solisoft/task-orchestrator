@@ -1,9 +1,45 @@
 <div class="min-h-screen bg-slate-950 text-white">
     <div class="max-w-6xl mx-auto px-6 py-12">
-        <header class="mb-12">
-            <h1 class="text-4xl font-bold tracking-tight">Task Orchestrator</h1>
-            <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
+        <header class="mb-8 flex items-baseline justify-between">
+            <div>
+                <h1 class="text-4xl font-bold tracking-tight">Task Orchestrator</h1>
+                <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
+            </div>
+            <a href="/settings"
+               class="text-sm text-slate-400 hover:text-indigo-300 hover:underline whitespace-nowrap">⚙ Settings</a>
         </header>
+
+        <!-- Agent usage tile: today's & this-week's run counts per agent,
+             with a progress bar when a limit is configured. -->
+        <section class="mb-10 rounded-2xl border border-white/10 bg-white/5 p-6">
+            <div class="flex items-baseline justify-between mb-4">
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Agent usage</h2>
+                <span class="text-xs text-slate-500">rolling 24h / 7d</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <% for a in agents %>
+                    <% let daily_used = usage_day[a] ?? 0 %>
+                    <% let daily_cap = limits[a]["daily"] %>
+                    <% let weekly_used = usage_week[a] ?? 0 %>
+                    <% let weekly_cap = limits[a]["weekly"] %>
+                    <article class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+                        <header class="flex items-baseline justify-between mb-3">
+                            <h3 class="font-mono text-sm text-slate-100"><%= a %></h3>
+                        </header>
+                        <%= partial("home/agent_usage_row", {
+                            "label": "today",
+                            "used":  daily_used,
+                            "cap":   daily_cap
+                        }) %>
+                        <%= partial("home/agent_usage_row", {
+                            "label": "this week",
+                            "used":  weekly_used,
+                            "cap":   weekly_cap
+                        }) %>
+                    </article>
+                <% end %>
+            </div>
+        </section>
 
         <% if projects.length == 0 %>
             <div class="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-8 text-center">
