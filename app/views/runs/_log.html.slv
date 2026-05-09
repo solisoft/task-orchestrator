@@ -8,8 +8,7 @@
     hx-get="/projects/<%= project["name"] %>/tasks/<%= slug %>/run/log"
     hx-trigger="every 2s"
     hx-swap="outerHTML"
-    hx-on::before-swap="window.__taskOrchSticky = (function(p){ if(!p) return true; return (p.scrollHeight - p.scrollTop - p.clientHeight) < 24; })(document.querySelector('#run-log'))"
-    hx-on::after-swap="(function(p){ if(p && window.__taskOrchSticky !== false) p.scrollTop = p.scrollHeight; })(document.querySelector('#run-log'))"
+    hx-on::before-swap="window.__taskOrchScroll = (function(p){ if(!p) return null; return { fromBottom: p.scrollHeight - p.scrollTop - p.clientHeight }; })(document.querySelector('#run-log'))"
   <% end %>
 >
   <!-- status pill row -->
@@ -36,7 +35,12 @@
   </div>
 
   <!-- log body -->
-  <div id="run-log" class="rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto">
+  <!-- `invisible` hides the panel until the inline script below has set
+       scrollTop, killing the load-then-snap flash that was visible on
+       every poll (each outerHTML swap creates a fresh #run-log at
+       scrollTop=0 — without this, the user sees the top of the log for
+       one frame before the script jumps it to the bottom). -->
+  <div id="run-log" class="invisible rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto">
     <% if tail == "" %>
       <p class="font-mono text-xs text-slate-600 p-6 text-center italic">no log yet — task hasn't been queued</p>
     <% else %>
@@ -44,3 +48,22 @@
     <% end %>
   </div>
 </div>
+<script>
+(function () {
+  var el = document.getElementById('run-log');
+  if (!el) return;
+  // window.__taskOrchScroll is captured by hx-on::before-swap on the
+  // outer #run-panel before the swap replaces this element. Initial
+  // page load: it's undefined → snap to bottom.
+  // Subsequent polls: if the user was within 24 px of the bottom we
+  // re-snap; otherwise we restore their distance-from-bottom so
+  // reading older lines isn't yanked.
+  var s = window.__taskOrchScroll;
+  if (s == null || s.fromBottom < 24) {
+    el.scrollTop = el.scrollHeight;
+  } else {
+    el.scrollTop = el.scrollHeight - el.clientHeight - s.fromBottom;
+  }
+  el.classList.remove('invisible');
+})();
+</script>
