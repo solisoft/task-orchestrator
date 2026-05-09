@@ -145,6 +145,20 @@ if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; t
   log "seeded worktree's .claude/skills/{do-task,review-task}"
 fi
 
+# 3b. Copy the project's `.env.test` into the worktree so `soli test`
+# (which the do-task / review-task skills run for verification) can
+# find it. The file is gitignored, so the worktree's checkout of
+# origin/main never has it; without this, every `soli test` in the
+# agent fails with "`.env.test` file not found at <worktree>/.env.test"
+# and the test server's port-bind errors that follow are red
+# herrings. We only copy `.env.test` (test credentials) — never the
+# production `.env`, which would let the agent's tests connect to
+# the orchestrator's live tasks DB.
+if [[ -f "$project_path/.env.test" ]]; then
+  cp "$project_path/.env.test" "$worktree_dir/.env.test"
+  log "seeded worktree's .env.test"
+fi
+
 # 4. Run /do-task and /review-task headlessly.
 claude_jq="$script_dir/_stream-format.jq"
 
