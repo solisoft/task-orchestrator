@@ -1,5 +1,28 @@
 # Application-wide view helpers
 
+# Drop the first `# Title` line (and any blank line right after it) from
+# a markdown blob — the page already shows the title as an `<h1>`, so
+# rendering it again inside the body would duplicate the heading.
+def strip_title_heading(body: String) -> String
+    let lines = body.split("\n")
+    let out = []
+    let dropped = false
+    for line in lines
+        if not dropped
+            let s = line.trim()
+            if s.starts_with("# ") and not s.starts_with("## ")
+                dropped = true
+                continue
+            end
+        end
+        out.push(line)
+    end
+    if out.length > 0 and out[0].trim() == ""
+        out.shift()
+    end
+    return out.join("\n")
+end
+
 # Truncate text to a maximum length with ellipsis
 def truncate_text(text: String, length: Int, suffix: String) -> String
     if len(text) <= length

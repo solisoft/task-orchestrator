@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#
+# ingest-todos
+#
+# Walk every project under $TASK_ORCH_ROOT, find each tasks/todo/*.md file,
+# and insert it as a row in the solidb `tasks` collection. Idempotent: the
+# unique index on (project, slug) makes re-runs return 409 for already-
+# present rows, which the script counts as "skipped".
+#
+# Title is parsed from the first line of the .md (expected to be "# ..."),
+# falling back to the slug.
+
+set -euo pipefail
+
+# Load .env from the project root so solidb credentials don't have to be
+# repeated in the shell environment.
+script_dir=$(cd "$(dirname "$0")" && pwd)
+project_root=$(dirname "$script_dir")
+if [[ -f "$project_root/.env" ]]; then
+    set -a; source "$project_root/.env"; set +a
+fi
+
+ROOT="${TASK_ORCH_ROOT:-$HOME/workspace/soli}"
+HOST="${SOLIDB_HOST:-http://localhost:6745}"
+DB="${SOLIDB_DATABASE:-tasks}"
+USER="${SOLIDB_USERNAME:-admin}"
+PASS="${SOLIDB_PASSWORD:-admin}"
+
+inserted=0
+skipped=0
+failed=0
+total=0
+
+for project_dir in "$ROOT"/*/; do
+    project=$(basename "$project_dir")
+    todo_dir="${project_dir}tasks/todo"
+    [[ -d "$todo_dir" ]] || continue
+
+    shopt -s nullglob
+    for md in "$todo_dir"/*.md; do
+        total=$((total+1))
+        slug="${md##*/}"; slug="${slug%.md}"
+        title=$(grep -m1 -E '^# ' "$md" | sed 's/^# *//' || true)
+        [[ -n "$title" ]] || title="$slug"
+        body=$(< "$md")
+        now=$(date -Iseconds)
+        key="${project}--${slug}"
+
+        payload=$(jq -n \
+            --arg key "$key" \
+            --arg project "$project" \
+            --arg slug "$slug" \
+            --arg title "$title" \
+            --arg body "$body" \
+            --arg now "$now" \
+            '{
+                _key: $key,
+                project: $project,
+                slug: $slug,
+                title: $title,
+                body_md: $body,
+                status: "todo",
+                created_at: $now,
+                updated_at: $now
+             }')
+
+        resp=$(curl -s -u "$USER:$PASS" \
+            -X POST "$HOST/_api/database/$DB/document/tasks" \
+            -H 'content-type: application/json' \
+            -w '\n%{http_code}' \
+            -d "$payload")
+        code="${resp##*$'\n'}"
+
+        case "$code" in
+            200|201)
+                inserted=$((inserted+1))
+                printf '  + %s/%s\n' "$project" "$slug"
+                ;;
+            409)
+                skipped=$((skipped+1))
+                ;;
+            *)
+                failed=$((failed+1))
+                body_resp="${resp%$'\n'*}"
+                printf '  ! %s/%s -> HTTP %s :: %s\n' "$project" "$slug" "$code" "$body_resp" >&2
+                ;;
+        esac
+    done
+    shopt -u nullglob
+done
+
+printf '\nDone: %d inserted, %d skipped, %d failed (of %d total)\n' \
+    "$inserted" "$skipped" "$failed" "$total"
+
+[[ "$failed" -eq 0 ]]

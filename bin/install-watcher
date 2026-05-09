@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# install-watcher <project_path>
+#
+# One-shot setup: installs the systemd-user unit template, then enables and
+# starts a task-watch instance for the given repo. Idempotent — safe to
+# re-run after editing the unit template.
+
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 <project_path>" >&2
+  exit 64
+fi
+
+project_path=$(realpath "$1")
+[[ -d "$project_path" ]] || { echo "not a directory: $project_path" >&2; exit 65; }
+[[ -d "$project_path/.git" ]] || echo "warning: $project_path is not a git repo (PR opening will fail)" >&2
+
+# Refuse to install at the workspace umbrella (./workspace/soli) — the
+# watcher needs to live inside a single repo so tasks/queued/ resolves
+# correctly. This catches the "I pointed it at the parent dir" mistake.
+if [[ -d "$project_path/lang" && -d "$project_path/db" && -d "$project_path/task-orchestrator" ]]; then
+  echo "refusing: $project_path looks like the workspace root, not a repo." >&2
+  echo "install per-repo: $0 $project_path/lang  (and one per other repo)" >&2
+  exit 65
+fi
+
+orchestrator_dir=$(dirname "$(dirname "$(realpath "$0")")")
+template_src="$orchestrator_dir/systemd/user/task-watch@.service"
+unit_dir="$HOME/.config/systemd/user"
+template_dst="$unit_dir/task-watch@.service"
+log_dir="$HOME/.local/state/task-orchestrator"
+
+# Pre-create paths the unit references. The unit template uses
+# `StandardOutput=append:` to a file in $log_dir; systemd requires the
+# parent directory to exist before it can route stdout there, so we
+# can't lazily create it from ExecStartPre (its own stdout would also
+# be routed to the missing path — chicken-and-egg).
+mkdir -p "$unit_dir" "$log_dir"
+touch "$log_dir/watcher.log"
+cp "$template_src" "$template_dst"
+echo "installed unit template at $template_dst"
+
+systemctl --user daemon-reload
+
+instance=$(systemd-escape "$project_path")
+echo "enabling task-watch@$instance.service"
+systemctl --user enable --now "task-watch@$instance.service"
+
+echo
+echo "watcher running. inspect with:"
+echo "  systemctl --user status 'task-watch@$instance.service'"
+echo "  journalctl --user -u 'task-watch@$instance.service' -f"

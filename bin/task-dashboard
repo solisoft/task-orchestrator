@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# task-dashboard
+#
+# Walks every project under TASK_ORCH_ROOT (default ~/workspace/soli) and
+# prints per-column task counts. Quick situational awareness across all
+# repos without booting the web UI.
+
+set -euo pipefail
+
+root=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+
+statuses=(todo queued inprogress review done)
+header_fmt="%-24s %5s %6s %11s %6s %5s  %s\n"
+row_fmt="%-24s %5d %6d %11d %6d %5d  %s\n"
+
+printf "$header_fmt" "PROJECT" "todo" "queued" "in-progress" "review" "done" "RUNNING"
+printf '%.s-' {1..80}; printf '\n'
+
+shopt -s nullglob
+for proj in "$root"/*/; do
+  proj=${proj%/}
+  [[ -d "$proj/tasks" ]] || continue
+  name=$(basename "$proj")
+
+  counts=()
+  for status in "${statuses[@]}"; do
+    dir="$proj/tasks/$status"
+    if [[ -d "$dir" ]]; then
+      n=$(find "$dir" -maxdepth 1 -name '*.md' -printf '.' | wc -c)
+    else
+      n=0
+    fi
+    counts+=("$n")
+  done
+
+  running_dir="$state_root/$name/_running"
+  if [[ -d "$running_dir" ]]; then
+    running=$(find "$running_dir" -maxdepth 1 -name '*.md' -printf '%f ' 2>/dev/null)
+  else
+    running=""
+  fi
+
+  printf "$row_fmt" "$name" "${counts[0]}" "${counts[1]}" "${counts[2]}" \
+    "${counts[3]}" "${counts[4]}" "$running"
+done
+shopt -u nullglob

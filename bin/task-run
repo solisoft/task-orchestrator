@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+#
+# task-run <project> <slug>
+#
+# Dispatches a single agent run for a task row in the solidb `tasks`
+# collection. Steps:
+#
+#   1. Fetch the task body from the DB (status must already be
+#      `inprogress` — the dispatcher CAS-claims it before exec'ing us).
+#   2. Create a fresh git worktree on a new branch off origin/main.
+#   3. Write the body into the worktree's tasks/todo/<slug>.md so
+#      `/do-task` finds it.
+#   4. Run `claude -p "/do-task ..."` and then `/review-task` headlessly.
+#   5. If review-task produced a commit: push the branch, open a PR via gh,
+#      mark the row `status=done` (with `pr_url`), and tear down the
+#      worktree.
+#   6. Otherwise: mark `status=failed` with a reason. The log file
+#      survives in either case.
+#
+# State files live under $TASK_ORCH_STATE (default ~/.local/state/task-orchestrator).
+# The DB row is the source of truth for status / pr_url / timestamps;
+# the on-disk .log / .status files are a journal for the run viewer.
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+project_root=$(dirname "$script_dir")
+
+# Load .env so SOLIDB_* are available without the caller having to export.
+if [[ -f "$project_root/.env" ]]; then
+  set -a; source "$project_root/.env"; set +a
+fi
+
+if [[ $# -ne 2 ]]; then
+  echo "usage: $0 <project> <slug>" >&2
+  exit 64
+fi
+
+# Fail fast with an actionable error rather than ENOENT mid-run.
+for cmd in claude gh git jq curl; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "task-run: '$cmd' not on PATH" >&2
+    echo "task-run: PATH=$PATH" >&2
+    exit 127
+  fi
+done
+
+repo_name=$1
+slug=$2
+key="${repo_name}--${slug}"
+md_name="${slug}.md"
+branch="task/${slug}"
+
+ROOT=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
+project_path="$ROOT/$repo_name"
+if [[ ! -d "$project_path" ]]; then
+  echo "task-run: project path not found: $project_path" >&2
+  exit 65
+fi
+
+HOST=${SOLIDB_HOST:-http://localhost:6745}
+DB=${SOLIDB_DATABASE:-tasks}
+USER=${SOLIDB_USERNAME:-admin}
+PASS=${SOLIDB_PASSWORD:-admin}
+
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+state_dir="$state_root/$repo_name"
+log_file="$state_dir/$slug.log"
+status_file="$state_dir/$slug.status"
+
+worktree_root=${TASK_ORCH_WORKTREES:-$HOME/.cache/task-orchestrator/worktrees}
+worktree_dir="$worktree_root/$repo_name/$slug"
+
+mkdir -p "$state_dir" "$worktree_root/$repo_name"
+
+write_status() {
+  printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"
+}
+
+log() {
+  printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$log_file"
+}
+
+# Update the DB row. Use AQL UPDATE so partial fields don't clobber the
+# rest. Errors are logged but never abort the bash flow — the local
+# .status journal is the fallback record.
+db_update() {
+  local patch_json="$1"
+  local body
+  body=$(jq -n --arg key "$key" --argjson patch "$patch_json" \
+    '{
+       query: "UPDATE @key WITH @patch IN tasks RETURN NEW",
+       bindVars: { key: $key, patch: $patch }
+     }')
+  curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' -d "$body" \
+    >> "$log_file" 2>&1 || log "db_update failed: $patch_json"
+}
+
+fail() {
+  log "FAIL: $*"
+  write_status "failed:$*"
+  db_update "$(jq -n --arg r "$*" '{status: "failed", failure_reason: $r, finished_at: now | todateiso8601}')"
+  exit 1
+}
+
+trap 'log "interrupted"; write_status "interrupted"; db_update "{\"status\":\"queued\"}"; exit 130' INT TERM
+
+write_status "starting"
+log "project=$project_path slug=$slug branch=$branch"
+
+# 1. Pull the body from solidb.
+write_status "fetching task body"
+body_url="$HOST/_api/database/$DB/document/tasks/$key"
+body_md=$(curl -s -u "$USER:$PASS" "$body_url" | jq -r '.body_md // empty')
+if [[ -z "$body_md" ]]; then
+  fail "task body empty or row not found ($key)"
+fi
+
+# 2. Refresh origin/main and build a fresh worktree from it.
+write_status "preparing worktree"
+log "fetching origin/main"
+git -C "$project_path" fetch --quiet origin main || fail "git fetch origin main"
+
+if [[ -d "$worktree_dir" ]]; then
+  log "removing stale worktree $worktree_dir"
+  git -C "$project_path" worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
+fi
+
+log "creating worktree at $worktree_dir on branch $branch"
+git -C "$project_path" worktree add -B "$branch" "$worktree_dir" origin/main \
+  >> "$log_file" 2>&1 || fail "git worktree add"
+
+# 3. Drop the body into the worktree's tasks/todo/ where /do-task looks.
+mkdir -p "$worktree_dir/tasks/todo"
+printf '%s' "$body_md" > "$worktree_dir/tasks/todo/$md_name"
+log "seeded worktree's tasks/todo/$md_name (${#body_md} bytes)"
+
+# 3a. Make sure the do-task / review-task skills are present.
+canonical_skills="$HOME/workspace/soli/lang/.claude/skills"
+if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; then
+  mkdir -p "$worktree_dir/.claude/skills"
+  cp -r "$canonical_skills/do-task" "$worktree_dir/.claude/skills/"
+  cp -r "$canonical_skills/review-task" "$worktree_dir/.claude/skills/"
+  log "seeded worktree's .claude/skills/{do-task,review-task}"
+fi
+
+# 4. Run /do-task and /review-task headlessly.
+claude_jq="$script_dir/_stream-format.jq"
+
+run_claude() {
+  local prompt="$1" phase="$2"
+  write_status "$phase"
+  log "running claude $prompt"
+  set +e
+  (
+    cd "$worktree_dir"
+    claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
+      < /dev/null "$prompt" 2>>"$log_file"
+  ) | tee -a "$log_file.jsonl" \
+    | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  local rc=${PIPESTATUS[0]}
+  set -e
+  if [[ $rc -ne 0 ]]; then
+    fail "$prompt exited non-zero (rc=$rc)"
+  fi
+}
+
+# Memory rule: never run /do-task and /review-task in parallel.
+run_claude "/do-task $slug" "running /do-task"
+run_claude "/review-task $slug" "running /review-task"
+
+# 5. /review-task may or may not produce a commit.
+head_sha=$(git -C "$worktree_dir" rev-parse HEAD)
+base_sha=$(git -C "$worktree_dir" rev-parse origin/main)
+
+# Copy any new tasks/todo/*.md the agent created in the worktree back to
+# the source repo (those become new DB rows next ingest).
+sync_new_todos() {
+  [[ -d "$worktree_dir/tasks/todo" ]] || return 0
+  mkdir -p "$project_path/tasks/todo"
+  while IFS= read -r -d '' f; do
+    local base
+    base=$(basename "$f")
+    [[ "$base" == "$md_name" ]] && continue
+    cp "$f" "$project_path/tasks/todo/$base"
+    log "propagated new todo: $base"
+  done < <(find "$worktree_dir/tasks/todo" -maxdepth 1 -type f -name '*.md' -print0)
+}
+
+cleanup_worktree() {
+  log "cleaning up worktree $worktree_dir"
+  git -C "$project_path" worktree remove --force "$worktree_dir" >> "$log_file" 2>&1 \
+    || rm -rf "$worktree_dir"
+}
+
+if [[ "$head_sha" == "$base_sha" ]]; then
+  log "no commit produced — treating as no-code-change success"
+  sync_new_todos
+  cleanup_worktree
+  iso=$(date -Iseconds)
+  db_update "$(jq -n --arg iso "$iso" '{status: "done", finished_at: $iso, outcome: "no-commit"}')"
+  write_status "done:no-commit"
+  log "DONE — no commit (review closed without code change)"
+  exit 0
+fi
+
+log "branch $branch ahead of origin/main: $head_sha"
+
+write_status "pushing branch"
+log "pushing $branch to origin"
+git -C "$worktree_dir" push --quiet --set-upstream origin "$branch" \
+  >> "$log_file" 2>&1 || fail "git push"
+
+write_status "opening PR"
+title=$(git -C "$worktree_dir" log -1 --format=%s "origin/main..$branch" | head -1)
+body="Automated by task-orchestrator. Source: tasks DB row $key."
+log "opening PR: $title"
+pr_url=$(
+  cd "$worktree_dir"
+  gh pr create --title "$title" --body "$body" --base main --head "$branch" 2>&1 | tee -a "$log_file" | tail -1
+) || fail "gh pr create"
+log "PR opened: $pr_url"
+
+# 6. Mark the row done (status=review until merge; pr_url stored).
+sync_new_todos
+cleanup_worktree
+
+iso=$(date -Iseconds)
+db_update "$(jq -n --arg iso "$iso" --arg url "$pr_url" \
+  '{status: "review", pr_url: $url, finished_at: $iso}')"
+printf '%s\n' "$pr_url" > "$state_dir/$slug.pr"
+write_status "done:$pr_url"
+log "DONE — PR: $pr_url"

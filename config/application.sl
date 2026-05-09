@@ -22,6 +22,6 @@
 #
 # Uncomment after confirming your proxy strips inbound `X-Forwarded-*`:
 #
-#   enable_trust_proxy
+enable_trust_proxy
 #
 # Equivalent operator-level toggle: `SOLI_TRUST_PROXY=1` in the env.

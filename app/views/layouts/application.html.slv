@@ -12,6 +12,39 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- HTMX for snappy in-place updates on Queue / Save / move actions -->
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+    <style>
+      /* HTMX v2 ships no CSS; replicate the canonical indicator pattern. */
+      .htmx-indicator { display: none; }
+      .htmx-request .htmx-indicator,
+      .htmx-request.htmx-indicator { display: inline; }
+
+      /* Hand-rolled markdown styles (no Tailwind typography plugin). */
+      .task-md { color: rgb(203 213 225); line-height: 1.65; }
+      .task-md h1, .task-md h2, .task-md h3, .task-md h4 { color: rgb(241 245 249); font-weight: 600; }
+      .task-md h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+      .task-md h3 { font-size: 1rem; margin: 1.25rem 0 0.4rem; }
+      .task-md h2:first-child, .task-md h3:first-child { margin-top: 0; }
+      .task-md p { margin: 0.5rem 0; }
+      .task-md ul, .task-md ol { margin: 0.5rem 0; padding-left: 1.5rem; }
+      .task-md ul { list-style: disc; }
+      .task-md ol { list-style: decimal; }
+      .task-md li { margin: 0.25rem 0; }
+      .task-md strong { color: rgb(241 245 249); font-weight: 600; }
+      .task-md em { color: rgb(226 232 240); font-style: italic; }
+      .task-md code { color: rgb(165 180 252); background: rgba(99,102,241,0.12); padding: 0.1em 0.35em; border-radius: 0.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+      .task-md pre { background: rgb(2 6 23); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.75rem 1rem; overflow-x: auto; margin: 0.75rem 0; }
+      .task-md pre code { background: transparent; padding: 0; color: rgb(226 232 240); }
+      .task-md a { color: rgb(165 180 252); text-decoration: underline; text-underline-offset: 2px; }
+      .task-md a:hover { color: rgb(199 210 254); }
+      .task-md blockquote { border-left: 3px solid rgba(99,102,241,0.5); padding-left: 1rem; margin: 0.75rem 0; color: rgb(148 163 184); }
+      .task-md table { border-collapse: collapse; margin: 0.75rem 0; }
+      .task-md th, .task-md td { border: 1px solid rgba(255,255,255,0.1); padding: 0.4rem 0.75rem; }
+      .task-md th { background: rgba(255,255,255,0.05); font-weight: 600; }
+      .task-md hr { border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
+    </style>
 </head>
 <body class="min-h-full bg-slate-950 text-white font-sans antialiased">
     <%= yield %>

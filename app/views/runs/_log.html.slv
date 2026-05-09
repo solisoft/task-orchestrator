@@ -1,0 +1,46 @@
+<% let token = status == nil ? nil : status["status"] %>
+<% let pill = task_status_pill(token) %>
+<% let polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
+<% let elapsed = status == nil ? "" : task_format_elapsed(status["at"]) %>
+
+<div id="run-panel"
+  <% if polling %>
+    hx-get="/projects/<%= project["name"] %>/tasks/<%= slug %>/run/log"
+    hx-trigger="every 2s"
+    hx-swap="outerHTML"
+    hx-on::before-swap="window.__taskOrchSticky = (function(p){ if(!p) return true; return (p.scrollHeight - p.scrollTop - p.clientHeight) < 24; })(document.querySelector('#run-log'))"
+    hx-on::after-swap="(function(p){ if(p && window.__taskOrchSticky !== false) p.scrollTop = p.scrollHeight; })(document.querySelector('#run-log'))"
+  <% end %>
+>
+  <!-- status pill row -->
+  <div class="flex items-center gap-3 mb-4 flex-wrap">
+    <span class="inline-flex items-center gap-2 rounded-full border <%= task_status_pill_classes(pill["tone"]) %> px-3 py-1 text-sm font-medium">
+      <% if pill["tone"] == "amber" %>
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+      <% else %>
+        <span class="text-base leading-none"><%= pill["icon"] %></span>
+      <% end %>
+      <%= pill["label"] %>
+    </span>
+
+    <% if elapsed != "" %>
+      <span class="text-xs text-slate-500 font-mono">⏱ <%= elapsed %></span>
+    <% end %>
+
+    <% if pr_url != nil %>
+      <a href="<%= pr_url %>" target="_blank" rel="noopener" class="ml-auto inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 border border-indigo-400/30 px-3 py-1 text-sm font-medium transition-colors">
+        Open PR
+        <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V8h1v6H2V2h6v1H3zm6.5 0h3.5v3.5h-1V4.7L8.4 9.3l-.7-.7L12.3 4H9.5V3z"/></svg>
+      </a>
+    <% end %>
+  </div>
+
+  <!-- log body -->
+  <div id="run-log" class="rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto">
+    <% if tail == "" %>
+      <p class="font-mono text-xs text-slate-600 p-6 text-center italic">no log yet — task hasn't been queued</p>
+    <% else %>
+      <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in tail.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
+    <% end %>
+  </div>
+</div>

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# task-queue <project>/<slug>
+# task-queue <project> <slug>
+# task-queue <path/to/<project>/tasks/todo/<slug>.md>
+#
+# Flips a task's row in the solidb `tasks` collection from `todo` to
+# `queued`, which causes the dispatcher's live query to pick it up.
+# The path form is supported so existing keybindings of the form
+#   task-queue ~/workspace/soli/lang/tasks/todo/SEC-095-foo.md
+# keep working — we just derive (project, slug) from the path.
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+project_root=$(dirname "$script_dir")
+if [[ -f "$project_root/.env" ]]; then
+  set -a; source "$project_root/.env"; set +a
+fi
+
+HOST=${SOLIDB_HOST:-http://localhost:6745}
+DB=${SOLIDB_DATABASE:-tasks}
+USER=${SOLIDB_USERNAME:-admin}
+PASS=${SOLIDB_PASSWORD:-admin}
+
+if [[ $# -eq 1 ]]; then
+  arg=$1
+  case "$arg" in
+    */tasks/todo/*.md)
+      src=$(realpath "$arg")
+      slug=$(basename "$src" .md)
+      project=$(basename "${src%/tasks/todo/*}")
+      ;;
+    */*)
+      project="${arg%%/*}"
+      slug="${arg#*/}"
+      ;;
+    *)
+      echo "task-queue: ambiguous argument '$arg' — pass <project>/<slug> or a tasks/todo/*.md path" >&2
+      exit 64
+      ;;
+  esac
+elif [[ $# -eq 2 ]]; then
+  project=$1
+  slug=$2
+else
+  echo "usage: $0 <project>/<slug>   |   <project> <slug>   |   <path-to-tasks/todo/X.md>" >&2
+  exit 64
+fi
+
+key="${project}--${slug}"
+iso=$(date -Iseconds)
+
+# Conditional UPDATE: the FOR/FILTER drives an atomic check-and-update —
+# we only flip rows currently in `todo`. Single-statement queries on the
+# cursor endpoint run as a server-side transaction, so this is a one-shot
+# CAS even if two `task-queue` invocations race.
+body=$(jq -n --arg key "$key" --arg iso "$iso" \
+  '{
+     query: "FOR doc IN tasks FILTER doc._key == @key AND doc.status == \"todo\" UPDATE doc WITH { status: \"queued\", queued_at: @iso } IN tasks RETURN NEW",
+     bindVars: { key: $key, iso: $iso }
+   }')
+
+resp=$(curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
+  -H 'content-type: application/json' -d "$body")
+
+n=$(printf '%s' "$resp" | jq -r '.result | length // 0')
+if [[ "$n" == "1" ]]; then
+  echo "queued: $project/$slug"
+else
+  cur=$(curl -s -u "$USER:$PASS" "$HOST/_api/database/$DB/document/tasks/$key" | jq -r '.status // "missing"')
+  echo "task-queue: nothing changed for $project/$slug (current status: $cur)" >&2
+  exit 65
+fi

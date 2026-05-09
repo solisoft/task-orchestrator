@@ -1,0 +1,157 @@
+#!/usr/bin/env bun
+//
+// task-dispatch
+//
+// One global daemon. Opens a WebSocket live-query against the solidb
+// `tasks` collection and watches for rows entering `status == "queued"`.
+// For each, attempts an atomic CAS-claim (UPDATE ... FILTER status ==
+// "queued") and, if it wins, fires `bin/task-run <project> <slug>`.
+//
+// Replaces the old per-project inotify watcher (bin/task-watch). One
+// process now covers every project in the workspace, because the queue
+// lives in the DB instead of a per-repo `tasks/queued/` directory.
+//
+// Environment (loaded from .env at the project root):
+//   SOLIDB_HOST, SOLIDB_DATABASE, SOLIDB_USERNAME, SOLIDB_PASSWORD
+//   TASK_ORCH_STATE  — where dispatcher logs land
+
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, appendFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { config as loadEnv } from "node:process";
+
+const SCRIPT_DIR = dirname(import.meta.path);
+const PROJECT_ROOT = dirname(SCRIPT_DIR);
+const ENV_FILE = join(PROJECT_ROOT, ".env");
+
+if (existsSync(ENV_FILE)) {
+  const lines = (await Bun.file(ENV_FILE).text()).split("\n");
+  for (const line of lines) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+  }
+}
+
+const HOST = process.env.SOLIDB_HOST ?? "http://localhost:6745";
+const DB = process.env.SOLIDB_DATABASE ?? "tasks";
+const USER = process.env.SOLIDB_USERNAME ?? "admin";
+const PASS = process.env.SOLIDB_PASSWORD ?? "admin";
+const STATE_ROOT = process.env.TASK_ORCH_STATE
+  ?? join(process.env.HOME ?? "/tmp", ".local/state/task-orchestrator");
+const LOG_FILE = join(STATE_ROOT, "dispatcher.log");
+
+const BASIC = "Basic " + Buffer.from(`${USER}:${PASS}`).toString("base64");
+const wsUrl = HOST.replace(/^http/, "ws") + "/_api/ws/changefeed";
+
+mkdirSync(STATE_ROOT, { recursive: true });
+
+function log(msg: string) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`;
+  process.stdout.write(line);
+  appendFileSync(LOG_FILE, line);
+}
+
+// Ask solidb to atomically flip a queued row to inprogress. Returns true
+// if we won the claim (the conditional UPDATE actually wrote a row).
+async function claim(key: string): Promise<boolean> {
+  const url = `${HOST}/_api/database/${DB}/cursor`;
+  const query = `
+    FOR doc IN tasks
+      FILTER doc._key == @key AND doc.status == "queued"
+      UPDATE doc WITH { status: "inprogress", started_at: DATE_ISO8601(DATE_NOW()) } IN tasks
+      RETURN NEW
+  `;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: BASIC },
+    body: JSON.stringify({ query, bindVars: { key } }),
+  });
+  if (!resp.ok) {
+    log(`claim ${key} HTTP ${resp.status}: ${await resp.text()}`);
+    return false;
+  }
+  const json = await resp.json() as { result: unknown[] };
+  return Array.isArray(json.result) && json.result.length === 1;
+}
+
+// In-process set so we don't double-dispatch the same row inside a single
+// burst of live_query results (the query streams the FULL set every time
+// anything changes, including our own UPDATE — so the same key can show
+// up across consecutive frames before the server's view catches up).
+const inflight = new Set<string>();
+
+function dispatch(row: { _key: string; project: string; slug: string }) {
+  if (inflight.has(row._key)) return;
+  inflight.add(row._key);
+
+  log(`dispatching ${row.project}/${row.slug}`);
+  const child = spawn(join(SCRIPT_DIR, "task-run"), [row.project, row.slug], {
+    stdio: "inherit",
+    detached: false,
+  });
+  child.on("exit", code => {
+    log(`task-run ${row.project}/${row.slug} exited rc=${code}`);
+    inflight.delete(row._key);
+  });
+}
+
+async function tryClaimAndDispatch(row: { _key: string; project: string; slug: string }) {
+  if (inflight.has(row._key)) return;
+  if (await claim(row._key)) dispatch(row);
+}
+
+// Fetch a short-lived JWT to put in the WS URL — browser/Web WebSocket
+// clients can't set Authorization headers, and solidb deliberately does
+// not accept Basic on the upgrade request for that reason.
+async function fetchLivequeryToken(): Promise<string> {
+  const r = await fetch(`${HOST}/_api/livequery/token`, {
+    headers: { authorization: BASIC },
+  });
+  if (!r.ok) throw new Error(`livequery token fetch failed: ${r.status} ${await r.text()}`);
+  const j = await r.json() as { token: string };
+  return j.token;
+}
+
+async function connect() {
+  let token: string;
+  try { token = await fetchLivequeryToken(); }
+  catch (e) {
+    log(`token fetch failed: ${(e as Error).message}; retry in 5s`);
+    setTimeout(connect, 5000);
+    return;
+  }
+  const url = `${wsUrl}?token=${encodeURIComponent(token)}`;
+  log(`connecting (token-auth) db=${DB}`);
+  const ws = new WebSocket(url);
+
+  ws.addEventListener("open", () => {
+    log("connected; subscribing live_query queued");
+    ws.send(JSON.stringify({
+      type: "live_query",
+      database: DB,
+      query: `FOR doc IN tasks FILTER doc.status == "queued" SORT doc.queued_at ASC RETURN doc`,
+      id: "queued",
+    }));
+  });
+
+  ws.addEventListener("message", async ev => {
+    let msg: any;
+    try { msg = JSON.parse(ev.data as string); }
+    catch { log(`bad frame: ${ev.data}`); return; }
+    if (msg.type !== "query_result") return;
+    const rows = (msg.result as any[]) ?? [];
+    if (rows.length === 0) return;
+    for (const row of rows) await tryClaimAndDispatch(row);
+  });
+
+  ws.addEventListener("close", ev => {
+    log(`closed code=${ev.code} reason=${ev.reason}; retry in 5s`);
+    setTimeout(connect, 5000);
+  });
+
+  ws.addEventListener("error", err => {
+    log(`error ${(err as any)?.message ?? err}`);
+  });
+}
+
+connect();

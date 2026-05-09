@@ -1,19 +1,18 @@
-# Home controller - handles the root routes
+# Home — list every project under workspace_root() with task counts.
 
-class HomeController < Controller
-    # GET /
-    def index(req)
-        return render("home/index", {
-            "title": "Welcome"
-        })
-    end
+fn index(req)
+  render("home/index", {
+    "title": "Task Orchestrator",
+    "projects": list_projects(),
+    "root": workspace_root(),
+    "statuses": Task.kanban_statuses()
+  })
+end
 
-    # GET /health
-    def health(req)
-        return {
-            "status": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": "{\"status\":\"ok\"}"
-        }
-    end
+fn health(req)
+  {
+    "status": 200,
+    "headers": {"Content-Type": "application/json"},
+    "body": "{\"status\":\"ok\"}"
+  }
 end

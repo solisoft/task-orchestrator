@@ -1,92 +1,123 @@
 # task-orchestrator
 
-A Soli MVC application.
+Per-repo task queue + Claude Code dispatcher across every project under
+`~/workspace/soli/`. Drop a `.md` task spec into a project's `tasks/todo/`,
+move it to `tasks/queued/` when you want to dispatch, and a watcher fires a
+headless Claude Code agent that runs `/do-task` and `/review-task` end-to-end
+in a fresh git worktree, then opens a PR via `gh`.
 
-## Getting Started
-
-### Development Server
-
-Start the development server with hot reload:
-
-```bash
-soli serve . --dev
-```
-
-Your app will be available at [http://localhost:5011](http://localhost:5011)
-
-### Production Server
-
-Start the production server:
-
-```bash
-soli serve . --port 5011
-```
-
-Or run as a daemon:
-
-```bash
-soli serve . -d
-```
-
-## Project Structure
+## Layout
 
 ```
 task-orchestrator/
-├── app/
-│   ├── assets/
-│   │   └── css/
-│   │       └── application.css  # Source CSS with Tailwind directives
-│   ├── controllers/     # Request handlers
-│   ├── models/          # Data models
-│   └── views/           # HTML templates
-│       ├── home/        # Home page views
-│       └── layouts/     # Layout templates
+├── bin/
+│   ├── task-run            # one-shot dispatch: worktree + agents + PR
+│   ├── task-watch          # inotify daemon, one per repo
+│   ├── task-queue          # convenience: mv tasks/todo/X.md → tasks/queued/
+│   ├── task-dashboard      # cross-repo status (CLI table)
+│   └── install-watcher     # registers + starts the systemd-user unit
+├── systemd/user/
+│   └── task-watch@.service # template unit (instance = path-encoded repo)
+├── app/                    # Soli web UI (paused; see "Status" below)
 ├── config/
-│   └── routes.sl      # Route definitions
-├── db/
-│   └── migrations/      # Database migrations
-├── public/              # Static assets (compiled output)
-│   ├── css/
-│   │   └── application.css  # Compiled CSS (generated)
-│   ├── js/
-│   └── images/
-├── tests/               # Test files
-├── package.json         # npm dependencies
-└── tailwind.config.js   # Tailwind configuration
+└── README.md               # this file
 ```
 
-## Database Migrations
+## How a task flows
 
-Generate a new migration:
+```
+   you drop a .md                you mv to queued/
+       │                                │
+       ▼                                ▼
+  tasks/todo/   ─────────────────►  tasks/queued/
+                                        │
+                                        ▼
+                          inotifywait fires task-run
+                                        │
+                                        ▼
+              fresh worktree + claude /do-task + /review-task
+                                        │
+                                ┌───────┴───────┐
+                       commit produced       no commit
+                                │                  │
+                                ▼                  ▼
+                        push + gh pr create   tasks/failed/
+                                │                  │
+                                └─────► state log ◄┘
+```
+
+The web UI (planned) lets you do the `mv` and edit task md content from a
+browser. Until BUG-001 is resolved (see Status), use `bin/task-queue` or a
+plain `mv` from the shell.
+
+## Setup
 
 ```bash
-soli db:migrate generate create_users
+# Dependencies
+sudo apt install inotify-tools                # inotifywait
+gh auth login                                 # gh CLI authenticated against your fork
+claude --version                              # Claude Code CLI in PATH
+
+# Per-repo: enable + start the watcher under systemd-user
+~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/lang
+~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/db
+# ... repeat per repo ...
+
+# Inspect
+systemctl --user list-units 'task-watch@*'
+journalctl --user -u 'task-watch@*' -f
 ```
 
-Run pending migrations:
+## Daily use
 
 ```bash
-soli db:migrate up
+# 1. Draft a task
+$EDITOR ~/workspace/soli/lang/tasks/todo/SEC-095-foo.md
+
+# 2. Validate + queue (fires the agent)
+~/workspace/soli/task-orchestrator/bin/task-queue \
+  ~/workspace/soli/lang/tasks/todo/SEC-095-foo.md
+
+# 3. Watch progress
+tail -f ~/.local/state/task-orchestrator/lang/SEC-095-foo.log
+
+# 4. See backlog across every repo
+~/workspace/soli/task-orchestrator/bin/task-dashboard
 ```
 
-Rollback last migration:
+State files live at `~/.local/state/task-orchestrator/<repo>/<task>.{log,status,pr}`.
+Active git worktrees at `~/.cache/task-orchestrator/worktrees/<repo>/<task>/`.
 
-```bash
-soli db:migrate down
-```
+## Failure mode
 
-Check migration status:
+If `/review-task` rejects the fix or the agent exits non-zero:
 
-```bash
-soli db:migrate status
-```
+- The task md is moved to `tasks/failed/<name>.md` (out of `tasks/queued/` so
+  it can't re-trigger).
+- The full log is preserved at `~/.local/state/task-orchestrator/<repo>/<task>.log`.
+- The git worktree is removed; the local branch may still exist for
+  inspection (no PR was opened).
 
-## Documentation
+To retry, fix the task spec and `mv tasks/failed/<name>.md tasks/todo/`.
 
-- [Soli MVC Documentation](https://soli.solisoft.net/docs)
-- [Soli Language Reference](https://soli.solisoft.net/docs/soli-language)
-- [Tailwind CSS](https://tailwindcss.com/docs)
+## Configuration
 
-## License
+Environment variables read by the scripts:
 
-MIT
+| Var                       | Default                                         | Purpose |
+|---------------------------|-------------------------------------------------|---------|
+| `TASK_ORCH_ROOT`          | `~/workspace/soli`                              | Where the dashboard scans for projects with `tasks/` folders. |
+| `TASK_ORCH_STATE`         | `~/.local/state/task-orchestrator`              | Log + status files per task run. |
+| `TASK_ORCH_WORKTREES`     | `~/.cache/task-orchestrator/worktrees`          | Where agents work in isolation. Cleaned up on success. |
+
+## Status
+
+**Web UI is paused.** The Soli serve loader rejects multi-statement bodies in
+the new `soli new` scaffold despite the same files parsing cleanly via
+`soli <file.sl>`. Filed as `lang/tasks/todo/BUG-001-serve-loader-parse-error.md`
+with a minimal reproducer. Resume `app/controllers/*` + `app/views/*` once
+that lands.
+
+**Working today:** `bin/task-run`, `bin/task-watch`, `bin/task-queue`,
+`bin/task-dashboard`, and the systemd unit. The full dispatch loop functions
+end-to-end from CLI; the web UI is the only piece blocked.

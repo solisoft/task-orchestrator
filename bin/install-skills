@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# install-skills [<project>...]
+#
+# Copies the canonical do-task / review-task skills from
+#   ~/workspace/soli/lang/.claude/skills/
+# into every target project's .claude/skills/, creating the directory
+# tree if missing. Idempotent — overwrites the SKILL.md if its
+# contents differ, otherwise no-op.
+#
+# Without arguments: installs into every sibling repo under
+# ~/workspace/soli/ that has a tasks/ folder, *except* lang itself
+# (the source) and task-orchestrator.
+
+set -euo pipefail
+
+source_dir="$HOME/workspace/soli/lang/.claude/skills"
+if [[ ! -d "$source_dir/do-task" || ! -d "$source_dir/review-task" ]]; then
+  echo "install-skills: source skills missing under $source_dir" >&2
+  exit 65
+fi
+
+if [[ $# -gt 0 ]]; then
+  targets=("$@")
+else
+  targets=()
+  for path in "$HOME/workspace/soli"/*/; do
+    name=$(basename "$path")
+    [[ "$name" == "lang" || "$name" == "task-orchestrator" ]] && continue
+    [[ -d "$path/tasks" ]] || continue
+    targets+=("$path")
+  done
+fi
+
+if [[ ${#targets[@]} -eq 0 ]]; then
+  echo "install-skills: no targets" >&2
+  exit 0
+fi
+
+for proj in "${targets[@]}"; do
+  proj_path=$(realpath "$proj")
+  name=$(basename "$proj_path")
+  for skill in do-task review-task; do
+    src="$source_dir/$skill/SKILL.md"
+    dst_dir="$proj_path/.claude/skills/$skill"
+    dst="$dst_dir/SKILL.md"
+    mkdir -p "$dst_dir"
+    if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then
+      echo "  $name/$skill: up to date"
+    else
+      cp "$src" "$dst"
+      echo "  $name/$skill: installed"
+    fi
+  done
+done

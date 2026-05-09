@@ -1,0 +1,7 @@
+<div id="body-md-wrapper">
+  <textarea name="body_md" required class="w-full h-[50vh] rounded-xl bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"><%= body %></textarea>
+  <p class="text-xs text-emerald-400/80 mt-1 italic">Spec drafted by /plan-task — review and edit before saving.</p>
+</div>
+<div id="title-wrapper" class="mb-4" hx-swap-oob="outerHTML">
+  <input name="title" value="<%= title %>" class="w-full rounded-lg bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+</div>
