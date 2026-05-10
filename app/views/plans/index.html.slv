@@ -19,10 +19,12 @@
       <!-- Column layout: each plan is a collapsible card. -->
       <div class="space-y-4 animate-fade-in animate-fade-in-1">
         <% for p in plans %>
-          <details class="rounded-xl glass-card border border-white/10 group" <%= p["status"] == "done" ? "open" : "" %>>
+          <details class="rounded-xl glass-card border border-white/10 group" <%= p["status"] == "done" or p["zombie"] ? "open" : "" %>>
             <summary class="flex items-center gap-4 px-5 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors rounded-xl select-none marker:hidden">
               <!-- Status badge -->
-              <% if p["status"] == "done" %>
+              <% if p["zombie"] %>
+                <span class="shrink-0 w-2 h-2 rounded-full bg-slate-500"></span>
+              <% elsif p["status"] == "done" %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-emerald-400 shadow-glow-emerald"></span>
               <% elsif p["status"].starts_with("failed") %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-red-400 shadow-glow-red"></span>
@@ -35,9 +37,10 @@
 
               <!-- Status text -->
               <span class="text-xs font-mono uppercase px-2 py-0.5 rounded-full shrink-0
+                <%= p["zombie"] ? "bg-slate-400/10 text-slate-400 border border-slate-400/20" : "" %>
                 <%= p["status"] == "done" ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/20" : "" %>
                 <%= p["status"].starts_with("failed") ? "bg-red-400/10 text-red-300 border border-red-400/20" : "" %>
-                <%= p["status"] != "done" and not p["status"].starts_with("failed") ? "bg-amber-400/10 text-amber-300 border border-amber-400/20" : "" %>
+                <%= not p["zombie"] and p["status"] != "done" and not p["status"].starts_with("failed") ? "bg-amber-400/10 text-amber-300 border border-amber-400/20" : "" %>
               "><%= p["status"] %></span>
 
               <!-- Model -->
@@ -76,10 +79,48 @@
               </div>
             <% end %>
 
-            <% if p["status"] == "done" and p["body"] != "" and p["prompt"] != "" %>
+            <% if p["prompt"] != "" %>
+              <div class="border-t border-white/5 px-5 py-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400/70">Prompt</span>
+                <p class="mt-1 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap"><%= p["prompt"] %></p>
+              </div>
+            <% end %>
+
+            <% if p["project_path"] != "" %>
               <div class="border-t border-white/5 px-5 py-2 flex items-center gap-2">
-                <span class="text-[11px] text-slate-500 italic">Original prompt:</span>
-                <span class="text-xs text-slate-400 font-mono truncate"><%= p["prompt_emoji"] %></span>
+                <span class="text-[11px] text-slate-500">Project:</span>
+                <span class="text-xs text-slate-400 font-mono"><%= p["project_path"] %></span>
+              </div>
+            <% end %>
+
+            <% if p["status_log"] != nil and p["status_log"].length > 0 %>
+              <div class="border-t border-white/5 px-5 py-3">
+                <details class="w-full">
+                  <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300 transition-colors select-none marker:content-[''] inline-flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    Status timeline (<%= str(p["status_log"].length) %> entries)
+                  </summary>
+                  <div class="mt-2 space-y-1 max-h-[20vh] overflow-y-auto">
+                    <% for entry in p["status_log"] %>
+                      <div class="flex items-center gap-2 text-xs font-mono">
+                        <span class="text-slate-600 shrink-0"><%= entry["at"] %></span>
+                        <span class="text-slate-400"><%= entry["status"] %></span>
+                      </div>
+                    <% end %>
+                  </div>
+                </details>
+              </div>
+            <% end %>
+
+            <% if p["log"] != "" %>
+              <div class="border-t border-white/5 px-5 py-3">
+                <details class="w-full">
+                  <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300 transition-colors select-none marker:content-[''] inline-flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    Agent output log
+                  </summary>
+                  <pre class="mt-2 rounded-lg bg-slate-900/80 border border-white/5 p-4 font-mono text-xs text-slate-300 max-h-[50vh] overflow-y-auto whitespace-pre-wrap"><%= p["log"] %></pre>
+                </details>
               </div>
             <% end %>
           </details>
