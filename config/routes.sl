@@ -3,6 +3,7 @@
 # ── Root & Utility ──────────────────
 
 get("/", "home#index")
+get("/plans", "plans#index")
 get("/health", "home#health")
 get("/debug", "debug#show")
 get("/docs", "docs#index")
