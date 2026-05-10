@@ -55,6 +55,68 @@ def _tq_seed_consumed(suffix, started_at_iso, agent_type)
   })
 end
 
+describe("TasksController#create", fn()
+  before_each(fn()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("persists review_model when provided", fn()
+    let response = post("/projects/proj/tasks", {
+      "body_md": "# Test task\n\nDo something",
+      "review_model": "claude-sonnet-4-20250514"
+    })
+    assert_eq(res_status(response), 302)
+    let task = Task.find_by_slug("proj", "test-task")
+    assert_not_null(task)
+    assert_eq(task.review_model, "claude-sonnet-4-20250514")
+  end)
+
+  test("stores empty review_model when not provided", fn()
+    let response = post("/projects/proj/tasks", {
+      "body_md": "# No review model\n\nDo something"
+    })
+    assert_eq(res_status(response), 302)
+    let task = Task.find_by_slug("proj", "no-review-model")
+    assert_not_null(task)
+    assert_eq(task.review_model, "")
+  end)
+end)
+
+describe("TasksController#save", fn()
+  before_each(fn()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("updates review_model on save", fn()
+    let slug = _tq_seed_todo()
+    let response = post("/projects/proj/tasks/" + slug + "/save", {
+      "review_model": "claude-sonnet-4-20250514"
+    })
+    assert_eq(res_status(response), 302)
+    let task = Task.find_by_slug("proj", slug)
+    assert_eq(task.review_model, "claude-sonnet-4-20250514")
+  end)
+
+  test("allows a task with reviewing status to validate", fn()
+    let task = Task.create({
+      "_key":    "proj--review-test",
+      "project": "proj",
+      "slug":    "review-test",
+      "title":   "Review test",
+      "body_md": "# Review test",
+      "status":  "reviewing"
+    })
+    assert_null(task._errors)
+    assert_eq(task.status, "reviewing")
+  end)
+end)
+
 describe("TasksController#queue", fn()
   before_each(fn()
     Task.delete_all()

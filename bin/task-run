@@ -109,10 +109,13 @@ trap 'log "interrupted"; write_status "interrupted"; db_update "{\"status\":\"qu
 write_status "starting"
 log "project=$project_path slug=$slug branch=$branch"
 
-# 1. Pull the body from solidb.
+# 1. Pull the body from solidb, plus model overrides.
 write_status "fetching task body"
 body_url="$HOST/_api/database/$DB/document/tasks/$key"
-body_md=$(curl -s -u "$USER:$PASS" "$body_url" | jq -r '.body_md // empty')
+row_json=$(curl -s -u "$USER:$PASS" "$body_url")
+body_md=$(echo "$row_json" | jq -r '.body_md // empty')
+task_model=$(echo "$row_json" | jq -r '.task_model // empty')
+review_model=$(echo "$row_json" | jq -r '.review_model // empty')
 if [[ -z "$body_md" ]]; then
   fail "task body empty or row not found ($key)"
 fi
@@ -149,14 +152,20 @@ fi
 claude_jq="$script_dir/_stream-format.jq"
 
 run_claude() {
-  local prompt="$1" phase="$2"
+  local prompt="$1" phase="$2" model="$3"
   write_status "$phase"
-  log "running claude $prompt"
+  log "running claude $prompt (model=${model:-default})"
   set +e
   (
     cd "$worktree_dir"
-    claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
-      < /dev/null "$prompt" 2>>"$log_file"
+    if [[ -n "$model" ]]; then
+      claude --dangerously-skip-permissions -p --model "$model" \
+        --output-format stream-json --verbose \
+        < /dev/null "$prompt" 2>>"$log_file"
+    else
+      claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
+        < /dev/null "$prompt" 2>>"$log_file"
+    fi
   ) | tee -a "$log_file.jsonl" \
     | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
   local rc=${PIPESTATUS[0]}
@@ -167,8 +176,9 @@ run_claude() {
 }
 
 # Memory rule: never run /do-task and /review-task in parallel.
-run_claude "/do-task $slug" "running /do-task"
-run_claude "/review-task $slug" "running /review-task"
+run_claude "/do-task $slug" "running /do-task" "$task_model"
+db_update '{"status":"reviewing"}'
+run_claude "/review-task $slug" "running /review-task" "${review_model:-$task_model}"
 
 # 5. /review-task may or may not produce a commit.
 head_sha=$(git -C "$worktree_dir" rev-parse HEAD)

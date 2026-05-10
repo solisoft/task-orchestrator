@@ -32,12 +32,13 @@ fn create(req)
   end
   let slug = unique_slug_for(project["name"], title.slugify())
   let task = Task.create({
-    "_key":    Task.key_for(project["name"], slug),
-    "project": project["name"],
-    "slug":    slug,
-    "title":   title,
-    "body_md": body,
-    "status":  "todo"
+    "_key":         Task.key_for(project["name"], slug),
+    "project":      project["name"],
+    "slug":         slug,
+    "title":        title,
+    "body_md":      body,
+    "status":       "todo",
+    "review_model": req["form"]["review_model"] ?? ""
   })
   if task._errors
     return render("tasks/new", {
@@ -106,6 +107,7 @@ fn save(req)
     return {"status": 422, "body": "Can only edit tasks in todo (current: " + task.status + ")"}
   end
   task.body_md = req["form"]["body_md"] ?? ""
+  task.review_model = req["form"]["review_model"] ?? ""
   let title = (req["form"]["title"] ?? "").trim()
   if title != ""
     task.title = title
@@ -172,8 +174,9 @@ fn plan(req)
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": render_partial("tasks/planned_body", {
-      "body":  result["body"],
-      "title": title
+      "body":         result["body"],
+      "title":        title,
+      "review_model": req["form"]["review_model"] ?? ""
     })
   }
 end

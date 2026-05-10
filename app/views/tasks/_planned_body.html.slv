@@ -5,3 +5,7 @@
 <div id="title-wrapper" class="mb-4" hx-swap-oob="outerHTML">
   <input name="title" value="<%= title %>" class="w-full rounded-lg bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
 </div>
+<div id="review-model-wrapper" class="mt-4" hx-swap-oob="outerHTML">
+  <label for="review_model" class="block text-sm font-medium text-slate-300 mb-1">Review model <span class="text-xs text-slate-500">(optional — falls back to the implementation model)</span></label>
+  <input id="review_model" name="review_model" placeholder="e.g. claude-sonnet-4-20250514" value="<%= review_model %>" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+</div>

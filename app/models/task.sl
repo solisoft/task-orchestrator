@@ -9,7 +9,7 @@ class Task < Model
   validates("slug",       { "presence": true,
                             "format": "^[A-Za-z0-9][A-Za-z0-9._-]*$" })
   validates("status",     { "presence": true,
-                            "format": "^(todo|queued|inprogress|review|done|failed)$" })
+                            "format": "^(todo|queued|inprogress|reviewing|review|done|failed)$" })
   validates("title",      { "presence": true })
   # `agent_type` is optional — when unset the dashboard falls back to
   # `Setting.get("agent_type")`. The format check only fires when the
@@ -19,7 +19,7 @@ class Task < Model
   before_save("touch_timestamps")
 
   static def statuses()
-    ["todo", "queued", "inprogress", "review", "done", "failed"]
+    ["todo", "queued", "inprogress", "reviewing", "review", "done", "failed"]
   end
 
   # Agents the orchestrator can dispatch to. Mirrors the regex above and
@@ -33,7 +33,7 @@ class Task < Model
   # Status columns shown on the kanban (skips "failed", which is rendered
   # as a banner on the project page when a run blew up).
   static def kanban_statuses()
-    ["todo", "queued", "inprogress", "review", "done"]
+    ["todo", "queued", "inprogress", "reviewing", "review", "done"]
   end
 
   static def key_for(project, slug)
