@@ -381,10 +381,13 @@ fn plan(req)
   }
 end
 
-# HTMX poll endpoint for the in-flight plan agent. Tails the log file
-# and, when the runner has flagged status=done, swaps the textarea to
-# the planned body via render_partial("tasks/planned_body"). Polling
-# stops automatically because that partial doesn't carry hx-* attrs.
+# HTMX poll endpoint for the in-flight plan agent. Returns ONLY the
+# right-panel `_plan_stream` partial (root id `plan-stream`), so the
+# 2-second poll never re-renders the static prompt aside on the left.
+# When the runner has flagged status=done, returns the full planned-body
+# replacement and uses HX-Retarget/HX-Reswap so htmx swaps the whole
+# `#form-stage` instead of just `#plan-stream`. Polling stops automatically
+# because the planned-body partial doesn't carry hx-* attrs.
 fn plan_log(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -396,7 +399,11 @@ fn plan_log(req)
     let title = parse_title_from_body(state["body"])
     return {
       "status": 200,
-      "headers": {"Content-Type": "text/html; charset=utf-8"},
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "HX-Retarget":  "#form-stage",
+        "HX-Reswap":    "innerHTML"
+      },
       "body": render_partial("tasks/planned_body", {
         "project":         project,
         "plan_id":         plan_id,
@@ -410,13 +417,12 @@ fn plan_log(req)
   {
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
-    "body": render_partial("tasks/plan_progress", {
+    "body": render_partial("tasks/plan_stream", {
       "project":          project,
       "plan_id":          plan_id,
       "log":              state["log"],
       "status":           state["status"],
-      "pending_question": state["pending_question"],
-      "prompt":           state["prompt"]
+      "pending_question": state["pending_question"]
     })
   }
 end
@@ -502,8 +508,13 @@ fn plan_answer(req)
     return {"status": 404, "body": "Unknown project"}
   end
   let plan_id = req["params"]["plan_id"]
-  let qid = (req["form"]["qid"] ?? "").trim()
-  let value = (req["form"]["value"] ?? "").trim()
+  # Read via `req["all"]` (route + query + form + JSON merged) so the
+  # same code path works for both production htmx form posts and the
+  # test client, which sends JSON. `req["form"]` alone would miss tests;
+  # `req["json"]` alone would miss prod.
+  let body_params = req["all"] ?? {}
+  let qid = (body_params["qid"] ?? "").trim()
+  let value = (body_params["value"] ?? "").trim()
   if qid == "" or value == ""
     return {"status": 422, "body": "qid and value required"}
   end
@@ -512,16 +523,38 @@ fn plan_answer(req)
     plan.write_pending_answer(qid, value)
   end
   let state = read_plan_state(plan_id)
+  # Mirror plan_log: while running, return only the right panel so the
+  # left prompt aside is preserved across answer round-trips. If the
+  # answer raced the agent finishing, retarget to #form-stage so the
+  # planned-body view replaces the whole stage.
+  if state["status"] == "done"
+    let title = parse_title_from_body(state["body"])
+    return {
+      "status": 200,
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "HX-Retarget":  "#form-stage",
+        "HX-Reswap":    "innerHTML"
+      },
+      "body": render_partial("tasks/planned_body", {
+        "project":         project,
+        "plan_id":         plan_id,
+        "body":            state["body"],
+        "title":           title,
+        "model":           state["model"],
+        "opencode_models": list_opencode_models()
+      })
+    }
+  end
   {
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
-    "body": render_partial("tasks/plan_progress", {
+    "body": render_partial("tasks/plan_stream", {
       "project":          project,
       "plan_id":          plan_id,
       "log":              state["log"],
       "status":           state["status"],
-      "pending_question": state["pending_question"],
-      "prompt":           state["prompt"]
+      "pending_question": state["pending_question"]
     })
   }
 end
