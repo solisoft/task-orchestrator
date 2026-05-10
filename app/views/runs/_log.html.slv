@@ -26,6 +26,19 @@
       <span class="text-xs text-slate-500 font-mono">⏱ <%= elapsed %></span>
     <% end %>
 
+    <% if token != nil and token.starts_with("failed:") %>
+      <form method="post"
+            action="/projects/<%= project["name"] %>/tasks/<%= slug %>/run/resume"
+            class="inline ml-auto">
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 hover:bg-amber-400/25 text-amber-200 hover:text-amber-100 border border-amber-400/30 px-3 py-1 text-sm font-medium transition-colors"
+                title="Re-launch this run in its existing worktree, keeping any uncommitted edits">
+          <span class="text-base leading-none">↻</span>
+          Continue
+        </button>
+      </form>
+    <% end %>
+
     <% if pr_url != nil %>
       <a href="<%= pr_url %>" target="_blank" rel="noopener" class="ml-auto inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 border border-indigo-400/30 px-3 py-1 text-sm font-medium transition-colors">
         Open PR

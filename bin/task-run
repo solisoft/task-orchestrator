@@ -31,8 +31,18 @@ if [[ -f "$project_root/.env" ]]; then
   set -a; source "$project_root/.env"; set +a
 fi
 
+# `--resume` skips the worktree wipe/recreate so the user's "Continue"
+# button picks up from whatever uncommitted state the previous (dead)
+# agent left behind. The spec md, skills, and .env.test still get
+# re-seeded — they're orchestrator-owned and idempotent.
+resume=0
+if [[ "${1-}" == "--resume" ]]; then
+  resume=1
+  shift
+fi
+
 if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <project> <slug>" >&2
+  echo "usage: $0 [--resume] <project> <slug>" >&2
   exit 64
 fi
 
@@ -96,11 +106,30 @@ state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
 state_dir="$state_root/$repo_name"
 log_file="$state_dir/$slug.log"
 status_file="$state_dir/$slug.status"
+pid_file="$state_dir/$slug.pid"
 
 worktree_root=${TASK_ORCH_WORKTREES:-$HOME/.cache/task-orchestrator/worktrees}
 worktree_dir="$worktree_root/$repo_name/$slug"
 
 mkdir -p "$state_dir" "$worktree_root/$repo_name"
+
+# Single-flight guard: if a previous task-run for this slug is still
+# alive, refuse rather than racing two agents in the same worktree.
+# Catches a double-clicked "Continue" button and any unexpected
+# dispatcher re-fire. The dispatcher's CAS already covers the normal
+# launch path; this is the belt to its braces.
+if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then
+  echo "task-run: pid $(cat "$pid_file") already running for $key; aborting" >&2
+  exit 75
+fi
+
+# Heartbeat for the run viewer: the .status file only flips to
+# `failed:` when this script's `fail`/INT/TERM trap runs. If we get
+# SIGKILLed (OOM, `pkill -9`, parent crash) the trap never fires and
+# the row is stuck at "running …" forever. Drop our PID so the model
+# can spot a zombie via `kill -0` and synthesize a failed indicator.
+printf '%s\n' "$$" > "$pid_file"
+trap 'rm -f "$pid_file"' EXIT
 
 write_status() {
   printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"
@@ -160,14 +189,21 @@ else
   git -C "$project_path" fetch --quiet origin main || fail "git fetch origin main"
 fi
 
-if [[ -d "$worktree_dir" ]]; then
-  log "removing stale worktree $worktree_dir"
-  git -C "$project_path" worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
-fi
+if [[ $resume -eq 1 ]]; then
+  if [[ ! -d "$worktree_dir" ]]; then
+    fail "resume requested but worktree $worktree_dir does not exist"
+  fi
+  log "resuming in existing worktree $worktree_dir (branch $(git -C "$worktree_dir" rev-parse --abbrev-ref HEAD))"
+else
+  if [[ -d "$worktree_dir" ]]; then
+    log "removing stale worktree $worktree_dir"
+    git -C "$project_path" worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
+  fi
 
-log "creating worktree at $worktree_dir on branch $branch (base $base_ref)"
-git -C "$project_path" worktree add -B "$branch" "$worktree_dir" "$base_ref" \
-  >> "$log_file" 2>&1 || fail "git worktree add"
+  log "creating worktree at $worktree_dir on branch $branch (base $base_ref)"
+  git -C "$project_path" worktree add -B "$branch" "$worktree_dir" "$base_ref" \
+    >> "$log_file" 2>&1 || fail "git worktree add"
+fi
 
 # 3. Drop the body into the worktree's tasks/todo/ where /do-task looks.
 # The spec is orchestrator-owned context (not project content) — but we
