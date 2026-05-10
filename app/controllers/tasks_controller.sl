@@ -648,6 +648,7 @@ fn _queue_limit_response(req, project, denied)
         "project": project,
         "columns": columns,
         "indicators": indicators_for(project["name"], columns),
+        "totals": totals_for(project["name"], columns),
         "agents": agents_for(columns),
         "statuses": Task.kanban_statuses(),
         "active_tab": active,
@@ -686,6 +687,7 @@ fn move_response(req, action)
         "project": project,
         "columns": columns,
         "indicators": indicators_for(project["name"], columns),
+        "totals": totals_for(project["name"], columns),
         "agents": agents_for(columns),
         "statuses": Task.kanban_statuses(),
         "active_tab": active

@@ -162,7 +162,17 @@ fail() {
   exit 1
 }
 
-trap 'log "interrupted"; write_status "interrupted"; db_update "{\"status\":\"queued\"}"; exit 130' INT TERM
+# SIGINT/TERM lands the row in `failed` (not `queued`) so the dispatcher
+# won't auto-reclaim and wipe the worktree on its next pass. The user
+# decides whether to resume via the Continue button (which already
+# accepts `failed`) or unqueue and start over.
+mark_interrupted() {
+  log "interrupted"
+  write_status "failed:interrupted"
+  db_update "$(jq -n '{status: "failed", failure_reason: "interrupted", finished_at: now | todateiso8601}')"
+  exit 130
+}
+trap mark_interrupted INT TERM
 
 write_status "starting"
 log "project=$project_path slug=$slug branch=$branch"
@@ -175,6 +185,7 @@ body_url="$HOST/_api/database/$DB/document/tasks/$key"
 row_json=$(curl -s -u "$USER:$PASS" "$body_url")
 body_md=$(printf '%s' "$row_json" | jq -r '.body_md // empty')
 task_model=$(printf '%s' "$row_json" | jq -r '.model // empty')
+task_title=$(printf '%s' "$row_json" | jq -r '.title // empty')
 if [[ -z "$body_md" ]]; then
   fail "task body empty or row not found ($key)"
 fi
@@ -389,6 +400,21 @@ git -C "$worktree_dir" push --quiet --set-upstream origin "$branch" \
 
 write_status "opening PR"
 title=$(git -C "$worktree_dir" log -1 --format=%s "$base_ref..$branch" | head -1)
+# Fallback chain: gh rejects --title "" with "pull request title must not
+# be blank". The range can come back empty when the branch HEAD coincides
+# with origin/main (e.g. after the agent reset/rebased onto a local ref
+# and only the safety-net amend remains), even though head_sha != base_sha
+# was true earlier. Prefer the task's stored title, then any most-recent
+# commit subject, then the slug — anything beats failing the PR.
+if [[ -z "$title" ]]; then
+  title="$task_title"
+fi
+if [[ -z "$title" ]]; then
+  title=$(git -C "$worktree_dir" log -1 --format=%s | head -1)
+fi
+if [[ -z "$title" ]]; then
+  title="$slug"
+fi
 body="Automated by task-orchestrator. Source: tasks DB row $key."
 log "opening PR: $title"
 pr_url=$(

@@ -224,7 +224,7 @@ describe("TasksController#show with local-branch outcome", fn()
     assert_contains(body, "merged into main")
     # The button only renders when `not merged` — its absence is the
     # signal the badge state matched.
-    assert_not_contains(body, "Merge into main")
+    assert_not(body.contains("Merge into main"))
   end)
 
   test("does not render branch info for done tasks without local-branch outcome", fn()
@@ -240,7 +240,7 @@ describe("TasksController#show with local-branch outcome", fn()
     let response = get("/projects/proj/tasks/no-commit-task")
     assert_eq(res_status(response), 200)
     let body = res_body(response)
-    assert_not_contains(body, "Merge into main")
+    assert_not(body.contains("Merge into main"))
   end)
 end)
 
