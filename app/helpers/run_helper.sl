@@ -22,6 +22,12 @@ def task_log_line_class(line: String) -> Any
   if s.starts_with("↩ ")
     return "text-slate-400 pl-4"
   end
+  if s.starts_with("- ")
+    return "text-red-300/90"
+  end
+  if s.starts_with("+ ")
+    return "text-emerald-300/90"
+  end
   if s.starts_with("✓ ")
     return "text-emerald-300 font-semibold"
   end
@@ -107,6 +113,23 @@ end
 
 def task_run_indicator(repo: String, slug: String) -> Any
   return run_indicator(repo, slug)
+end
+
+# Tailwind classes + glyph for a TodoWrite item, given its `status`
+# field. Returns `{ "icon": "...", "classes": "..." }`. Statuses outside
+# the known set fall back to the pending styling.
+def task_todo_chrome(status: Any) -> Any
+  let s = status ?? ""
+  if s == "completed"
+    return { "icon": "✓", "classes": "text-emerald-300/90 line-through decoration-emerald-300/40" }
+  end
+  if s == "in_progress"
+    return { "icon": "▸", "classes": "text-amber-200 font-medium" }
+  end
+  if s == "cancelled"
+    return { "icon": "✗", "classes": "text-slate-500 line-through" }
+  end
+  return { "icon": "○", "classes": "text-slate-400" }
 end
 
 def task_run_pr_url(repo: String, slug: String) -> Any

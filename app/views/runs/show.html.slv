@@ -1,5 +1,5 @@
 <div class="min-h-screen bg-slate-950 text-white">
-  <div class="max-w-5xl mx-auto px-6 py-8">
+  <div class="max-w-7xl mx-auto px-6 py-8">
     <nav class="text-sm text-slate-500 mb-4">
       <a href="/" class="hover:text-slate-300">All projects</a>
       <span class="mx-2">/</span>
@@ -17,7 +17,8 @@
       "slug": slug,
       "status": status,
       "pr_url": pr_url,
-      "tail": tail
+      "tail": tail,
+      "todos": todos
     }) %>
   </div>
 </div>

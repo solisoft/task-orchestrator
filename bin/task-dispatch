@@ -100,6 +100,38 @@ async function tryClaimAndDispatch(row: { _key: string; project: string; slug: s
   if (await claim(row._key)) dispatch(row);
 }
 
+// Backstop: if the WS subscription wedges (TCP stays ESTABLISHED but
+// query_result frames stop flowing — observed in the wild), the heartbeat
+// won't always catch it, because *any* incoming WS frame refreshes
+// lastFrameAt. Poll the queue directly every POLL_INTERVAL_MS so worst-
+// case dispatch latency is bounded regardless of WS health.
+const POLL_INTERVAL_MS = 5 * 60_000;
+
+async function pollQueue() {
+  const url = `${HOST}/_api/database/${DB}/cursor`;
+  const query = `FOR doc IN tasks FILTER doc.status == "queued" SORT doc.queued_at ASC RETURN doc`;
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: BASIC },
+      body: JSON.stringify({ query }),
+    });
+    if (!resp.ok) {
+      log(`poll HTTP ${resp.status}: ${await resp.text()}`);
+      return;
+    }
+    const json = await resp.json() as { result: any[] };
+    const rows = json.result ?? [];
+    if (rows.length === 0) return;
+    log(`poll backstop found ${rows.length} queued row(s)`);
+    for (const row of rows) await tryClaimAndDispatch(row);
+  } catch (e) {
+    log(`poll error: ${(e as Error).message}`);
+  }
+}
+
+setInterval(pollQueue, POLL_INTERVAL_MS);
+
 // Fetch a short-lived JWT to put in the WS URL — browser/Web WebSocket
 // clients can't set Authorization headers, and solidb deliberately does
 // not accept Basic on the upgrade request for that reason.

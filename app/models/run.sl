@@ -75,6 +75,89 @@ fn run_log_tail(repo, slug, max_bytes)
   body.substring(body.length - max_bytes, body.length)
 end
 
+# Path to the per-task raw JSON-lines transcript. The .log next to it is
+# the human-rendered view (post-`_stream-format.jq`); this is the source.
+fn run_log_jsonl_path(repo, slug)
+  run_log_path(repo, slug) + ".jsonl"
+end
+
+# Latest TodoWrite payload from the run's raw stream, or [] if no todo
+# event has been seen. Each entry is the agent's hash — typically
+# `{ "content", "status", "priority"|"activeForm" }` — passed through as-
+# is so the view can pick what to render.
+#
+# Strategy: read the last 1 MiB of the .jsonl tail and scan forward. The
+# tail is a cheap bound that still catches the most recent TodoWrite for
+# any active run; if the file is shorter, we scan all of it. Older
+# events outside the window are intentionally invisible — the panel
+# shows the agent's *current* plan, not a history.
+fn run_latest_todos(repo, slug)
+  let path = run_log_jsonl_path(repo, slug)
+  if not Trusted.exists(path)
+    return []
+  end
+  let body = Trusted.read(path) rescue ""
+  if body == ""
+    return []
+  end
+  let max_bytes = 1048576
+  if body.length > max_bytes
+    body = body.substring(body.length - max_bytes, body.length)
+  end
+  let lines = body.split("\n")
+  let latest = []
+  let i = 0
+  while i < lines.length
+    let line = lines[i]
+    if line != ""
+      let obj = JSON.parse(line) rescue nil
+      if obj != nil
+        let todos = _extract_todos_from_event(obj)
+        if todos != nil
+          latest = todos
+        end
+      end
+    end
+    i = i + 1
+  end
+  latest
+end
+
+# Pull a todos array out of a single stream event, recognising both the
+# claude (nested `assistant.message.content[]`) and opencode (flat
+# `tool_use` with `.part.tool == "todowrite"`) shapes. Returns nil if
+# the event isn't a TodoWrite call.
+fn _extract_todos_from_event(obj)
+  let kind = obj["type"] ?? ""
+  if kind == "tool_use"
+    let part = obj["part"] ?? {}
+    let tool = part["tool"] ?? ""
+    if tool == "todowrite"
+      let state = part["state"] ?? {}
+      let input = state["input"] ?? {}
+      return input["todos"]
+    end
+    return nil
+  end
+  if kind == "assistant"
+    let msg = obj["message"] ?? {}
+    let content = msg["content"] ?? []
+    let i = 0
+    while i < content.length
+      let c = content[i]
+      let c_type = c["type"] ?? ""
+      let c_name = c["name"] ?? ""
+      if c_type == "tool_use" and c_name == "TodoWrite"
+        let input = c["input"] ?? {}
+        return input["todos"]
+      end
+      i = i + 1
+    end
+    return nil
+  end
+  return nil
+end
+
 # PR URL if `task-run` opened one, else nil.
 fn run_pr_url(repo, slug)
   let path = run_pr_path(repo, slug)

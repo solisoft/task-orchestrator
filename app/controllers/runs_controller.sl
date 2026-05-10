@@ -19,7 +19,8 @@ fn show(req)
     "slug": slug,
     "status": run_current_status(project["name"], slug),
     "pr_url": run_pr_url(project["name"], slug),
-    "tail": run_log_tail(project["name"], slug, 16384)
+    "tail": run_log_tail(project["name"], slug, 16384),
+    "todos": run_latest_todos(project["name"], slug)
   })
 end
 
@@ -37,7 +38,8 @@ fn log(req)
       "slug": slug,
       "status": run_current_status(project["name"], slug),
       "pr_url": run_pr_url(project["name"], slug),
-      "tail": run_log_tail(project["name"], slug, 16384)
+      "tail": run_log_tail(project["name"], slug, 16384),
+      "todos": run_latest_todos(project["name"], slug)
     })
   }
 end
