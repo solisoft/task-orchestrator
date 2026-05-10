@@ -261,6 +261,17 @@ class Task < Model
     self.save()
   end
 
+  # Re-arm a failed (or zombie) row for another agent pass. Counterpart
+  # to `bin/task-run --resume`: we flip the row back to `inprogress` and
+  # clear the failure note so the run viewer's polling resumes, but the
+  # worktree (and any uncommitted edits in it) is left intact.
+  def resume!()
+    self.status         = "inprogress"
+    self.failure_reason = null
+    self.finished_at    = null
+    self.save()
+  end
+
   # Reset every transient run field — DB-side counterpart to
   # `clear_run_state` in run.sl, which wipes the on-disk log artefacts.
   # Called on cancel/unqueue so re-queuing starts from a clean slate.

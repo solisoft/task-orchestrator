@@ -34,6 +34,70 @@ fn run_pr_path(repo, slug)
   run_state_root() + "/" + repo + "/" + slug + ".pr"
 end
 
+fn run_pid_path(repo, slug)
+  run_state_root() + "/" + repo + "/" + slug + ".pid"
+end
+
+# Mirror of `bin/task-run`'s worktree layout: $TASK_ORCH_WORKTREES (or
+# ~/.cache/task-orchestrator/worktrees) → <repo>/<slug>. Used by the
+# resume action to refuse early when there's nothing to resume into.
+# Keep in sync with the `worktree_root=` line in `bin/task-run`.
+fn run_worktree_path(repo, slug)
+  let custom = getenv("TASK_ORCH_WORKTREES")
+  let root = ""
+  if custom != nil and custom != ""
+    root = custom
+  else
+    let home = getenv("HOME") ?? ""
+    root = home + "/.cache/task-orchestrator/worktrees"
+  end
+  root + "/" + repo + "/" + slug
+end
+
+fn run_worktree_exists(repo, slug)
+  Trusted.is_dir(run_worktree_path(repo, slug))
+end
+
+# nil  = no pidfile (run never launched, finished cleanly, or pre-pidfile launch).
+# true = the recorded PID is still alive.
+# false = pidfile present but the process is gone — the wrapper got SIGKILLed
+#        before it could write `failed:` to the status journal.
+fn _run_pid_alive(repo, slug)
+  let path = run_pid_path(repo, slug)
+  if not Trusted.exists(path)
+    return nil
+  end
+  let pid = (Trusted.read(path) rescue "").trim()
+  if pid == ""
+    return nil
+  end
+  let res = System.run_sync(["kill", "-0", pid]) rescue { "exit_code": 1 }
+  res["exit_code"] == 0
+end
+
+# Seconds since the run's .log was last modified, or nil if it isn't
+# stat-able. Fallback heartbeat for runs launched before the pidfile
+# convention shipped (no .pid on disk to probe).
+fn _run_log_age_seconds(repo, slug)
+  let path = run_log_path(repo, slug)
+  if not Trusted.exists(path)
+    return nil
+  end
+  let res = System.run_sync(["stat", "-c", "%Y", path])
+  if res["exit_code"] != 0
+    return nil
+  end
+  let mtime = (res["stdout"] ?? "").trim().to_int() rescue nil
+  if mtime == nil
+    return nil
+  end
+  DateTime.now().to_unix() - mtime
+end
+
+fn _is_terminal_status(token)
+  token.starts_with("done:") or token.starts_with("failed:")
+end
+
 # Most recent status line, or nil if no run has happened.
 fn run_current_status(repo, slug)
   let path = run_status_path(repo, slug)
@@ -55,10 +119,28 @@ fn run_current_status(repo, slug)
   if parts.length < 2
     return nil
   end
-  {
-    "at": parts[0],
-    "status": parts[1]
-  }
+  let at = parts[0]
+  let token = parts[1]
+
+  # Zombie detection: the journal says we're mid-flight, but the
+  # wrapper bash is gone. Synthesize `failed:` so run_indicator and
+  # the status pill flip — without rewriting the on-disk journal,
+  # which a manual reaper / re-queue path is responsible for.
+  if not _is_terminal_status(token)
+    let alive = _run_pid_alive(repo, slug)
+    if alive == false
+      return { "at": at, "status": "failed:agent died (no live process)" }
+    end
+    if alive == nil
+      let age = _run_log_age_seconds(repo, slug)
+      if age != nil and age > 600
+        return { "at": at,
+                 "status": "failed:agent died (no heartbeat for " + str(age / 60) + "m)" }
+      end
+    end
+  end
+
+  { "at": at, "status": token }
 end
 
 # Tail the last N bytes of the log. Returns "" if the log doesn't exist
@@ -165,6 +247,28 @@ fn run_pr_url(repo, slug)
     return nil
   end
   Trusted.read(path).strip()
+end
+
+# Check whether a GitHub PR has been merged. Shells out to `gh` CLI;
+# returns false when the command fails (e.g. unauthenticated, PR not
+# found, network flake) so the caller can decide how to handle it.
+fn pr_merged(pr_url)
+  let mock = getenv("_TASK_ORCH_PR_MERGED_MOCK")
+  if mock == "true"
+    return true
+  end
+  if mock == "false"
+    return false
+  end
+  let res = System.run_sync([
+    "gh", "pr", "view", pr_url,
+    "--json", "merged",
+    "-q", ".merged"
+  ])
+  if res["exit_code"] != 0
+    return false
+  end
+  (res["stdout"] ?? "").trim() == "true"
 end
 
 # A short status token for the kanban indicator: nil / running / done / failed.
@@ -301,7 +405,8 @@ fn clear_run_state(repo, slug)
     run_log_path(repo, slug),
     run_log_path(repo, slug) + ".jsonl",
     run_status_path(repo, slug),
-    run_pr_path(repo, slug)
+    run_pr_path(repo, slug),
+    run_pid_path(repo, slug)
   ]
     if Trusted.exists(path)
       Trusted.delete(path) rescue System.run_sync(["rm", "-f", path])

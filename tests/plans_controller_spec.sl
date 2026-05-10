@@ -1,97 +1,72 @@
-# PlansController — /plans lists completed plan specs on disk that haven't
-# been converted to tasks. We seed plan directories + files under the
-# default TASK_ORCH_STATE to simulate the on-disk state.
+# Plans controller — lists agent-drafted task specs from
+# run_state_root()/_plans/.
 
-def _setup_plan(plan_id, status, body_text, project_name)
-  let dir = getenv("TASK_ORCH_STATE") + "/_plans/" + plan_id
+describe("PlansController", fn() {
+  before_each(fn() {
+    as_guest()
+    let root = getenv("TASK_ORCH_STATE") ?? "/tmp/task-orch-spec-state"
+    System.run_sync(["rm", "-rf", root + "/_plans"])
+  })
+
+  describe("GET /plans", fn() {
+    test("returns 200 with no plans", fn() {
+      let response = get("/plans")
+      assert_eq(res_status(response), 200)
+      assert(res_body(response).contains("No plans yet"))
+    })
+
+    test("lists a done plan with rendered body", fn() {
+      _plan_fixture("plan-99990001", "done",
+        "claude-sonnet-4-6", "add a footer",
+        "# Fix pagination\n\n## Severity\nhigh")
+
+      let response = get("/plans")
+      assert_eq(res_status(response), 200)
+      let body = res_body(response)
+      assert(body.contains("plan-99990001"))
+      assert(body.contains("claude-sonnet-4-6"))
+      assert(body.contains("Fix pagination"))
+    })
+
+    test("lists a failed plan", fn() {
+      _plan_fixture("plan-99990002", "failed:rc=1",
+        "claude-opus-4-7", "broken", "")
+
+      let response = get("/plans")
+      assert_eq(res_status(response), 200)
+      assert(res_body(response).contains("plan-99990002"))
+    })
+
+    test("sorts plans newest-first by id", fn() {
+      for i in [1, 2, 3]
+        _plan_fixture("plan-9999000" + str(i), "done",
+          "claude-sonnet-4-6", "test " + str(i),
+          "# Task " + str(i))
+      end
+
+      let body = res_body(get("/plans"))
+      let p1 = body.index_of("plan-99990003")
+      let p2 = body.index_of("plan-99990002")
+      let p3 = body.index_of("plan-99990001")
+      assert(p1 != -1 and p2 != -1 and p3 != -1 and p1 < p2 and p2 < p3)
+    })
+
+    test("reading state for a missing plan dir does not crash", fn() {
+      let response = get("/plans")
+      assert_eq(res_status(response), 200)
+    })
+  })
+})
+
+def _plan_fixture(id, status, model, prompt, body)
+  let root = getenv("TASK_ORCH_STATE") ?? "/tmp/task-orch-spec-state"
+  let dir = root + "/_plans/" + id
   System.run_sync(["mkdir", "-p", dir])
-  Trusted.write(dir + "/status", "2025-01-01T00:00:00\t" + status)
-  Trusted.write(dir + "/body", body_text)
-  if project_name != ""
-    let proj_path = "/tmp/test-projects/" + project_name
-    System.run_sync(["mkdir", "-p", proj_path])
-    Trusted.write(dir + "/project_path", proj_path)
+  let ts = "2026-05-10T12:00:00+00:00"
+  Trusted.write(dir + "/status", ts + "\t" + status + "\n")
+  Trusted.write(dir + "/model", model + "\n")
+  Trusted.write(dir + "/prompt", prompt + "\n")
+  if body != ""
+    Trusted.write(dir + "/body", body + "\n")
   end
 end
-
-def _plans_cleanup()
-  let dir = getenv("TASK_ORCH_STATE") + "/_plans"
-  if Trusted.exists(dir)
-    System.run_sync(["rm", "-rf", dir])
-  end
-  System.run_sync(["rm", "-rf", "/tmp/test-projects"])
-end
-
-describe("PlansController", fn()
-  describe("GET /plans", fn()
-    before_each(fn()
-      assert_test_db()
-      Task.delete_all()
-      Setting.delete_all()
-      _plans_cleanup()
-      as_guest()
-    end)
-
-    test("returns 200 when no plans dir exists", fn()
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      assert_contains(res_body(response), "No unconverted plans found")
-    end)
-
-    test("returns 200 with empty state", fn()
-      System.run_sync(["mkdir", "-p", getenv("TASK_ORCH_STATE") + "/_plans"])
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      assert_contains(res_body(response), "No unconverted plans found")
-    end)
-
-    test("shows a done plan without a matching task", fn()
-      _setup_plan("plan-1", "done", "# My test plan\n\nSome body text", "testproj")
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      assert_contains(res_body(response), "My test plan")
-      assert_contains(res_body(response), "plan-1")
-      assert_contains(res_body(response), "Create task")
-    end)
-
-    test("hides a plan when a matching Task exists", fn()
-      _setup_plan("plan-2", "done", "# Already done\n\nBody here", "testproj")
-      Task.create({
-        "_key":    "testproj--already-done",
-        "project": "testproj",
-        "slug":    "already-done",
-        "title":   "Already done",
-        "status":  "todo"
-      })
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      # The only plan present should be hidden → empty state
-      assert_contains(res_body(response), "No unconverted plans found")
-    end)
-
-    test("skips in-progress plans", fn()
-      _setup_plan("plan-3", "starting", "# Incomplete\n\nBody", "testproj")
-      _setup_plan("plan-4", "planning", "# Also incomplete\n\nBody", "testproj")
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      # Both plans have non-done status → empty state
-      assert_contains(res_body(response), "No unconverted plans found")
-    end)
-
-    test("skips plans with missing body file", fn()
-      let dir = getenv("TASK_ORCH_STATE") + "/_plans/plan-5"
-      System.run_sync(["mkdir", "-p", dir])
-      Trusted.write(dir + "/status", "2025-01-01T00:00:00\tdone")
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-      assert_contains(res_body(response), "No unconverted plans found")
-    end)
-
-    test("skips plans with unparseable status file gracefully", fn()
-      let dir = getenv("TASK_ORCH_STATE") + "/_plans/plan-6"
-      System.run_sync(["mkdir", "-p", dir])
-      let response = get("/plans")
-      assert_eq(res_status(response), 200)
-    end)
-  end)
-end)

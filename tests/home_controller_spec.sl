@@ -38,7 +38,7 @@ describe("HomeController", fn()
 
     test("renders the agent-usage tile", fn()
       let response = get("/")
-      assert_contains(res_body(response), "Agent usage")
+      assert_contains(res_body(response), "Usage")
     end)
 
     test("lists every known agent in the tile, even with zero usage", fn()
@@ -63,8 +63,8 @@ describe("HomeController", fn()
       let body = res_body(response)
       # Every agent's tile shows the daily figure; with one claude run
       # the body must contain a `1` somewhere — the regex check below
-      # nails it down to the claude row.
-      assert_match(body, "claude[\\s\\S]+today[\\s\\S]+1")
+      # nails it down to the claude row's 24h slot.
+      assert_match(body, "claude[\\s\\S]+1[\\s\\S]+24h")
     end)
 
     test("renders `used / cap` when a daily cap is configured", fn()
@@ -76,14 +76,13 @@ describe("HomeController", fn()
     end)
 
     test("hides the cap when the limit is the unlimited sentinel (0)", fn()
-      # Default state: no Setting rows. Body must NOT carry a "/ 0"
-      # rendering for the claude daily tile.
+      # Default state: no Setting rows. The tile still renders (the
+      # `Usage` heading is present); the per-agent slot just omits
+      # the `/N` cap suffix when the limit is the 0 = unlimited
+      # sentinel.
       let response = get("/")
       let body = res_body(response)
-      # The literal "/ 0" only appears when a limit IS rendered, so
-      # its absence is the assertion. We can't assert_not_contains,
-      # but we can assert the body length / presence of the tile.
-      assert_contains(body, "Agent usage")
+      assert_contains(body, "Usage")
     end)
 
     test("links to /settings from the header", fn()

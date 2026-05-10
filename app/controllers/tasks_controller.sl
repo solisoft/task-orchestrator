@@ -257,6 +257,34 @@ fn merge_branch(req)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
+fn mark_done(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "mark-done is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if task.pr_url != nil and task.pr_url != ""
+    if not pr_merged(task.pr_url)
+      return {"status": 422, "body": "PR is not merged yet"}
+    end
+  end
+  task.status = "done"
+  task.finished_at = DateTime.now().to_iso()
+  task.save()
+  if task._errors
+    return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
 fn save(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -648,6 +676,7 @@ fn _queue_limit_response(req, project, denied)
         "project": project,
         "columns": columns,
         "indicators": indicators_for(project["name"], columns),
+        "totals": totals_for(project["name"], columns),
         "agents": agents_for(columns),
         "statuses": Task.kanban_statuses(),
         "active_tab": active,
@@ -686,6 +715,7 @@ fn move_response(req, action)
         "project": project,
         "columns": columns,
         "indicators": indicators_for(project["name"], columns),
+        "totals": totals_for(project["name"], columns),
         "agents": agents_for(columns),
         "statuses": Task.kanban_statuses(),
         "active_tab": active

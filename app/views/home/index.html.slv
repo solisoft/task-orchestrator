@@ -1,14 +1,15 @@
 <div class="min-h-screen text-white">
     <div class="max-w-6xl mx-auto px-6 py-12">
-        <!-- Hero section -->
-        <header class="mb-14 animate-fade-in">
+
+        <header class="mb-12 animate-fade-in">
             <div class="flex items-baseline justify-between flex-wrap gap-3 mb-6">
                 <div>
                     <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Task Orchestrator</h1>
                     <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
                 </div>
-                <div class="flex gap-3">
+                <div class="flex items-center gap-2">
                     <a href="/plans" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Plans</a>
+                    <a href="/settings" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Settings</a>
                     <a href="/docs" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Docs</a>
                 </div>
             </div>
@@ -17,33 +18,28 @@
             </p>
         </header>
 
-        <!-- Agent usage tile -->
-        <section class="mb-10 rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-1">
-            <div class="flex items-baseline justify-between mb-4">
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Agent usage</h2>
-                <span class="text-xs text-slate-500">rolling 24h / 7d</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <section class="mb-8 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
+            <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0 mr-2">Usage</h2>
+                <% let idx = 0 %>
                 <% for a in agents %>
-                    <% let daily_used = usage_day[a] ?? 0 %>
-                    <% let daily_cap = limits[a]["daily"] %>
-                    <% let weekly_used = usage_week[a] ?? 0 %>
-                    <% let weekly_cap = limits[a]["weekly"] %>
-                    <article class="rounded-xl border border-white/10 bg-slate-900/60 p-4 hover-lift card-glow">
-                        <header class="flex items-baseline justify-between mb-3">
-                            <h3 class="font-mono text-sm gradient-text"><%- a %></h3>
-                        </header>
-                        <%- partial("home/agent_usage_row", {
-                            "label": "today",
-                            "used":  daily_used,
-                            "cap":   daily_cap
-                        }) %>
-                        <%- partial("home/agent_usage_row", {
-                            "label": "this week",
-                            "used":  weekly_used,
-                            "cap":   weekly_cap
-                        }) %>
-                    </article>
+                    <% if idx > 0 %><span class="text-slate-700">|</span><% end %>
+                    <% let du = usage_day[a] ?? 0 %>
+                    <% let dc = limits[a]["daily"] %>
+                    <% let wu = usage_week[a] ?? 0 %>
+                    <% let wc = limits[a]["weekly"] %>
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="gradient-text font-medium uppercase tracking-wide"><%= a %></span>
+                        <% let du_over = dc > 0 and du >= dc %>
+                        <span class="font-mono <%= du_over ? "text-red-300" : "text-slate-300" %>"><%= du %><% if dc > 0 %><span class="text-slate-500">/<%= dc %></span><% end %></span>
+                        <span class="text-slate-600">24h</span>
+                        <% if wc > 0 %>
+                            <% let wu_over = wu >= wc %>
+                            <span class="font-mono <%= wu_over ? "text-red-300" : "text-slate-400" %>"><%= wu %>/<%= wc %></span>
+                            <span class="text-slate-600">7d</span>
+                        <% end %>
+                    </div>
+                    <% idx = idx + 1 %>
                 <% end %>
             </div>
         </section>
@@ -53,25 +49,25 @@
                 <p class="text-amber-300 font-medium">No projects with a <code>tasks/</code> folder under <code><%= root %></code>.</p>
                 <p class="mt-2 text-slate-400 text-sm">Create one with <code class="text-amber-300">mkdir &lt;repo&gt;/tasks/todo</code> and refresh.</p>
             </div>
+        <% else %>
+            <div class="rounded-xl overflow-hidden border border-white/10 animate-fade-in animate-fade-in-2">
+                <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr repeat(<%= statuses.length() %>, 5rem)">
+                    <span>Project</span>
+                    <% for s in statuses %>
+                        <span class="text-center"><%= s %></span>
+                    <% end %>
+                </div>
+                <% for p in projects %>
+                    <a href="/projects/<%= p["name"] %>" class="grid items-center px-5 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors group" style="grid-template-columns: 1fr repeat(<%= statuses.length() %>, 5rem)">
+                        <span class="text-sm font-medium group-hover:text-indigo-200 transition-colors truncate pr-2"><%= p["name"] %></span>
+                        <% for s in statuses %>
+                            <% let cnt = p["counts"][s] ?? 0 %>
+                            <span class="text-center text-sm font-mono <%= cnt > 0 ? "text-white" : "text-slate-600" %>"><%= cnt %></span>
+                        <% end %>
+                    </a>
+                <% end %>
+            </div>
         <% end %>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <% for p in projects %>
-                <a href="/projects/<%= p["name"] %>" class="group block rounded-2xl glass-card-light p-6 hover-lift card-glow animate-fade-in animate-fade-in-2">
-                    <div class="flex items-baseline justify-between mb-4">
-                        <h2 class="text-xl font-semibold group-hover:text-indigo-200 transition-colors"><%= p["name"] %></h2>
-                        <span class="text-xs text-slate-500 font-mono"><%= p["total"] %> task<%= p["total"] == 1 ? "" : "s" %></span>
-                    </div>
-                    <div class="grid grid-cols-5 gap-1 text-center text-xs">
-                        <% for s in statuses %>
-                            <div class="rounded-md bg-slate-900/60 border border-white/5 py-2 group-hover:border-white/10 transition-colors">
-                                <div class="font-mono text-base text-white"><%= p["counts"][s] %></div>
-                                <div class="text-slate-500 truncate"><%= s %></div>
-                            </div>
-                        <% end %>
-                    </div>
-                </a>
-            <% end %>
-        </div>
     </div>
 </div>

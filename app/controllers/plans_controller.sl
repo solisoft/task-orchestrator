@@ -1,81 +1,86 @@
-# Plans — list completed plan specs that haven't been converted to tasks yet.
-# Scans the on-disk `_plans/` directory under run_state_root().
+# Plans — list every plan under run_state_root()/_plans/. Done plans with
+# a body are candidates for conversion into tasks; all plans are listed
+# so the user can review, refine, or discard stale ones.
 
 fn index(req)
+  let plans_dir = run_state_root() + "/_plans"
+  if not Trusted.is_dir(plans_dir)
+    return render("plans/index", {
+      "title": "Plans",
+      "plans": []
+    })
+  end
+  let dirs = _list_dirs(plans_dir)
+  let plans = []
+  for dir in dirs
+    let segs = dir.split("/")
+    let plan_id = segs[segs.length - 1]
+    let state = _read_plan_state(plan_id)
+    plans.push({
+      "id":      plan_id,
+      "status":  state["status"],
+      "body":    state["body"],
+      "model":   state["model"],
+      "prompt":  state["prompt"],
+      "prompt_emoji": _plan_emoji(state["prompt"])
+    })
+  end
+  plans = plans.sort_by(fn(p) p["id"]).reverse()
   render("plans/index", {
     "title": "Plans",
-    "plans": _list_plans()
+    "plans": plans
   })
 end
 
-fn _list_plans()
-  let plans_dir = run_state_root() + "/_plans"
-  if not Trusted.is_dir(plans_dir)
-    return []
+fn _read_plan_state(plan_id)
+  let dir = run_state_root() + "/_plans/" + plan_id
+  let status = _read_last_status(dir + "/status")
+  let body = ""
+  if status == "done"
+    body = Trusted.read(dir + "/body") rescue ""
   end
-  let out = []
-  for entry in list_dir(plans_dir)
-    if not Trusted.is_dir(entry)
-      next
-    end
-    let segs = entry.split("/")
-    let plan_id = segs[segs.length - 1]
-    let plan = _read_plan(plan_id) rescue nil
-    if plan != nil and not plan["has_task"]
-      out.push(plan)
-    end
-  end
-  out.sort_by(fn(p) p["plan_id"])
+  let model  = (Trusted.read(dir + "/model") rescue "").trim()
+  let prompt = (Trusted.read(dir + "/prompt") rescue "")
+  { "status": status,
+    "body":   body,
+    "model":  model == "" ? "claude-sonnet-4-6" : model,
+    "prompt": prompt }
 end
 
-fn _read_plan(plan_id)
-  let dir = run_state_root() + "/_plans/" + plan_id
-  let status_text = (Trusted.read(dir + "/status") rescue "").trim()
-  if status_text == ""
-    return nil
+fn _read_last_status(path)
+  let txt = (Trusted.read(path) rescue "").trim()
+  if txt == ""
+    return "starting"
   end
-  let lines = status_text.split("\n")
+  let lines = txt.split("\n")
   let last_line = lines[lines.length - 1].trim()
   let parts = last_line.split("\t")
-  let status = parts[parts.length - 1]
-  if status != "done"
-    return nil
-  end
-  let body = (Trusted.read(dir + "/body") rescue "").trim()
-  if body == ""
-    return nil
-  end
-  let title = _parse_title(body)
-  if title == ""
-    return nil
-  end
-  let project_path = (Trusted.read(dir + "/project_path") rescue "").trim()
-  let project_name = ""
-  let has_task = false
-  if project_path != ""
-    let segs = project_path.split("/")
-    project_name = segs[segs.length - 1]
-    let slug = title.slugify()
-    let task = Task.find_by_slug(project_name, slug) rescue nil
-    if task != nil
-      has_task = true
-    end
-  end
-  return {
-    "plan_id":      plan_id,
-    "title":        title,
-    "has_task":     has_task,
-    "project_name": project_name,
-    "body":         body
-  }
+  parts[parts.length - 1]
 end
 
-fn _parse_title(body)
-  for line in body.split("\n")
-    let s = line.trim()
-    if s.starts_with("# ") and not s.starts_with("## ")
-      return s.substring(2, s.length).trim()
+fn _list_dirs(dir)
+  let result = System.run_sync(["ls", "-1", dir])
+  if result["exit_code"] != 0
+    return []
+  end
+  let entries = []
+  for line in result["stdout"].split("\n")
+    if line != ""
+      entries.push(dir + "/" + line)
     end
   end
-  ""
+  entries
+end
+
+# 10-char preview for the prompt column — strip leading # or whitespace.
+fn _plan_emoji(prompt)
+  let s = prompt.strip()
+  if s == ""
+    return ""
+  end
+  let n = 12
+  if s.length() < n
+    n = s.length()
+  end
+  s.substring(0, n).replace_all("\n", " ")
 end

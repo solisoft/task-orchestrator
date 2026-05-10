@@ -24,6 +24,54 @@ fn show(req)
   })
 end
 
+# POST /projects/:name/tasks/:slug/run/resume — re-launch a dead run
+# in its existing worktree. Valid when the row is `failed`, or when
+# it's still `inprogress` but the wrapper process is gone (zombie:
+# `run_indicator` returns "failed" via the synthesized status). Spawns
+# `bin/task-run --resume` detached and bounces back to the run page so
+# the polling viewer picks up the new transcript.
+fn resume(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let slug = req["params"]["slug"]
+  let task = Task.find_by_slug(project["name"], slug)
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+
+  # Resumable iff the row is failed, OR we're "inprogress" but the
+  # liveness check has flagged the run as a zombie. Anything else
+  # (queued, done, todo) is a no-op refused at the boundary.
+  let indicator = run_indicator(project["name"], slug)
+  let resumable = task.status == "failed" or
+                  (task.status == "inprogress" and indicator == "failed")
+  if not resumable
+    return {"status": 422,
+            "body": "task is not in a resumable state (status=" + task.status +
+                    ", indicator=" + (indicator ?? "nil") + ")"}
+  end
+
+  # The worktree is the whole point of `--resume` — without it,
+  # `bin/task-run` would `fail` and the user would just see another
+  # dead run. Refuse here with a clearer error.
+  if not run_worktree_exists(project["name"], slug)
+    return {"status": 422,
+            "body": "no worktree at " + run_worktree_path(project["name"], slug) +
+                    " — re-queue the task instead of resuming"}
+  end
+
+  task.resume!()
+
+  let line = "nohup ./bin/task-run --resume " +
+             project["name"] + " " + slug +
+             " >/dev/null 2>&1 & disown"
+  System.run_sync(["bash", "-c", line]) rescue null
+
+  redirect("/projects/" + project["name"] + "/tasks/" + slug + "/run")
+end
+
 fn log(req)
   let project = find_project(req["params"]["name"])
   if project == nil
