@@ -359,7 +359,7 @@ describe("TasksController#mark_done", fn()
   end)
 
   test("transitions review task to done when the linked PR is merged", fn()
-    setenv("_TASK_ORCH_PR_MERGED_MOCK", "true")
+    set_pr_merged_mock(true)
     Task.create({
       "_key":    "proj--merged-pr",
       "project": "proj",
@@ -369,14 +369,14 @@ describe("TasksController#mark_done", fn()
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
     let response = post("/projects/proj/tasks/merged-pr/mark-done", {})
-    setenv("_TASK_ORCH_PR_MERGED_MOCK", "")
+    set_pr_merged_mock(nil)
     assert_eq(res_status(response), 302)
     let t = Task.find_by_slug("proj", "merged-pr")
     assert_eq(t.status, "done")
   end)
 
   test("returns 422 when the linked PR is not merged", fn()
-    setenv("_TASK_ORCH_PR_MERGED_MOCK", "false")
+    set_pr_merged_mock(false)
     Task.create({
       "_key":    "proj--open-pr",
       "project": "proj",
@@ -386,7 +386,7 @@ describe("TasksController#mark_done", fn()
       "pr_url":  "https://github.com/owner/repo/pull/2"
     })
     let response = post("/projects/proj/tasks/open-pr/mark-done", {})
-    setenv("_TASK_ORCH_PR_MERGED_MOCK", "")
+    set_pr_merged_mock(nil)
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "PR is not merged yet")
     let t = Task.find_by_slug("proj", "open-pr")
