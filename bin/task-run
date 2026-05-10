@@ -155,10 +155,21 @@ db_update() {
     >> "$log_file" 2>&1 || log "db_update failed: $patch_json"
 }
 
+# Fetch the current status from the DB; returns empty string on error.
+fetch_status() {
+  curl -s -u "$USER:$PASS" "$HOST/_api/database/$DB/document/tasks/$key" | jq -r '.status // empty'
+}
+
 fail() {
   log "FAIL: $*"
   write_status "failed:$*"
-  db_update "$(jq -n --arg r "$*" '{status: "failed", failure_reason: $r, finished_at: now | todateiso8601}')"
+  local current_status
+  current_status=$(fetch_status)
+  if [[ "$current_status" == "done" ]]; then
+    log "not overwriting DB row: status is already 'done'"
+  else
+    db_update "$(jq -n --arg r "$*" '{status: "failed", failure_reason: $r, finished_at: now | todateiso8601}')"
+  fi
   exit 1
 }
 
@@ -169,7 +180,13 @@ fail() {
 mark_interrupted() {
   log "interrupted"
   write_status "failed:interrupted"
-  db_update "$(jq -n '{status: "failed", failure_reason: "interrupted", finished_at: now | todateiso8601}')"
+  local current_status
+  current_status=$(fetch_status)
+  if [[ "$current_status" == "done" ]]; then
+    log "not overwriting DB row: status is already 'done'"
+  else
+    db_update "$(jq -n '{status: "failed", failure_reason: "interrupted", finished_at: now | todateiso8601}')"
+  fi
   exit 130
 }
 trap mark_interrupted INT TERM
