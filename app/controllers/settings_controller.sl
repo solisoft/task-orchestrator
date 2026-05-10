@@ -6,6 +6,7 @@ fn show(req)
     "title": "Settings",
     "agent_type": Setting.get_or("agent_type", Task.known_agents()[0]),
     "agents": Task.known_agents(),
+    "agents_config": _settings_load_agents_config(),
     "limits": _settings_load_limits()
   })
 end
@@ -20,6 +21,15 @@ fn update(req)
   let agent_type = (form["agent_type"] ?? "").trim()
   if agent_type != "" and _settings_known_agent(agent_type)
     Setting.set("agent_type", agent_type)
+  end
+  for a in Task.known_agents()
+    let enabled_key = "enabled_" + a
+    let enabled_val = form[enabled_key]
+    if enabled_val != nil and (enabled_val == "1" or enabled_val == "true")
+      AgentConfig.set(a, true)
+    else
+      AgentConfig.set(a, false)
+    end
   end
   for a in Task.known_agents()
     Setting.set("limit_daily_"  + a, _settings_parse_limit(form["limit_daily_"  + a]))
@@ -45,6 +55,16 @@ fn _settings_form(req)
     return json
   end
   return req["params"] ?? {}
+end
+
+# { "claude": true, "opencode": false, ... } — reflects whether each
+# agent is currently enabled. Unset means true (enabled by default).
+fn _settings_load_agents_config()
+  let h = {}
+  for a in Task.known_agents()
+    h[a] = AgentConfig.get_or(a, true)
+  end
+  h
 end
 
 # { "claude": { "daily": N, "weekly": N }, ... } — every known agent

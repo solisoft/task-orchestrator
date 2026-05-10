@@ -21,6 +21,22 @@
       </fieldset>
 
       <fieldset class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent options</legend>
+        <p class="mt-2 text-sm text-slate-400">Enable or disable agents available for dispatch. Changes take effect immediately.</p>
+        <div class="mt-4 space-y-3">
+          <% for a in agents %>
+            <div class="flex items-center gap-3">
+              <input type="hidden" name="enabled_<%= a %>" value="0">
+              <input type="checkbox" id="enabled_<%= a %>" name="enabled_<%= a %>" value="1"
+                     <%= agents_config[a] != false ? "checked" : "" %>
+                     class="h-4 w-4 rounded border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
+              <label for="enabled_<%= a %>" class="text-sm font-mono text-slate-200"><%= a %></label>
+            </div>
+          <% end %>
+        </div>
+      </fieldset>
+
+      <fieldset class="rounded-2xl border border-white/10 bg-white/5 p-6">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Run limits</legend>
         <p class="mt-2 text-sm text-slate-400">Cap how many runs an agent may start per rolling 24h / 7d window. <code>0</code> means unlimited.</p>
         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-slate-400">
