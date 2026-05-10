@@ -1,94 +1,11 @@
-<% let polling = (status != "done" and not status.starts_with("failed")) %>
-<% let failed  = status.starts_with("failed") %>
-<% let pq      = pending_question %>
-
-<!-- Left panel: prompt recap (read-only while running). -->
-<aside class="space-y-4 animate-fade-in">
-  <label class="block text-sm font-medium text-slate-300">Your prompt</label>
-  <div class="rounded-xl glass-card p-4 text-sm text-slate-300 font-mono whitespace-pre-wrap min-h-[8rem]"><%= prompt == "" ? "(in-flight; see right pane)" : prompt %></div>
-  <p class="text-xs text-slate-500 italic">The agent is planning. Refining is available once the draft is ready.</p>
-</aside>
-
-<!-- Right panel: log + question card + status. The polling element is a
-     plain wrapper that targets #form-stage so the next poll seamlessly
-     swaps the entire grid. -->
-<section
-  <% if polling %>
-    hx-get="/projects/<%= project["name"] %>/tasks/plan-log/<%= plan_id %>"
-    hx-trigger="every 2s"
-    hx-target="#form-stage"
-    hx-swap="innerHTML"
-  <% end %>
->
-  <input type="hidden" name="body_md" value="">
-
-  <% if pq != nil %>
-    <% let q = pq["input"]["questions"][0] %>
-    <!-- No nested <form>: this partial is inserted inside the outer
-         <form action="/.../tasks">. Each option button posts its own
-         answer via hx-post + hx-vals. -->
-    <div class="mb-4 rounded-xl bg-amber-400/10 border border-amber-400/30 p-4">
-      <div class="text-xs text-amber-300/80 font-mono mb-1">human-in-the-loop · <%= pq["tool"] %></div>
-      <div class="text-sm text-amber-100 mb-3"><%= h(q["question"]) %></div>
-      <% for opt in q["options"] %>
-        <% let vals = JSON.stringify({"qid": pq["id"], "value": opt["label"]}) %>
-        <button type="button"
-                hx-post="/projects/<%= project["name"] %>/tasks/plan-answer/<%= plan_id %>"
-                hx-vals="<%= vals %>"
-                hx-target="#form-stage"
-                hx-swap="innerHTML"
-                class="block w-full text-left mb-1 px-3 py-2 rounded bg-amber-400/5 hover:bg-amber-400/15 text-sm text-amber-100 transition-colors">
-          <span class="font-medium"><%= h(opt["label"]) %></span>
-          <% if opt["description"] != nil and opt["description"] != "" %>
-            <span class="text-amber-300/60 text-xs ml-2">— <%= h(opt["description"]) %></span>
-          <% end %>
-        </button>
-      <% end %>
-    </div>
-  <% end %>
-
-  <div class="rounded-xl neon-terminal overflow-hidden">
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-white/5 text-xs font-mono">
-      <% if failed %>
-        <span class="inline-flex items-center gap-2 rounded-full border bg-red-500/15 text-red-300 border-red-500/30 px-2 py-0.5">x <%= status %></span>
-      <% elsif pq != nil %>
-        <span class="inline-flex items-center gap-2 rounded-full border bg-amber-400/15 text-amber-300 border-amber-400/30 px-2 py-0.5">awaiting answer</span>
-      <% else %>
-        <span class="inline-flex items-center gap-2 rounded-full border bg-amber-400/15 text-amber-300 border-amber-400/30 px-2 py-0.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-          <%= status %>
-        </span>
-      <% end %>
-      <span class="text-slate-500">plan-task · <%= plan_id %></span>
-    </div>
-    <div id="plan-log" class="max-h-[70vh] overflow-y-auto" data-tail="bottom">
-      <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% if log == "" %><span class="text-slate-600 italic">starting agent...</span><% else %><% for line in log.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %><% end %></pre>
-    </div>
-  </div>
-
-  <div class="mt-4 flex justify-end gap-2">
-    <a href="/projects/<%= project["name"] %>"
-       class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
-    <% if failed %>
-      <button type="button" onclick="location.reload()"
-              class="rounded-lg bg-amber-500/80 hover:bg-amber-400 text-white text-sm font-medium px-4 py-2 transition-colors">
-        Try again
-      </button>
-    <% end %>
-  </div>
-</section>
-
-<script>
-(function () {
-  var box = document.getElementById('plan-log');
-  if (!box) return;
-  box.scrollTop = box.scrollHeight;
-  if (!document.body.dataset.planTailListener) {
-    document.body.dataset.planTailListener = '1';
-    document.body.addEventListener('htmx:afterSwap', function () {
-      var b = document.getElementById('plan-log');
-      if (b) b.scrollTop = b.scrollHeight;
-    });
-  }
-})();
-</script>
+<!-- Two-column in-flight view: static prompt aside on the left,
+     polling log/status panel on the right. Split into two partials
+     so the htmx poll only re-renders the right side. -->
+<%- render_partial("tasks/plan_prompt", { "prompt": prompt }) %>
+<%- render_partial("tasks/plan_stream", {
+  "project":          project,
+  "plan_id":          plan_id,
+  "log":              log,
+  "status":           status,
+  "pending_question": pending_question
+}) %>

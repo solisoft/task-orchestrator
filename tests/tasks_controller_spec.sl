@@ -408,3 +408,133 @@ describe("TasksController#mark_done", fn()
     assert_eq(t.status, "todo")
   end)
 end)
+
+# --- plan_log polling shape ----------------------------------------
+#
+# Regression coverage for the prompt-panel-flash bug: while a plan is
+# running, the polling endpoint must return ONLY the right-panel
+# `_plan_stream` markup. The static "Your prompt" recap (rendered by
+# `_plan_prompt`) belongs to the initial swap and must NOT appear in
+# subsequent poll responses — re-rendering it on every tick is what
+# made the left aside flash. When the runner flips to `done`, the
+# response retargets to `#form-stage` so the whole stage swaps to the
+# planned-body editor.
+
+def _tq_seed_plan(plan_id, status, log_text, body_text, pending_question)
+  Plan.create({
+    "_key":             plan_id,
+    "project":          "proj",
+    "plan_id":          plan_id,
+    "status":           status,
+    "model":            "claude-sonnet-4-6",
+    "prompt":           "build me a thing",
+    "project_path":     "/tmp/proj",
+    "body":             body_text,
+    "log":              log_text,
+    "pending_question": pending_question,
+    "zombie":           false
+  })
+end
+
+describe("TasksController#plan_log", fn()
+  before_each(fn()
+    assert_test_db()
+    Plan.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("returns only the plan-stream partial while the plan is running", fn()
+    _tq_seed_plan("plan-running", "running", "step 1\nstep 2", "", nil)
+    let response = get("/projects/proj/tasks/plan-log/plan-running")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # Right-panel root is present; static prompt aside is NOT.
+    assert_contains(body, "id=\"plan-stream\"")
+    assert_not(body.contains("Your prompt"))
+    # Polling continues — the section carries the hx-trigger.
+    assert_contains(body, "hx-trigger=\"every 2s\"")
+  end)
+
+  test("omits hx-trigger and the prompt aside on the awaiting_question state", fn()
+    let pq = {
+      "id":    "q1",
+      "tool":  "AskUserQuestion",
+      "input": { "questions": [{ "question": "Pick one",
+                                  "options":  [{ "label": "A" }, { "label": "B" }] }] }
+    }
+    _tq_seed_plan("plan-q", "awaiting_question", "", "", pq)
+    let response = get("/projects/proj/tasks/plan-log/plan-q")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "id=\"plan-stream\"")
+    assert_contains(body, "Pick one")
+    assert_not(body.contains("Your prompt"))
+  end)
+
+  test("returns the planned-body and retargets to #form-stage when done", fn()
+    _tq_seed_plan("plan-done", "done", "", "# Done plan\n\nbody markdown\n", nil)
+    let response = get("/projects/proj/tasks/plan-log/plan-done")
+    assert_eq(res_status(response), 200)
+    # HX-Retarget tells htmx to redirect the swap from #plan-stream
+    # (the polling element) onto the outer #form-stage container, so
+    # the whole stage flips to the editor view in one tick.
+    assert_eq(res_header(response, "HX-Retarget"), "#form-stage")
+    assert_eq(res_header(response, "HX-Reswap"), "innerHTML")
+    let body = res_body(response)
+    # Planned-body markup is present; the running-state stream root
+    # (id="plan-stream") has been replaced.
+    assert_contains(body, "Refine the draft")
+    assert_not(body.contains("id=\"plan-stream\""))
+  end)
+end)
+
+describe("TasksController#plan_answer", fn()
+  before_each(fn()
+    assert_test_db()
+    Plan.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("returns only the plan-stream partial after writing the answer", fn()
+    let pq = {
+      "id":    "q1",
+      "tool":  "AskUserQuestion",
+      "input": { "questions": [{ "question": "Pick one",
+                                  "options":  [{ "label": "A" }, { "label": "B" }] }] }
+    }
+    _tq_seed_plan("plan-ans", "awaiting_question", "", "", pq)
+    let response = post("/projects/proj/tasks/plan-answer/plan-ans",
+                        { "qid": "q1", "value": "A" })
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # Right-panel-only response — the left "Your prompt" aside is NOT
+    # in the answer payload, so the prompt DOM node persists across
+    # the round-trip.
+    assert_contains(body, "id=\"plan-stream\"")
+    assert_not(body.contains("Your prompt"))
+    # The answer was persisted on the plan row.
+    let plan = Plan.find_by_plan_id("plan-ans")
+    assert_eq(plan.pending_question["id"], "q1")
+    assert_eq(plan.pending_question["value"], "A")
+  end)
+
+  test("retargets to #form-stage when the answer races the agent finishing", fn()
+    _tq_seed_plan("plan-race", "done", "", "# Raced plan\n\nfinal spec\n", nil)
+    let response = post("/projects/proj/tasks/plan-answer/plan-race",
+                        { "qid": "q1", "value": "A" })
+    assert_eq(res_status(response), 200)
+    assert_eq(res_header(response, "HX-Retarget"), "#form-stage")
+    assert_eq(res_header(response, "HX-Reswap"), "innerHTML")
+    let body = res_body(response)
+    assert_not(body.contains("id=\"plan-stream\""))
+  end)
+
+  test("rejects with 422 when qid or value is missing", fn()
+    _tq_seed_plan("plan-bad", "awaiting_question", "", "", nil)
+    let response = post("/projects/proj/tasks/plan-answer/plan-bad",
+                        { "qid": "", "value": "A" })
+    assert_eq(res_status(response), 422)
+  end)
+end)
