@@ -1,6 +1,7 @@
 # Routes configuration
 
 get("/", "home#index")
+get("/plans", "plans#index")
 get("/health", "home#health")
 get("/docs", "docs#index")
 

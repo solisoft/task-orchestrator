@@ -7,7 +7,10 @@
                     <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Task Orchestrator</h1>
                     <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
                 </div>
-                <a href="/docs" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Docs</a>
+                <div class="flex gap-3">
+                    <a href="/plans" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Plans</a>
+                    <a href="/docs" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Docs</a>
+                </div>
             </div>
             <p class="text-slate-400 text-sm max-w-2xl leading-relaxed">
                 Drop a markdown task spec, queue it, and watch a Claude Code agent dispatch it end-to-end inside a fresh git worktree.
