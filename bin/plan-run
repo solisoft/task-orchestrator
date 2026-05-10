@@ -16,11 +16,11 @@
 # omitted (interactive runs from the orchestrator dir), the runner
 # falls back to its own cwd, which keeps backwards compatibility.
 #
-# Streams stream-json events through bin/_stream-format.jq into
-# $TASK_ORCH_STATE/_plans/<plan_id>/log so the UI can tail it; captures
-# the raw events to log.jsonl; on success extracts the final assistant
-# text into body and writes status=done. On failure writes status=failed
-# with a reason. Always cleans up the notes tmpfile on exit.
+# All plan state (status, body, model, prompt, log) is written to the
+# solidb `plans` collection via direct REST API calls (AQL UPDATE).
+# The plans_controller reads back the list from Plan.all().
+# On success extracts the final assistant text into body.
+# Always cleans up the notes tmpfile on exit.
 set -euo pipefail
 
 if [[ $# -lt 2 || $# -gt 4 ]]; then
@@ -39,36 +39,42 @@ if [[ -f "$project_root/.env" ]]; then
   set -a; source "$project_root/.env"; set +a
 fi
 
-state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
-state_dir="$state_root/_plans/$plan_id"
-mkdir -p "$state_dir"
+HOST=${SOLIDB_HOST:-http://localhost:6745}
+DB=${SOLIDB_DATABASE:-tasks}
+USER=${SOLIDB_USERNAME:-admin}
+PASS=${SOLIDB_PASSWORD:-admin}
 
-log_file="$state_dir/log"
-jsonl_file="$state_dir/log.jsonl"
-body_file="$state_dir/body"
-status_file="$state_dir/status"
-jq_file="$script_dir/_stream-format.jq"
+log() { printf '[%s] %s\n' "$(date -Is)" "$*" >&2; }
 
-write_status() { printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"; }
-log()          { printf '[%s] %s\n' "$(date -Is)" "$*" >> "$log_file"; }
+db_update() {
+  local patch_json="$1"
+  local body
+  body=$(jq -n --arg plan_id "$plan_id" --argjson patch "$patch_json" \
+    '{
+       query: "UPDATE @plan_id WITH @patch IN plans RETURN NEW",
+       bindVars: { plan_id: $plan_id, patch: $patch }
+     }')
+  curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' -d "$body" >&2 \
+    || log "db_update failed: $patch_json"
+}
+
+write_status() { db_update "$(jq -n --arg s "$1" '{status: $s, updated_at: now | todateiso8601}')"; }
+write_log()     { db_update "$(jq -n --argjson l "$1" '{log: $l}')"; }
+write_body()    { db_update "$(jq -n --argjson b "$1" '{body: $b}')"; }
+write_pq()      { db_update "$(jq -n --argjson p "$1" '{pending_question: $p}')"; }
 
 trap 'rm -f "$notes_path"' EXIT
 
 write_status "starting"
 log "plan-run plan_id=$plan_id notes=$notes_path model=${model:-default} project=${project_dir:-<orchestrator cwd>}"
 
-# Validate the project_dir before either runner touches it. An empty
-# value falls back to the runner's cwd (the orchestrator dir) — that's
-# the legacy behavior for callers that don't know the target project.
 if [[ -n "$project_dir" && ! -d "$project_dir" ]]; then
   log "project_dir not a directory: $project_dir"
   write_status "failed:bad-project-dir"
   exit 65
 fi
 
-# Model id with a "/" is provider/model — route to opencode CLI. Otherwise
-# the Claude Agent SDK runner (which alone supports the AskUserQuestion
-# canUseTool intercept the form's question card needs).
 runner=sdk
 if [[ "$model" == */* ]]; then
   runner=opencode
@@ -78,37 +84,34 @@ set +e
 case "$runner" in
   opencode)
     log "spawning opencode model=$model"
-    # opencode picks up the /plan-task skill from cwd's .claude/skills/,
-    # so we DON'T pass --dir here — that would point opencode at the
-    # target project where the skill doesn't exist. The target project
-    # path goes into the prompt as a second positional arg; the skill
-    # uses it for Glob/Read/Grep grounding.
     prompt_args="$notes_path"
     if [[ -n "$project_dir" ]]; then
       prompt_args="$notes_path $project_dir"
     fi
-    (
-      opencode run --format json --dangerously-skip-permissions \
-        -m "$model" \
-        < /dev/null \
-        "/plan-task $prompt_args" 2>>"$log_file"
-    ) | tee -a "$jsonl_file" \
-      | stdbuf -oL jq -r --unbuffered -f "$jq_file" >> "$log_file"
+    opencode run --format json --dangerously-skip-permissions \
+      -m "$model" \
+      < /dev/null \
+      "/plan-task $prompt_args" 2>&1 \
+      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" \
+      | while read -r line; do
+          write_log "$line"
+        done
     rc=${PIPESTATUS[0]}
     ;;
   *)
     log "spawning plan-run-agent (sdk)"
-    agent_args=(--plan-id "$plan_id" --state-dir "$state_dir" --notes-path "$notes_path")
+    agent_args=(--plan-id "$plan_id" --notes-path "$notes_path")
     if [[ -n "$model" ]]; then
       agent_args+=(--model "$model")
     fi
     if [[ -n "$project_dir" ]]; then
       agent_args+=(--project-dir "$project_dir")
     fi
-    (
-      bun "$script_dir/plan-run-agent.ts" "${agent_args[@]}" 2>>"$log_file"
-    ) | tee -a "$jsonl_file" \
-      | stdbuf -oL jq -r --unbuffered -f "$jq_file" >> "$log_file"
+    bun "$script_dir/plan-run-agent.ts" "${agent_args[@]}" 2>&1 \
+      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" \
+      | while read -r line; do
+          write_log "$line"
+        done
     rc=${PIPESTATUS[0]}
     ;;
 esac
@@ -120,46 +123,15 @@ if [[ $rc -ne 0 ]]; then
   exit "$rc"
 fi
 
-# plan-run-agent.ts writes body itself when the agent exits cleanly;
-# the jq fallbacks only fire if the SDK path crashed before that step,
-# or if we ran via opencode (which doesn't write body itself).
-if [[ ! -s "$body_file" ]]; then
-  case "$runner" in
-    opencode)
-      # opencode emits one `text` event per chunk; group by messageID and
-      # take the last message — that's the assistant's final reply.
-      body=$(jq -rs '
-        ([.[] | select(.type == "text") | .part.messageID] | last) as $m
-        | [.[] | select(.type == "text" and .part.messageID == $m) | .part.text]
-        | join("")
-      ' < "$jsonl_file")
-      ;;
-    *)
-      body=$(jq -rs '
-        [.[] | select(.type == "assistant")] | last
-        | (.message.content // [])
-        | map(select(.type == "text") | .text)
-        | add // ""
-      ' < "$jsonl_file")
-      ;;
-  esac
-else
-  body=$(cat "$body_file")
-fi
-
-# Strip surrounding ``` code fences if the model wrapped the spec.
-body=$(printf '%s' "$body" | awk '
-  NR==1 && /^```/ { in_fence=1; next }
-  in_fence && /^```$/ { in_fence=0; next }
-  { print }
-')
-
+body=$(curl -s -u "$USER:$PASS" \
+  "$HOST/_api/database/$DB/document/plans/$plan_id" \
+  | jq -r '.body // empty')
 if [[ -z "$body" ]]; then
   log "agent emitted empty body"
   write_status "failed:empty-body"
   exit 1
 fi
 
-printf '%s' "$body" > "$body_file"
+write_body "$body"
 log "wrote body (${#body} bytes)"
 write_status "done"
