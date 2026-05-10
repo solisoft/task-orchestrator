@@ -1,35 +1,45 @@
-# Routes configuration
+# Routes
+
+# ── Root & Utility ──────────────────
 
 get("/", "home#index")
 get("/health", "home#health")
+get("/debug", "debug#show")
 get("/docs", "docs#index")
 
-# Settings — global config (active agent + per-agent run caps)
+# ── Plans ────────────────────────────
+
+get("/plans", "plans#index")
+
+# ── Settings ─────────────────────────
+
 get("/settings", "settings#show")
 post("/settings", "settings#update")
 
-# Project kanban
+# ── Projects ─────────────────────────
+
 get("/projects/:name", "projects#show")
 
-# Task viewer + actions. URLs use the task slug (filename without `.md`),
-# which is the identifier on the Task model.
+# ── Tasks ────────────────────────────
+
 get("/projects/:name/tasks/new", "tasks#new")
-# create must come before the literal-segment plan route, otherwise the
-# Soli router prunes the `/tasks` POST branch when the static child is
-# registered first and bare-`/tasks` POSTs fall through to a 404.
+# create must precede the static-segment plan route (Soli pruning)
 post("/projects/:name/tasks", "tasks#create")
-post("/projects/:name/tasks/plan", "tasks#plan")
-get("/projects/:name/tasks/plan-log/:plan_id", "tasks#plan_log")
-post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
-post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
 get("/projects/:name/tasks/:slug", "tasks#show")
 post("/projects/:name/tasks/:slug/save", "tasks#save")
 post("/projects/:name/tasks/:slug/queue", "tasks#queue")
 post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
 post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
 
-# Live agent-run viewer (status + log tail, HTMX-polled)
+# ── Plans (per-project) ──────────────
+
+post("/projects/:name/tasks/plan", "tasks#plan")
+get("/projects/:name/tasks/plan-log/:plan_id", "tasks#plan_log")
+post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
+post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
+
+# ── Runs ─────────────────────────────
+
 get("/projects/:name/tasks/:slug/run", "runs#show")
 get("/projects/:name/tasks/:slug/run/log", "runs#log")
 post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
-get("/debug", "debug#show")
