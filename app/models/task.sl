@@ -30,6 +30,13 @@ class Task < Model
     ["claude", "opencode", "opencode-sdk"]
   end
 
+  # Enabled agents = all known agents with enabled flag true (or no flag
+  # set, which defaults to enabled). Used by the orchestrator to decide
+  # which agents may be dispatched.
+  static def enabled_agents()
+    AgentConfig.enabled_agents(Task.known_agents())
+  end
+
   # Status columns shown on the kanban (skips "failed", which is rendered
   # as a banner on the project page when a run blew up).
   static def kanban_statuses()
@@ -80,10 +87,14 @@ class Task < Model
 
   # Default agent for tasks that have no per-task `agent_type` set yet.
   # Reads the global `Setting.get("agent_type")` value; falls back to
-  # the first known agent so the dashboard never NPEs on a clean DB.
+  # the first enabled agent so the dashboard never NPEs on a clean DB.
   static def default_agent()
     let cfg = Setting.get("agent_type") rescue nil
     if cfg == nil or cfg == ""
+      let enabled = Task.enabled_agents()
+      if enabled.length() > 0
+        return enabled[0]
+      end
       return Task.known_agents()[0]
     end
     return cfg
