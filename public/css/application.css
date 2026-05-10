@@ -1750,6 +1750,7 @@ img, video {
         radial-gradient(ellipse 60% 50% at 85% 100%, rgba(147, 51, 234, 0.05), transparent 50%),
         radial-gradient(ellipse 40% 40% at 50% 50%, rgba(192, 132, 252, 0.03), transparent 50%),
         rgb(2, 6, 23);
+  background-attachment: fixed;
 }
 
 /* ── Staggered fade-in on load ── */
