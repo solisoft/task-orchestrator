@@ -1,14 +1,14 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen text-white">
   <div class="w-full px-6 py-8">
-    <nav class="text-sm text-slate-500 mb-4">
-      <a href="/" class="hover:text-slate-300">All projects</a>
+    <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
       <span class="mx-2">/</span>
       <a href="/projects/<%= project["name"] %>" class="hover:text-slate-300"><%= project["name"] %></a>
       <span class="mx-2">/</span>
       <span class="text-slate-300">new task</span>
     </nav>
 
-    <h1 class="text-2xl font-bold mb-6">New task in <span class="text-indigo-400"><%= project["name"] %></span></h1>
+    <h1 class="text-2xl font-bold mb-6 animate-fade-in">New task in <span class="gradient-text"><%= project["name"] %></span></h1>
 
     <% if task != nil and task._errors %>
       <div class="rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3 mb-4">
@@ -98,7 +98,7 @@
           </aside>
 
           <!-- Right panel: empty placeholder until a plan exists. -->
-          <section class="rounded-xl border border-white/5 bg-slate-900/40 p-8 flex items-center justify-center min-h-[60vh]">
+          <section class="rounded-xl glass-card p-8 flex items-center justify-center min-h-[60vh] animate-fade-in animate-fade-in-2">
             <p class="text-sm text-slate-500 italic text-center max-w-md">
               The structured spec will appear here once the agent finishes planning.
               You will be able to edit it, refine it through the agent, or create the task directly.

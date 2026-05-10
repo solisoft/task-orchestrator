@@ -46,7 +46,8 @@
       .task-md hr { border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
     </style>
 </head>
-<body class="min-h-full bg-slate-950 text-white font-sans antialiased">
+<body class="min-h-full text-white font-sans antialiased gradient-mesh">
+    <div class="gradient-accent-bar"></div>
     <%= yield %>
 </body>
 </html>
