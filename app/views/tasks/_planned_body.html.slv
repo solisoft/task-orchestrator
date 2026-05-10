@@ -15,7 +15,7 @@
   let _model_base  = _colon_at > 0 ? _model_in.substring(0, _colon_at) : _model_in
   let _model_var   = _colon_at > 0 ? _model_in.substring(_colon_at + 1, _model_in.length) : "default"
 %>
-<aside class="space-y-4">
+<aside class="space-y-4 animate-fade-in">
   <label class="block text-sm font-medium text-slate-300">Refine the draft</label>
   <textarea name="refine_note" rows="10"
             placeholder="What needs changing? e.g. 'add a Severity of high', 'split the migration into two steps', 'drop the destroy action'."
@@ -96,7 +96,7 @@
     </div>
 
     <article data-tab-pane="markdown"
-             class="task-md rounded-xl bg-slate-900/40 border border-white/5 p-6 text-sm overflow-y-auto"
+             class="task-md rounded-xl glass-card p-6 text-sm overflow-y-auto"
              style="min-height: 60vh; max-height: calc(100vh - 22rem);">
       <%- Markdown.to_safe_html(body) %>
     </article>

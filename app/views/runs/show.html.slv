@@ -1,16 +1,16 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen text-white">
   <div class="max-w-7xl mx-auto px-6 py-8">
-    <nav class="text-sm text-slate-500 mb-4">
-      <a href="/" class="hover:text-slate-300">All projects</a>
+    <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
       <span class="mx-2">/</span>
-      <a href="/projects/<%= project["name"] %>" class="hover:text-slate-300"><%= project["name"] %></a>
+      <a href="/projects/<%= project["name"] %>" class="hover:text-slate-300 transition-colors"><%= project["name"] %></a>
       <span class="mx-2">/</span>
-      <a href="/projects/<%= project["name"] %>/tasks/<%= slug %>" class="hover:text-slate-300"><%= slug %></a>
+      <a href="/projects/<%= project["name"] %>/tasks/<%= slug %>" class="hover:text-slate-300 transition-colors"><%= slug %></a>
       <span class="mx-2">/</span>
       <span class="text-slate-300">run</span>
     </nav>
 
-    <h1 class="text-2xl font-bold font-mono mb-4">Agent run · <%= slug %></h1>
+    <h1 class="text-2xl font-bold font-mono mb-4 gradient-text animate-fade-in">Agent run · <%= slug %></h1>
 
     <%- render_partial("runs/log", {
       "project": project,

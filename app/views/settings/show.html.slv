@@ -1,12 +1,12 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen text-white">
   <div class="max-w-3xl mx-auto px-6 py-12">
-    <header class="mb-10 flex items-baseline justify-between">
-      <h1 class="text-4xl font-bold tracking-tight">Settings</h1>
+    <header class="mb-10 flex items-baseline justify-between animate-fade-in">
+      <h1 class="text-4xl font-bold tracking-tight gradient-text">Settings</h1>
       <a href="/" class="text-sm text-slate-400 hover:text-indigo-300">← Home</a>
     </header>
 
     <form method="post" action="/settings" class="space-y-8">
-      <fieldset class="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-1">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent</legend>
         <p class="mt-2 text-sm text-slate-400">Active runner used when a task has no per-task <code>agent_type</code>.</p>
         <div class="mt-4">
@@ -20,7 +20,7 @@
         </div>
       </fieldset>
 
-      <fieldset class="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-2">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent options</legend>
         <p class="mt-2 text-sm text-slate-400">Enable or disable agents available for dispatch. Changes take effect immediately.</p>
         <div class="mt-4 space-y-3">
@@ -36,7 +36,7 @@
         </div>
       </fieldset>
 
-      <fieldset class="rounded-2xl border border-white/10 bg-white/5 p-6">
+      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-3">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Run limits</legend>
         <p class="mt-2 text-sm text-slate-400">Cap how many runs an agent may start per rolling 24h / 7d window. <code>0</code> means unlimited.</p>
         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-slate-400">

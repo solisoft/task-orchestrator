@@ -1,17 +1,17 @@
 <% let body_for_render = strip_title_heading(task.body_md ?? "") %>
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen text-white">
   <div class="max-w-4xl mx-auto px-6 py-8">
-    <nav class="text-sm text-slate-500 mb-4">
-      <a href="/" class="hover:text-slate-300">All projects</a>
+    <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
       <span class="mx-2">/</span>
       <a href="/projects/<%= project["name"] %>" class="hover:text-slate-300"><%= project["name"] %></a>
       <span class="mx-2">/</span>
       <span class="text-slate-300"><%= task.slug %></span>
     </nav>
 
-    <header class="mb-6 flex items-baseline justify-between flex-wrap gap-3">
+    <header class="mb-6 flex items-baseline justify-between flex-wrap gap-3 animate-fade-in">
       <div>
-        <h1 class="text-2xl font-bold"><%= task.title %></h1>
+        <h1 class="text-2xl font-bold gradient-text"><%= task.title %></h1>
         <p class="text-xs text-slate-500 mt-1 font-mono"><%= task.slug %></p>
         <p class="text-xs text-slate-500 mt-1">
           Status:
@@ -34,7 +34,7 @@
     </header>
 
     <% if branch_info != nil %>
-      <div class="mb-6 rounded-xl bg-slate-900/60 border border-white/10 p-4">
+      <div class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
         <div class="flex items-center justify-between flex-wrap gap-3">
           <div class="flex items-center gap-2 text-sm flex-wrap">
             <span class="text-slate-400">Branch</span>
@@ -74,7 +74,7 @@
     <% if task.status == "todo" %>
       <!-- Editable body: rendered view by default; click "Edit" to switch to the textarea form. -->
       <div id="task-body">
-        <div id="task-body-view" class="rounded-xl bg-slate-900/60 border border-white/10 p-6">
+        <div id="task-body-view" class="rounded-xl glass-card p-6">
           <div class="flex items-center justify-end mb-3 -mt-2 -mr-2">
             <button type="button"
                     onclick="document.getElementById('task-body-view').classList.add('hidden'); document.getElementById('task-body-edit').classList.remove('hidden'); document.querySelector('#task-body-edit textarea').focus();"
@@ -102,7 +102,7 @@
       </div>
     <% else %>
       <!-- Read-only rendered markdown for non-todo tasks. -->
-      <div class="rounded-xl bg-slate-900/60 border border-white/10 p-6">
+      <div class="rounded-xl glass-card p-6">
         <p class="text-xs text-slate-500 mb-3 italic">Read-only — task has left the todo column. Click "Cancel" above to move back if you need to edit.</p>
         <article class="task-md text-sm">
           <%- Markdown.to_safe_html(body_for_render) %>

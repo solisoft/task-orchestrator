@@ -1,11 +1,11 @@
-<div class="min-h-screen bg-slate-950 text-white">
+<div class="min-h-screen text-white">
   <div class="max-w-4xl mx-auto px-6 py-12">
-    <nav class="text-sm text-slate-500 mb-4">
-      <a href="/" class="hover:text-slate-300">&larr; All projects</a>
+    <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">&larr; All projects</a>
     </nav>
 
-    <header class="mb-10">
-      <h1 class="text-4xl font-bold tracking-tight">Getting Started</h1>
+    <header class="mb-10 animate-fade-in">
+      <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Getting Started</h1>
       <p class="mt-2 text-slate-400">
         Drop a task spec, queue it, watch a Claude Code agent dispatch it end-to-end.
       </p>
