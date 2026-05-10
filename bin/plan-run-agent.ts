@@ -6,14 +6,15 @@
 // Routes AskUserQuestion / ExitPlanMode through canUseTool so the user
 // can answer interactively from the form.
 //
-// State lives in $TASK_ORCH_STATE/_plans/<plan_id>/:
-//   pending_question.json — { id, tool, input, asked_at }
-//   pending_answer.json   — { id, value }
-//   body                  — final spec (written when the agent exits cleanly)
+// Question/answer state is persisted on the plan's solidb document
+// (`pending_question` column) so the controller can render the question
+// card and the form's POST handler can deliver the answer:
+//   - Agent writes:   { id, tool, tool_use_id, input, asked_at }
+//   - Controller writes (on user submit):   { id, value }
+//   - Agent clears to null after consuming the answer.
 //
 // Flags:
 //   --plan-id <id>       Plan id (e.g. "plan-1778347304").
-//   --state-dir <path>   $TASK_ORCH_STATE/_plans/<id>.
 //   --notes-path <path>  Path to the user's rough notes.
 //   --model <id>         Optional Claude model id (e.g. "claude-opus-4-7").
 //                        When omitted, the SDK's default applies.
@@ -21,10 +22,10 @@
 //                        *that* CLAUDE.md and globs *that* tree, not
 //                        the orchestrator's own. When omitted, falls
 //                        back to process.cwd() (the orchestrator dir).
+//   --state-dir <path>   Vestigial, accepted for backwards compat. No
+//                        files are written under it anymore.
 
 import { query, type CanUseTool, type Options } from "@anthropic-ai/claude-agent-sdk";
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
 
 function flag(name: string): string | undefined {
   const i = process.argv.indexOf("--" + name);
@@ -32,46 +33,68 @@ function flag(name: string): string | undefined {
 }
 
 const planId     = flag("plan-id");
-const stateDir   = flag("state-dir");
 const notesPath  = flag("notes-path");
 const model      = flag("model");
 const projectDir = flag("project-dir");
 
-if (!planId || !stateDir || !notesPath) {
-  console.error("usage: plan-run-agent --plan-id ID --state-dir DIR --notes-path PATH");
+if (!planId || !notesPath) {
+  console.error("usage: plan-run-agent --plan-id ID --notes-path PATH [--model M] [--project-dir D]");
   process.exit(64);
 }
 
-mkdirSync(stateDir, { recursive: true });
+// solidb access for question/answer round-trips. Keep these on
+// process.env (NOT childEnv) so the SDK subprocess doesn't inherit
+// production credentials.
+const SOLIDB_HOST = process.env.SOLIDB_HOST     ?? "http://localhost:6745";
+const SOLIDB_DB   = process.env.SOLIDB_DATABASE ?? "tasks";
+const SOLIDB_USER = process.env.SOLIDB_USERNAME ?? "admin";
+const SOLIDB_PASS = process.env.SOLIDB_PASSWORD ?? "admin";
+const AUTH_HEADER = "Basic " + Buffer.from(`${SOLIDB_USER}:${SOLIDB_PASS}`).toString("base64");
 
-const QUESTION_FILE = join(stateDir, "pending_question.json");
-const ANSWER_FILE   = join(stateDir, "pending_answer.json");
-const BODY_FILE     = join(stateDir, "body");
-
-function writeQuestion(record: unknown): void {
-  writeFileSync(QUESTION_FILE, JSON.stringify(record));
+async function dbUpdatePendingQuestion(value: unknown): Promise<void> {
+  try {
+    await fetch(`${SOLIDB_HOST}/_api/database/${SOLIDB_DB}/cursor`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": AUTH_HEADER },
+      body: JSON.stringify({
+        query: "UPDATE @plan_id WITH @patch IN plans",
+        bindVars: { plan_id: planId, patch: { pending_question: value } },
+      }),
+    });
+  } catch (err) {
+    process.stderr.write(`dbUpdatePendingQuestion failed: ${(err as Error).message}\n`);
+  }
 }
 
-function clearQA(): void {
-  for (const f of [QUESTION_FILE, ANSWER_FILE]) {
-    try { unlinkSync(f); } catch { /* ignore */ }
+async function dbReadPendingQuestion(): Promise<unknown> {
+  try {
+    const r = await fetch(
+      `${SOLIDB_HOST}/_api/database/${SOLIDB_DB}/document/plans/${planId}`,
+      { headers: { "authorization": AUTH_HEADER } },
+    );
+    if (!r.ok) return null;
+    const doc = await r.json() as { pending_question?: unknown };
+    return doc.pending_question ?? null;
+  } catch {
+    return null;
   }
+}
+
+function writeQuestion(record: unknown): Promise<void> {
+  return dbUpdatePendingQuestion(record);
+}
+
+function clearQA(): Promise<void> {
+  return dbUpdatePendingQuestion(null);
 }
 
 async function pollAnswer(qid: string, signal: AbortSignal): Promise<string> {
   while (!signal.aborted) {
-    if (existsSync(ANSWER_FILE)) {
-      try {
-        const a = JSON.parse(readFileSync(ANSWER_FILE, "utf8")) as {
-          id?: string; value?: string;
-        };
-        if (a.id === qid && typeof a.value === "string") {
-          clearQA();
-          return a.value;
-        }
-      } catch {
-        // Partial write or stale file — keep polling.
-      }
+    const pq = await dbReadPendingQuestion() as
+      { id?: string; value?: string } | null;
+    if (pq && pq.id === qid && typeof pq.value === "string") {
+      await clearQA();
+      return pq.value;
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -89,7 +112,7 @@ const canUseTool: CanUseTool = async (toolName, input, opts) => {
 
   const qid = globalThis.crypto?.randomUUID?.()
     ?? `q-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  writeQuestion({
+  await writeQuestion({
     id: qid,
     tool: toolName,
     tool_use_id: opts.toolUseID,
@@ -137,14 +160,12 @@ const options: Options = {
 };
 
 let exitCode = 0;
-const transcript: any[] = [];
 const promptArgs = projectDir
   ? `${notesPath} ${projectDir}`
   : notesPath;
 try {
   for await (const msg of query({ prompt: `/plan-task ${promptArgs}`, options })) {
     process.stdout.write(JSON.stringify(msg) + "\n");
-    transcript.push(msg);
     if (msg.type === "result" && msg.subtype !== "success") {
       exitCode = 1;
     }
@@ -152,22 +173,6 @@ try {
 } catch (err) {
   process.stderr.write(`plan-run-agent: ${(err as Error).stack ?? err}\n`);
   exitCode = 1;
-}
-
-if (exitCode === 0) {
-  const lastAssistant = [...transcript].reverse().find(
-    (m) => m.type === "assistant",
-  ) as { message?: { content?: Array<{ type: string; text?: string }> } } | undefined;
-  const body = (lastAssistant?.message?.content ?? [])
-    .filter((c) => c.type === "text")
-    .map((c) => c.text ?? "")
-    .join("");
-  if (body.trim().length > 0) {
-    writeFileSync(BODY_FILE, body);
-  } else {
-    process.stderr.write("plan-run-agent: no assistant text captured\n");
-    exitCode = 1;
-  }
 }
 
 process.exit(exitCode);

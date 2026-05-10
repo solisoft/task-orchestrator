@@ -645,6 +645,10 @@ img, video {
   visibility: collapse;
 }
 
+.static {
+  position: static;
+}
+
 .m-0 {
   margin: 0px;
 }
@@ -1058,6 +1062,10 @@ img, video {
 
 .whitespace-pre-wrap {
   white-space: pre-wrap;
+}
+
+.break-words {
+  overflow-wrap: break-word;
 }
 
 .rounded {

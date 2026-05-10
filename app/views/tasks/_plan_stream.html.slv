@@ -71,7 +71,10 @@
     <a href="/projects/<%= project["name"] %>"
        class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
     <% if failed %>
-      <button type="button" onclick="location.reload()"
+      <button type="button"
+              hx-post="/projects/<%= project["name"] %>/tasks/plan-retry/<%= plan_id %>"
+              hx-target="#form-stage"
+              hx-swap="innerHTML"
               class="rounded-lg bg-amber-500/80 hover:bg-amber-400 text-white text-sm font-medium px-4 py-2 transition-colors">
         Try again
       </button>

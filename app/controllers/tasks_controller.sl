@@ -487,6 +487,49 @@ fn plan_refine(req)
   }
 end
 
+# Re-spawn a failed plan using the original prompt + model. Issued by
+# the "Try again" button on the failed _plan_stream panel. Allocates a
+# NEW plan_id so the failed plan stays in the index for diagnosis.
+fn plan_retry(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let prev_plan_id = req["params"]["plan_id"]
+  let prev = Plan.find_by_plan_id(prev_plan_id)
+  if prev == nil
+    return {"status": 404, "body": "Unknown plan"}
+  end
+  let notes = (prev.prompt ?? "").trim()
+  if notes == ""
+    return {"status": 422, "body": "Original prompt missing — cannot retry"}
+  end
+  let model = _allow_plan_model(prev.model ?? "")
+  let plan_id = spawn_plan_agent(notes, model, project["path"])
+  if plan_id == nil
+    return {
+      "status": 500,
+      "headers": {"Content-Type": "text/html; charset=utf-8"},
+      "body": "<div class=\"text-red-300 text-sm p-3\">failed to spawn plan-run</div>"
+    }
+  end
+  {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=utf-8",
+      "HX-Push-Url":  "/projects/" + project["name"] + "/tasks/new?plan_id=" + plan_id
+    },
+    "body": render_partial("tasks/plan_progress", {
+      "project":          project,
+      "plan_id":          plan_id,
+      "log":              "",
+      "status":           "starting",
+      "pending_question": nil,
+      "prompt":           notes
+    })
+  }
+end
+
 # Read the model the user picked when this plan was first spawned.
 # Falls back to the canonical default so a missing/corrupt file never
 # raises into the refine flow.

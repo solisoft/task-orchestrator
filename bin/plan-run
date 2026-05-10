@@ -59,12 +59,29 @@ db_update() {
     || log "db_update failed: $patch_json"
 }
 
-write_status() { db_update "$(jq -n --arg s "$1" '{status: $s, updated_at: now | todateiso8601}')"; }
-write_log()     { db_update "$(jq -n --argjson l "$1" '{log: $l}')"; }
-write_body()    { db_update "$(jq -n --argjson b "$1" '{body: $b}')"; }
-write_pq()      { db_update "$(jq -n --argjson p "$1" '{pending_question: $p}')"; }
+# AQL UPDATE WITH merges keys, so a plain `{log: $line}` patch overwrites
+# the column on every call — leaving only the most recent line visible
+# in the UI. CONCAT against DOCUMENT() appends instead.
+append_log() {
+  local body
+  body=$(jq -n --arg plan_id "$plan_id" --arg line "$1"$'\n' \
+    '{
+       query: "LET p = DOCUMENT(\"plans\", @plan_id) UPDATE @plan_id WITH { log: CONCAT(p.log, @line) } IN plans",
+       bindVars: { plan_id: $plan_id, line: $line }
+     }')
+  curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' -d "$body" >&2 \
+    || log "append_log failed: $1"
+}
 
-trap 'rm -f "$notes_path"' EXIT
+write_status() { db_update "$(jq -n --arg s "$1" '{status: $s, updated_at: now | todateiso8601}')"; }
+write_log()    { append_log "$1"; }
+write_body()   { db_update "$(jq -n --arg b "$1" '{body: $b}')"; }
+write_pq()     { db_update "$(jq -n --argjson p "$1" '{pending_question: $p}')"; }
+
+jsonl_file=$(mktemp -t plan-run.XXXXXX.jsonl)
+state_dir=$(mktemp -d -t plan-run.XXXXXX)
+trap 'rm -f "$notes_path" "$jsonl_file"; rm -rf "$state_dir"' EXIT
 
 write_status "starting"
 log "plan-run plan_id=$plan_id notes=$notes_path model=${model:-default} project=${project_dir:-<orchestrator cwd>}"
@@ -92,7 +109,8 @@ case "$runner" in
       -m "$model" \
       < /dev/null \
       "/plan-task $prompt_args" 2>&1 \
-      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" \
+      | tee "$jsonl_file" \
+      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" 2>/dev/null \
       | while read -r line; do
           write_log "$line"
         done
@@ -100,7 +118,7 @@ case "$runner" in
     ;;
   *)
     log "spawning plan-run-agent (sdk)"
-    agent_args=(--plan-id "$plan_id" --notes-path "$notes_path")
+    agent_args=(--plan-id "$plan_id" --state-dir "$state_dir" --notes-path "$notes_path")
     if [[ -n "$model" ]]; then
       agent_args+=(--model "$model")
     fi
@@ -108,7 +126,8 @@ case "$runner" in
       agent_args+=(--project-dir "$project_dir")
     fi
     bun "$script_dir/plan-run-agent.ts" "${agent_args[@]}" 2>&1 \
-      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" \
+      | tee "$jsonl_file" \
+      | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" 2>/dev/null \
       | while read -r line; do
           write_log "$line"
         done
@@ -123,9 +142,38 @@ if [[ $rc -ne 0 ]]; then
   exit "$rc"
 fi
 
-body=$(curl -s -u "$USER:$PASS" \
-  "$HOST/_api/database/$DB/document/plans/$plan_id" \
-  | jq -r '.body // empty')
+# Extract body from the captured stream. The jsonl tee mixes stderr in,
+# so first parse each line as JSON (skipping non-JSON noise) and slurp
+# the resulting values for the format-specific extractor.
+case "$runner" in
+  opencode)
+    # opencode emits one `text` event per chunk; group by messageID and
+    # take the last message — that's the assistant's final reply.
+    body=$(jq -R 'fromjson? // empty' "$jsonl_file" | jq -rs '
+      ([.[] | select(.type == "text") | .part.messageID] | last) as $m
+      | [.[] | select(.type == "text" and .part.messageID == $m) | .part.text]
+      | join("")
+    ')
+    ;;
+  *)
+    # SDK emits nested content blocks; take the last assistant message
+    # and join its text parts.
+    body=$(jq -R 'fromjson? // empty' "$jsonl_file" | jq -rs '
+      [.[] | select(.type == "assistant")] | last
+      | (.message.content // [])
+      | map(select(.type == "text") | .text)
+      | add // ""
+    ')
+    ;;
+esac
+
+# Strip surrounding ``` code fences if the model wrapped the spec.
+body=$(printf '%s' "$body" | awk '
+  NR==1 && /^```/ { in_fence=1; next }
+  in_fence && /^```$/ { in_fence=0; next }
+  { print }
+')
+
 if [[ -z "$body" ]]; then
   log "agent emitted empty body"
   write_status "failed:empty-body"

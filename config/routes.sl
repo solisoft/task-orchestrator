@@ -35,6 +35,7 @@ post("/projects/:name/tasks/plan", "tasks#plan")
 get("/projects/:name/tasks/plan-log/:plan_id", "tasks#plan_log")
 post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
 post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
+post("/projects/:name/tasks/plan-retry/:plan_id",  "tasks#plan_retry")
 
 # ── Runs ─────────────────────────────
 

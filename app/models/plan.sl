@@ -68,7 +68,7 @@ class Plan < Model
     if s.length() < n
       n = s.length()
     end
-    s.substring(0, n).replace_all("\n", " ")
+    s.substring(0, n).gsub("\n", " ")
   end
 
   def write_pending_answer(qid, value)
