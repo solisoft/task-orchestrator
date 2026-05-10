@@ -56,7 +56,7 @@
          visible); scrolling up reveals older content. No JS, no
          visibility-toggle flicker, no fight with htmx's swap timing —
          the layout itself does the work. -->
-    <div id="run-log" class="lg:col-span-2 flex flex-col-reverse rounded-xl bg-slate-950/80 border border-white/10 max-h-[65vh] overflow-y-auto">
+    <div id="run-log" class="lg:col-span-2 flex flex-col-reverse rounded-xl neon-terminal max-h-[65vh] overflow-y-auto">
       <% if tail == "" %>
         <p class="font-mono text-xs text-slate-600 p-6 text-center italic">no log yet — task hasn't been queued</p>
       <% else %>
@@ -65,7 +65,7 @@
     </div>
 
     <!-- plan / todo panel — pulled live from the agent's TodoWrite stream. -->
-    <aside id="run-plan" class="rounded-xl bg-slate-900/60 border border-white/10 p-4 max-h-[65vh] overflow-y-auto">
+    <aside id="run-plan" class="rounded-xl glass-card p-4 max-h-[65vh] overflow-y-auto">
       <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
         <span>Plan</span>
         <% if todo_list.length() > 0 %>

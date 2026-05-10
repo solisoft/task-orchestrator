@@ -6,12 +6,12 @@
     </div>
   <% end %>
   <!-- tab strip -->
-  <nav class="flex items-center gap-1 border-b border-white/10 mb-4 overflow-x-auto">
+  <nav class="flex items-center gap-1 border-b border-white/10 mb-4 overflow-x-auto animate-fade-in">
     <% for status in statuses %>
       <% let count = columns[status].length %>
       <% let is_active = status == active_tab %>
       <a href="/projects/<%= project["name"] %>?tab=<%= status %>"
-         class="<%= is_active ? "border-indigo-400 text-white" : "border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600" %> inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px">
+         class="<%= is_active ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
         <%= status %>
         <span class="<%= is_active ? "bg-indigo-500/20 text-indigo-200" : "bg-white/5 text-slate-500" %> rounded-full px-2 py-0.5 text-xs font-mono">
           <%= count %>
@@ -21,16 +21,16 @@
   </nav>
 
   <!-- active list -->
-  <section class="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
+  <section class="rounded-xl glass-card overflow-hidden animate-fade-in animate-fade-in-1">
     <ul class="divide-y divide-white/5">
       <% for task in columns[active_tab] %>
-        <li class="group flex items-center gap-3 pl-4 pr-2 py-3 hover:bg-white/5 transition-colors">
+        <li class="group flex items-center gap-3 pl-4 pr-2 py-3 hover:bg-white/5 transition-all duration-200 hover-lift">
           <% if indicators[task.slug] == "running" %>
-            <span title="agent running" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"></span>
+            <span title="agent running" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0 glow-ring-amber"></span>
           <% elsif indicators[task.slug] == "done" %>
-            <span title="PR opened" class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></span>
+            <span title="PR opened" class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0 glow-ring-emerald"></span>
           <% elsif indicators[task.slug] == "failed" %>
-            <span title="last run failed" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
+            <span title="last run failed" class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 glow-ring-red"></span>
           <% else %>
             <span class="w-2 h-2 rounded-full bg-slate-700 flex-shrink-0"></span>
           <% end %>
