@@ -418,7 +418,8 @@ fn plan_refine(req)
   # form didn't resubmit one (rare — the dropdown is always in the DOM).
   let prev_model = _read_plan_model(prev_plan_id)
   let form = req["form"]
-  if (form["plan_model"] ?? "") == ""
+  let submitted_model = form["plan_model"] ?? ""
+  if submitted_model == ""
     form["plan_model"] = prev_model
   end
   let model = _stitched_plan_model(form)
