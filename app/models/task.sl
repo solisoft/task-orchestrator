@@ -275,3 +275,16 @@ class Task < Model
     end
   end
 end
+
+# Tripwire for spec `before_each` hooks that call `Task.delete_all()` /
+# `Setting.delete_all()`. If `.env.test` is missing or empty, soli falls
+# back to `.env` and the test suite truncates the live `tasks` collection.
+# Call this from every before_each that wipes data; it raises before any
+# damage if SOLIDB_DATABASE doesn't end with `_test`.
+fn assert_test_db()
+  let db = getenv("SOLIDB_DATABASE") ?? ""
+  if not db.ends_with("_test")
+    throw("Refusing to wipe data: SOLIDB_DATABASE='" + db +
+          "' is not a *_test database. Check .env.test.")
+  end
+end

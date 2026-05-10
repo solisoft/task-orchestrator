@@ -9,6 +9,7 @@
 
 describe("SettingsController", fn()
   before_each(fn()
+    assert_test_db()
     Setting.delete_all()
     as_guest()
   end)

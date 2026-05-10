@@ -26,6 +26,7 @@ end
 describe("HomeController", fn()
   describe("GET / dashboard", fn()
     before_each(fn()
+      assert_test_db()
       _home_reset_state()
       as_guest()
     end)

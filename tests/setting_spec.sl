@@ -10,7 +10,10 @@
 
 describe("Setting", fn()
   describe(".get", fn()
-    before_each(fn() Setting.delete_all() end)
+    before_each(fn()
+      assert_test_db()
+      Setting.delete_all()
+    end)
 
     test("returns nil when the key is absent", fn()
       assert_null(Setting.get("missing_key"))
@@ -28,7 +31,10 @@ describe("Setting", fn()
   end)
 
   describe(".get_or", fn()
-    before_each(fn() Setting.delete_all() end)
+    before_each(fn()
+      assert_test_db()
+      Setting.delete_all()
+    end)
 
     test("returns the default when the key is absent", fn()
       assert_eq(Setting.get_or("nope", 42), 42)
@@ -49,7 +55,10 @@ describe("Setting", fn()
   end)
 
   describe(".set", fn()
-    before_each(fn() Setting.delete_all() end)
+    before_each(fn()
+      assert_test_db()
+      Setting.delete_all()
+    end)
 
     test("creates a row on first write", fn()
       assert_null(Setting.get("agent_type"))

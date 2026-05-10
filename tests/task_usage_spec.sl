@@ -32,6 +32,7 @@ end
 
 describe("Task.usage_by_agent", fn()
   before_each(fn()
+    assert_test_db()
     Task.delete_all()
     Setting.delete_all()
   end)
@@ -102,7 +103,10 @@ describe("Task.usage_by_agent", fn()
 end)
 
 describe("Task.default_agent", fn()
-  before_each(fn() Setting.delete_all() end)
+  before_each(fn()
+    assert_test_db()
+    Setting.delete_all()
+  end)
 
   test("returns the first known agent when no Setting is configured", fn()
     assert_eq(Task.default_agent(), Task.known_agents()[0])
@@ -121,6 +125,7 @@ end)
 
 describe("Task.effective_agent", fn()
   before_each(fn()
+    assert_test_db()
     Task.delete_all()
     Setting.delete_all()
   end)

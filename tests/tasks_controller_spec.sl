@@ -57,6 +57,7 @@ end
 
 describe("TasksController#queue", fn()
   before_each(fn()
+    assert_test_db()
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
@@ -180,6 +181,7 @@ end
 
 describe("TasksController#show with local-branch outcome", fn()
   before_each(fn()
+    assert_test_db()
     Task.delete_all()
     Setting.delete_all()
     as_guest()
@@ -244,6 +246,7 @@ end)
 
 describe("TasksController#merge_branch", fn()
   before_each(fn()
+    assert_test_db()
     Task.delete_all()
     Setting.delete_all()
     as_guest()
