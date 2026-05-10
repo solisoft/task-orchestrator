@@ -41,3 +41,9 @@ post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
 get("/projects/:name/tasks/:slug/run", "runs#show")
 get("/projects/:name/tasks/:slug/run/log", "runs#log")
 post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
+
+# ── Push notifications ───────────────
+
+post("/push_subscriptions", "push_subscriptions#create")
+post("/push_subscriptions/delete", "push_subscriptions#destroy")
+get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")

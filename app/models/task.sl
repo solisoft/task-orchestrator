@@ -286,6 +286,13 @@ class Task < Model
     self.save()
   end
 
+  # Single before_save: stamp timestamps + dispatch a Web Push when
+  # `status` changes. The two responsibilities are merged into one
+  # callback because Soli's framework re-registers `before_save("...")`
+  # entries each time the model file is reloaded by a spec — having
+  # two separate registrations means each save fires both callbacks
+  # N-spec-files times. One callback ⇒ a single invocation per save
+  # regardless of reload count.
   def touch_timestamps()
     let now = DateTime.now().to_iso()
     if self.created_at == null
@@ -295,6 +302,47 @@ class Task < Model
     if self.status == null
       self.status = "todo"
     end
+    self._notify_if_status_changed()
+  end
+
+  # Diff `self.status` against the persisted row of the same `_key`
+  # and, on a change, dispatch a Web Push to every active subscription.
+  # Called from `touch_timestamps` (which runs in before_save) — by
+  # then validations have passed and the DB still holds the OLD value,
+  # so we can read it back via `find_by("_key", ...)` and snapshot
+  # inline. Brand-new rows (no prior status) are skipped, so creating
+  # a task doesn't fire a notification.
+  #
+  # Idempotency: Soli's framework re-registers `before_save` entries
+  # each time the model file reloads (across spec files), so a single
+  # save() can invoke this callback multiple times with the same
+  # `self`. We tombstone the dispatched status on `last_notified_status`
+  # so the second-and-onward calls in the chain see "already sent"
+  # and skip — yielding exactly one Web Push per real status flip.
+  def _notify_if_status_changed()
+    if self._key == nil or self._key == ""
+      return nil
+    end
+    let new_status  = self.status ?? ""
+    if self.last_notified_status == new_status
+      return nil
+    end
+    let prev = Task.find_by("_key", self._key) rescue nil
+    if prev == nil
+      return nil
+    end
+    let prev_status = prev.status ?? ""
+    if prev_status == new_status
+      return nil
+    end
+    self.last_notified_status = new_status
+    let url = "/projects/" + (self.project ?? "") +
+              "/tasks/" + (self.slug ?? "")
+    web_push_send_to_all({
+      "title":  self.title ?? self.slug ?? "Task",
+      "status": new_status,
+      "url":    url
+    }) rescue null
   end
 end
 

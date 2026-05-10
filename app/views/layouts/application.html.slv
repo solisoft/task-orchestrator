@@ -15,6 +15,9 @@
 
     <!-- HTMX for snappy in-place updates on Queue / Save / move actions -->
     <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+
+    <!-- Browser push notifications (registers the service worker on every page) -->
+    <script src="<%= public_path("push.js") %>" defer></script>
     <style>
       /* HTMX v2 ships no CSS; replicate the canonical indicator pattern. */
       .htmx-indicator { display: none; }
