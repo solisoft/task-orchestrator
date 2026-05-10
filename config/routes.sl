@@ -8,10 +8,6 @@ get("/health", "home#health")
 get("/debug", "debug#show")
 get("/docs", "docs#index")
 
-# ── Plans ────────────────────────────
-
-get("/plans", "plans#index")
-
 # ── Settings ─────────────────────────
 
 get("/settings", "settings#show")

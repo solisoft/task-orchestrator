@@ -17,9 +17,7 @@ fn new(req)
   let plan_state = nil
   let plan_title = ""
   if plan_id != ""
-    # Probe the status journal so a bogus plan_id doesn't loop the
-    # polling forever against a runner that never existed.
-    let probe = Trusted.read(run_state_root() + "/_plans/" + plan_id + "/status") rescue nil
+    let probe = Plan.find_by_plan_id(plan_id)
     if probe != nil
       plan_state = read_plan_state(plan_id)
       if plan_state["status"] == "done"
@@ -487,15 +485,17 @@ end
 # Falls back to the canonical default so a missing/corrupt file never
 # raises into the refine flow.
 fn _read_plan_model(plan_id)
-  let v = (Trusted.read(run_state_root() + "/_plans/" + plan_id + "/model") rescue "").trim()
+  let plan = Plan.find_by_plan_id(plan_id)
+  if plan == nil
+    return "claude-sonnet-4-6"
+  end
+  let v = (plan.model ?? "").trim()
   if v == ""
     return "claude-sonnet-4-6"
   end
   v
 end
 
-# Write the user's reply to the SDK runner's polling location.
-# File-based since planning has no DB row.
 fn plan_answer(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -507,8 +507,10 @@ fn plan_answer(req)
   if qid == "" or value == ""
     return {"status": 422, "body": "qid and value required"}
   end
-  let answer_path = run_state_root() + "/_plans/" + plan_id + "/pending_answer.json"
-  Trusted.write(answer_path, JSON.stringify({ "id": qid, "value": value }))
+  let plan = Plan.find_by_plan_id(plan_id)
+  if plan != nil
+    plan.write_pending_answer(qid, value)
+  end
   let state = read_plan_state(plan_id)
   {
     "status": 200,
@@ -541,11 +543,26 @@ fn spawn_plan_agent(notes, model, project_path)
   let plan_id = "plan-" + nonce
   let notes_path = "/tmp/plan-task-" + nonce + ".md"
   Trusted.write(notes_path, notes)
-  let dir = run_state_root() + "/_plans/" + plan_id
-  System.run_sync(["mkdir", "-p", dir]) rescue null
-  Trusted.write(dir + "/model", model) rescue null
-  Trusted.write(dir + "/prompt", notes) rescue null
-  Trusted.write(dir + "/project_path", project_path) rescue null
+  let project = ""
+  if project_path != nil and project_path != ""
+    let segs = project_path.split("/")
+    if segs.length() > 0
+      project = segs[segs.length() - 1]
+    end
+  end
+  let plan = Plan.create({
+    "_key":        plan_id,
+    "project":      project,
+    "plan_id":      plan_id,
+    "status":       "starting",
+    "model":        model,
+    "prompt":       notes,
+    "project_path": project_path,
+    "body":         "",
+    "log":          "",
+    "pending_question": nil,
+    "zombie":       false
+  })
   let line = "nohup ./bin/plan-run " + plan_id + " " + notes_path
             + " " + model + " " + project_path
             + " >/dev/null 2>&1 & disown"
@@ -592,32 +609,26 @@ fn _stitched_plan_model(form)
   return _allow_plan_model(base)
 end
 
-# Read the on-disk state for a plan_id. Returns { status, log, body,
-# pending_question, model, prompt }. body is read only when
-# status=="done"; pending_question is parsed from the JSON file the SDK
-# runner writes when the agent calls AskUserQuestion / ExitPlanMode.
-# `model` and `prompt` were persisted by `spawn_plan_agent`.
+# Read the DB-backed state for a plan_id. Returns { status, log, body,
+# pending_question, model, prompt }. body is read only when status=="done".
 fn read_plan_state(plan_id)
-  let dir = run_state_root() + "/_plans/" + plan_id
-  let status = read_last_status(dir + "/status")
-  let log_text = Trusted.read(dir + "/log") rescue ""
-  let body = ""
-  if status == "done"
-    body = Trusted.read(dir + "/body") rescue ""
+  let plan = Plan.find_by_plan_id(plan_id)
+  if plan == nil
+    return {
+      "status":           "unknown",
+      "log":              "",
+      "body":             "",
+      "pending_question": nil,
+      "model":            "claude-sonnet-4-6",
+      "prompt":           "" }
   end
-  let pending_question = nil
-  let pq_text = Trusted.read(dir + "/pending_question.json") rescue ""
-  if pq_text != ""
-    pending_question = JSON.parse(pq_text) rescue nil
-  end
-  let model  = (Trusted.read(dir + "/model") rescue "").trim()
-  let prompt = (Trusted.read(dir + "/prompt") rescue "")
-  { "status":           status,
-    "log":              log_text,
-    "body":             body,
-    "pending_question": pending_question,
-    "model":            model == "" ? "claude-sonnet-4-6" : model,
-    "prompt":           prompt }
+  {
+    "status":           plan.status,
+    "log":              plan.log ?? "",
+    "body":             plan.body ?? "",
+    "pending_question": plan.pending_question,
+    "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
+    "prompt":           plan.prompt ?? "" }
 end
 
 fn read_last_status(path)
