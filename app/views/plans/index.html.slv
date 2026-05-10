@@ -18,7 +18,7 @@
     <% else %>
       <div class="space-y-4 animate-fade-in animate-fade-in-1">
         <% for plan in plans %>
-          <details class="rounded-xl glass-card border border-white/10 group" <%= plan.status == "done" ? "open" : "" %>>
+          <details class="rounded-xl glass-card border border-white/10 group">
             <summary class="flex items-center gap-4 px-5 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors rounded-xl select-none marker:hidden">
               <% if plan.status == "done" %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-emerald-400 shadow-glow-emerald"></span>
@@ -38,7 +38,7 @@
 
               <span class="text-xs text-slate-500 font-mono shrink-0"><%= plan.model %></span>
 
-              <span class="text-xs text-slate-400 truncate flex-1 min-w-0"><%= plan.prompt_emoji %></span>
+              <span class="text-xs text-slate-400 flex-1 break-words"><%= plan.prompt_emoji %></span>
 
               <svg class="w-4 h-4 text-slate-500 shrink-0 transition-transform details-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path d="M6 9l6 6 6-6"/>
