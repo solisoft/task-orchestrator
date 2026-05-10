@@ -30,6 +30,7 @@ post("/projects/:name/tasks/:slug/save", "tasks#save")
 post("/projects/:name/tasks/:slug/queue", "tasks#queue")
 post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
 post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
+post("/projects/:name/tasks/:slug/mark-done", "tasks#mark_done")
 
 # ── Plans (per-project) ──────────────
 

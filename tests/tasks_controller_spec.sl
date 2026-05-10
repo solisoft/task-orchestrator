@@ -334,3 +334,77 @@ describe("TasksController#merge_branch", fn()
     assert_contains(res_body(response), "Checkout main first")
   end)
 end)
+
+describe("TasksController#mark_done", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("transitions review task to done when no pr_url is set", fn()
+    Task.create({
+      "_key":    "proj--no-pr-review",
+      "project": "proj",
+      "slug":    "no-pr-review",
+      "title":   "No PR review task",
+      "status":  "review"
+    })
+    let response = post("/projects/proj/tasks/no-pr-review/mark-done", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "no-pr-review")
+    assert_eq(t.status, "done")
+  end)
+
+  test("transitions review task to done when the linked PR is merged", fn()
+    setenv("_TASK_ORCH_PR_MERGED_MOCK", "true")
+    Task.create({
+      "_key":    "proj--merged-pr",
+      "project": "proj",
+      "slug":    "merged-pr",
+      "title":   "Merged PR task",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/merged-pr/mark-done", {})
+    setenv("_TASK_ORCH_PR_MERGED_MOCK", "")
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "merged-pr")
+    assert_eq(t.status, "done")
+  end)
+
+  test("returns 422 when the linked PR is not merged", fn()
+    setenv("_TASK_ORCH_PR_MERGED_MOCK", "false")
+    Task.create({
+      "_key":    "proj--open-pr",
+      "project": "proj",
+      "slug":    "open-pr",
+      "title":   "Open PR task",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/2"
+    })
+    let response = post("/projects/proj/tasks/open-pr/mark-done", {})
+    setenv("_TASK_ORCH_PR_MERGED_MOCK", "")
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "PR is not merged yet")
+    let t = Task.find_by_slug("proj", "open-pr")
+    assert_eq(t.status, "review")
+  end)
+
+  test("returns 422 for non-review status", fn()
+    Task.create({
+      "_key":    "proj--todo-task",
+      "project": "proj",
+      "slug":    "todo-task",
+      "title":   "Todo task",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/todo-task/mark-done", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available for review tasks")
+    let t = Task.find_by_slug("proj", "todo-task")
+    assert_eq(t.status, "todo")
+  end)
+end)

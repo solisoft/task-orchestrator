@@ -249,6 +249,28 @@ fn run_pr_url(repo, slug)
   Trusted.read(path).strip()
 end
 
+# Check whether a GitHub PR has been merged. Shells out to `gh` CLI;
+# returns false when the command fails (e.g. unauthenticated, PR not
+# found, network flake) so the caller can decide how to handle it.
+fn pr_merged(pr_url)
+  let mock = getenv("_TASK_ORCH_PR_MERGED_MOCK")
+  if mock == "true"
+    return true
+  end
+  if mock == "false"
+    return false
+  end
+  let res = System.run_sync([
+    "gh", "pr", "view", pr_url,
+    "--json", "merged",
+    "-q", ".merged"
+  ])
+  if res["exit_code"] != 0
+    return false
+  end
+  (res["stdout"] ?? "").trim() == "true"
+end
+
 # A short status token for the kanban indicator: nil / running / done / failed.
 fn run_indicator(repo, slug)
   let s = run_current_status(repo, slug)
