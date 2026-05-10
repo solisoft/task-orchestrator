@@ -12,13 +12,17 @@ def strip_title_heading(body: String) -> String
             let s = line.trim()
             if s.starts_with("# ") and not s.starts_with("## ")
                 dropped = true
-                continue
+                next
             end
         end
         out.push(line)
     end
     if out.length > 0 and out[0].trim() == ""
-        out.shift()
+        let res = []
+        for i in 1..out.length
+            res.push(out[i])
+        end
+        out = res
     end
     return out.join("\n")
 end
@@ -101,4 +105,8 @@ def pluralize_simple(count: Int, word: String) -> String
         return str(count) + " " + word
     end
     return str(count) + " " + word + "s"
+end
+
+def round_dollar(amount)
+    return Math.floor(amount * 100.0 + 0.5) / 100.0
 end

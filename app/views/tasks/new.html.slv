@@ -1,5 +1,5 @@
 <div class="min-h-screen bg-slate-950 text-white">
-  <div class="max-w-3xl mx-auto px-6 py-8">
+  <div class="w-full px-6 py-8">
     <nav class="text-sm text-slate-500 mb-4">
       <a href="/" class="hover:text-slate-300">All projects</a>
       <span class="mx-2">/</span>
@@ -19,31 +19,92 @@
     <% end %>
 
     <form method="post" action="/projects/<%= project["name"] %>/tasks">
-      <div class="flex items-baseline justify-between mb-1">
-        <label class="block text-sm font-medium text-slate-300">Title</label>
-        <button type="button"
-                hx-post="/projects/<%= project["name"] %>/tasks/plan"
-                hx-include="textarea[name=body_md]"
-                hx-target="#body-md-wrapper"
-                hx-swap="outerHTML"
-                hx-indicator="#plan-spinner"
-                class="text-xs text-indigo-300 hover:text-indigo-200 hover:bg-indigo-400/10 rounded px-2 py-1 transition-colors">
-          ✨ Plan with agent
-          <span id="plan-spinner" class="htmx-indicator ml-1">⏳</span>
-        </button>
-      </div>
-      <div id="title-wrapper" class="mb-4">
-        <input name="title" placeholder="A short, descriptive title (auto-filled by /plan-task)" value="<%= task == nil ? "" : (task.title ?? "") %>" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
-      </div>
+      <!-- Two-column grid lives on #form-stage. Each stage partial outputs
+           a left panel + a right panel (in that order); innerHTML swap
+           drops them into the same grid. -->
+      <div id="form-stage" class="grid grid-cols-1 lg:grid-cols-[minmax(320px,28%)_1fr] gap-6">
+        <% if plan_state != nil and plan_state["status"] == "done" %>
+          <%- render_partial("tasks/planned_body", {
+            "project":         project,
+            "plan_id":         plan_id,
+            "body":            plan_state["body"],
+            "title":           plan_title,
+            "model":           plan_state["model"] ?? "claude-sonnet-4-6",
+            "opencode_models": opencode_models
+          }) %>
+        <% elsif plan_state != nil %>
+          <%- render_partial("tasks/plan_progress", {
+            "project":          project,
+            "plan_id":          plan_id,
+            "log":              plan_state["log"],
+            "status":           plan_state["status"],
+            "pending_question": plan_state["pending_question"],
+            "prompt":           plan_state["prompt"] ?? ""
+          }) %>
+        <% else %>
+          <!-- Left panel: prompt + agent picker + Plan it. -->
+          <aside class="space-y-4">
+            <label class="block text-sm font-medium text-slate-300">What are you trying to do?</label>
+            <textarea name="body_md" required rows="14"
+                      placeholder="A few rough lines is fine. The agent reads CLAUDE.md, looks at file conventions, and turns this into a structured spec."
+                      class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"><%= task == nil ? "" : (task.body_md ?? "") %></textarea>
 
-      <label class="block text-sm font-medium text-slate-300 mb-1">Body (Markdown)</label>
-      <div id="body-md-wrapper">
-        <textarea name="body_md" required class="w-full h-[50vh] rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y" placeholder="A few rough lines is fine — click ‘Plan with agent’ to expand into a structured spec."><%= task == nil ? "" : (task.body_md ?? "") %></textarea>
-      </div>
+            <div class="grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-xs text-slate-400">
+              <label for="new-plan-model" class="text-right">Plan with</label>
+              <select id="new-plan-model" name="plan_model"
+                      class="w-full rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+                <optgroup label="Claude SDK (questions supported)">
+                  <option value="claude-opus-4-7">Opus 4.7</option>
+                  <option value="claude-sonnet-4-6" selected>Sonnet 4.6</option>
+                  <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+                </optgroup>
+                <% if opencode_models != nil and opencode_models.length() > 0 %>
+                  <optgroup label="opencode CLI (no questions)">
+                    <% for m in opencode_models %>
+                      <option value="<%= m %>"><%= m %></option>
+                    <% end %>
+                  </optgroup>
+                <% end %>
+              </select>
 
-      <div class="mt-3 flex justify-end gap-2">
-        <a href="/projects/<%= project["name"] %>" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
-        <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Create</button>
+              <label for="new-plan-variant" class="text-right">Effort</label>
+              <div class="flex items-center gap-2">
+                <select id="new-plan-variant" name="plan_variant"
+                        title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
+                        class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+                  <option value="default" selected>Default</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <span class="text-[11px] text-slate-500 italic">opencode only</span>
+              </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+              <a href="/projects/<%= project["name"] %>"
+                 class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
+              <button type="button"
+                      hx-post="/projects/<%= project["name"] %>/tasks/plan"
+                      hx-include="textarea[name=body_md], select[name=plan_model], select[name=plan_variant]"
+                      hx-target="#form-stage"
+                      hx-swap="innerHTML"
+                      hx-indicator="#plan-spinner"
+                      class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+                Plan it
+                <span id="plan-spinner" class="htmx-indicator ml-1">...</span>
+              </button>
+            </div>
+          </aside>
+
+          <!-- Right panel: empty placeholder until a plan exists. -->
+          <section class="rounded-xl border border-white/5 bg-slate-900/40 p-8 flex items-center justify-center min-h-[60vh]">
+            <p class="text-sm text-slate-500 italic text-center max-w-md">
+              The structured spec will appear here once the agent finishes planning.
+              You will be able to edit it, refine it through the agent, or create the task directly.
+            </p>
+          </section>
+        <% end %>
       </div>
     </form>
   </div>

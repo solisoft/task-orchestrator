@@ -17,6 +17,8 @@ fn show(req)
     "project": project,
     "columns": columns,
     "indicators": indicators_for(name, columns),
+    "totals": totals_for(name, columns),
+    "agents": agents_for(columns),
     "statuses": Task.kanban_statuses(),
     "active_tab": active
   })
@@ -50,6 +52,25 @@ fn indicators_for(project_name, columns)
   for status in Task.kanban_statuses()
     for task in columns[status]
       h[task.slug] = run_indicator(project_name, task.slug)
+    end
+  end
+  h
+end
+
+# Pre-compute run totals (duration_ms, total_cost_usd) for every
+# non-todo task so the board view can show time spent and money used.
+fn totals_for(project_name, columns)
+  Task.totals_for(project_name, columns)
+end
+
+# Pre-compute the model badge for every task on the board so the view
+# doesn't need to call `Task.display_model` (static methods are not
+# reachable from .slv templates). Mirrors `indicators_for` shape.
+fn agents_for(columns)
+  let h = {}
+  for status in Task.kanban_statuses()
+    for task in columns[status]
+      h[task.slug] = Task.display_model(task)
     end
   end
   h

@@ -30,10 +30,11 @@ class Task < Model
     ["claude", "opencode", "opencode-sdk"]
   end
 
-  # Status columns shown on the kanban (skips "failed", which is rendered
-  # as a banner on the project page when a run blew up).
+  # Status columns shown on the kanban. Includes "failed" so users can
+  # see and re-handle blown runs from the board (move back to todo,
+  # edit the spec, re-queue) without having to remember the slug.
   static def kanban_statuses()
-    ["todo", "queued", "inprogress", "review", "done"]
+    ["todo", "queued", "inprogress", "review", "done", "failed"]
   end
 
   static def key_for(project, slug)
@@ -89,14 +90,35 @@ class Task < Model
     return cfg
   end
 
-  # Resolve the effective agent for a single task — either its own
-  # `agent_type` or the global default. Used by the queue-action limit
-  # check and by `usage_by_agent`.
+  # Resolve the effective agent kind for a single task. Order:
+  #   1. `task.model` — fine-grained model id from the new-task form.
+  #      `claude-*` -> "claude"; "<provider>/<model>" -> "opencode".
+  #   2. `task.agent_type` — legacy coarse field.
+  #   3. global default from Setting.get("agent_type").
+  # Used by the queue limit check, the dashboard usage tiles, and the
+  # board badge.
   static def effective_agent(t)
+    if t.model != nil and t.model != ""
+      if t.model.contains("/")
+        return "opencode"
+      end
+      return "claude"
+    end
     if t.agent_type != nil and t.agent_type != ""
       return t.agent_type
     end
     return Task.default_agent()
+  end
+
+  # Display label for the board / dashboard. When the user picked a
+  # specific model, show that model id directly so they see "Sonnet 4.6"
+  # or "deepseek/deepseek-chat" instead of the coarse "claude" /
+  # "opencode" bucket.
+  static def display_model(t)
+    if t.model != nil and t.model != ""
+      return t.model
+    end
+    return Task.effective_agent(t)
   end
 
   # Run counts grouped by agent over the rolling `window`. `window` is
@@ -119,7 +141,10 @@ class Task < Model
     for t in Task.all()
       let unix = Task._started_at_unix(t)
       if unix != nil and unix >= cutoff_unix
-        let agent = t.agent_type
+        # Use effective_agent so per-task `model` (claude-* or
+        # provider/model) buckets correctly without needing a separate
+        # legacy `agent_type` value on the row.
+        let agent = Task.effective_agent(t)
         if agent == nil or agent == ""
           agent = fallback
         end
@@ -156,6 +181,54 @@ class Task < Model
       return now - 86400 * 7
     end
     return now - 86400
+  end
+
+  static def totals_for(project_name, columns)
+    let h = {}
+    for status in Task.kanban_statuses()
+      for task in columns[status]
+        h[task.slug] = Task.totals_for_task(project_name, task.slug)
+      end
+    end
+    h
+  end
+
+  static def totals_for_task(project_name, slug)
+    let jsonl_path = run_state_root() + "/" + project_name + "/" + slug + ".log.jsonl"
+    if not Trusted.exists(jsonl_path)
+      return { "duration_ms": 0, "total_cost_usd": 0.0 }
+    end
+    let body = Trusted.read(jsonl_path) rescue ""
+    if body == ""
+      return { "duration_ms": 0, "total_cost_usd": 0.0 }
+    end
+    let total_ms = 0
+    let total_cost = 0.0
+    for line in body.split("\n")
+      next if line == ""
+      let obj = JSON.parse(line) rescue nil
+      next if obj == nil
+      if obj["type"] == "result"
+        let ms = obj["duration_ms"] ?? 0
+        if ms > 0
+          total_ms = total_ms + ms
+        end
+        let cost = obj["total_cost_usd"] ?? 0.0
+        if cost > 0.0
+          total_cost = total_cost + cost
+        end
+      elsif obj["type"] == "step_finish" and obj["part"] != nil and obj["part"]["cost"] != nil
+        let ms = obj["part"]["duration_ms"] ?? 0
+        if ms > 0
+          total_ms = total_ms + ms
+        end
+        let cost = obj["part"]["cost"] ?? 0.0
+        if cost > 0.0
+          total_cost = total_cost + cost
+        end
+      end
+    end
+    { "duration_ms": total_ms, "total_cost_usd": total_cost }
   end
 
   # Distinct project names that have at least one task ingested.

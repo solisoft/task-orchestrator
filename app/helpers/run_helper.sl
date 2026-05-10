@@ -105,7 +105,6 @@ def task_format_elapsed(iso_then: String) -> Any
   return str(secs / 3600) + "h " + str((secs % 3600) / 60) + "m"
 end
 
-# Stub kept for back-compat with anything still calling these names.
 def task_run_indicator(repo: String, slug: String) -> Any
   return run_indicator(repo, slug)
 end

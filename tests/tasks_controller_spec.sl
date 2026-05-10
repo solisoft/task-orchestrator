@@ -157,3 +157,177 @@ describe("TasksController#queue", fn()
     assert_contains(body, "is at its day limit")
   end)
 end)
+
+# Set up a real git repo at <root>/proj with a `task/<slug>` branch
+# carrying one extra commit. We need a real repo (not mocks) because
+# the merge UI shells out to git for branch state. `main` is checked
+# out at the end so the merge action's "current branch must be main"
+# guard passes.
+def _tq_setup_git_proj(slug)
+  let root = _tq_setup_workspace()
+  let proj = root + "/proj"
+  let cmd = "set -e; cd " + proj + " && rm -rf .git && " +
+            "git init -q -b main && " +
+            "git config user.email t@example.com && " +
+            "git config user.name Test && " +
+            "git commit --allow-empty -q -m initial && " +
+            "git checkout -q -b task/" + slug + " && " +
+            "git commit --allow-empty -q -m feature && " +
+            "git checkout -q main"
+  System.run_sync(["bash", "-c", cmd])
+  return proj
+end
+
+describe("TasksController#show with local-branch outcome", fn()
+  before_each(fn()
+    Task.delete_all()
+    Setting.delete_all()
+    as_guest()
+  end)
+
+  test("renders branch info with merge button when not merged", fn()
+    _tq_setup_git_proj("done-task")
+    Task.create({
+      "_key":    "proj--done-task",
+      "project": "proj",
+      "slug":    "done-task",
+      "title":   "Done task",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = get("/projects/proj/tasks/done-task")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "task/done-task")
+    assert_contains(body, "Merge into main")
+    assert_contains(body, "not merged into main")
+  end)
+
+  test("shows merged badge and hides merge button when already merged", fn()
+    let proj = _tq_setup_git_proj("already-merged")
+    System.run_sync(["bash", "-c",
+      "cd " + proj + " && git -c user.email=t@example.com -c user.name=Test " +
+      "merge --no-ff --no-edit -q task/already-merged"])
+    Task.create({
+      "_key":    "proj--already-merged",
+      "project": "proj",
+      "slug":    "already-merged",
+      "title":   "Already merged",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = get("/projects/proj/tasks/already-merged")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "merged into main")
+    # The button only renders when `not merged` — its absence is the
+    # signal the badge state matched.
+    assert_not_contains(body, "Merge into main")
+  end)
+
+  test("does not render branch info for done tasks without local-branch outcome", fn()
+    _tq_setup_git_proj("no-commit-task")
+    Task.create({
+      "_key":    "proj--no-commit-task",
+      "project": "proj",
+      "slug":    "no-commit-task",
+      "title":   "No commit",
+      "status":  "done",
+      "outcome": "no-commit"
+    })
+    let response = get("/projects/proj/tasks/no-commit-task")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_not_contains(body, "Merge into main")
+  end)
+end)
+
+describe("TasksController#merge_branch", fn()
+  before_each(fn()
+    Task.delete_all()
+    Setting.delete_all()
+    as_guest()
+  end)
+
+  test("merges the local branch into main on a clean main checkout", fn()
+    let proj = _tq_setup_git_proj("merge-me")
+    Task.create({
+      "_key":    "proj--merge-me",
+      "project": "proj",
+      "slug":    "merge-me",
+      "title":   "Merge me",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = post("/projects/proj/tasks/merge-me/merge", {})
+    assert_eq(res_status(response), 302)
+    let check = System.run_sync(["git", "-C", proj,
+      "merge-base", "--is-ancestor", "task/merge-me", "main"])
+    assert_eq(check["exit_code"], 0)
+  end)
+
+  test("rejects with 422 when the task is not done+local-branch", fn()
+    _tq_setup_git_proj("not-eligible")
+    Task.create({
+      "_key":    "proj--not-eligible",
+      "project": "proj",
+      "slug":    "not-eligible",
+      "title":   "Not eligible",
+      "status":  "done",
+      "outcome": "no-commit"
+    })
+    let response = post("/projects/proj/tasks/not-eligible/merge", {})
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("rejects with 422 when the branch ref is missing locally", fn()
+    let proj = _tq_setup_git_proj("ghost")
+    System.run_sync(["git", "-C", proj, "branch", "-D", "task/ghost"])
+    Task.create({
+      "_key":    "proj--ghost",
+      "project": "proj",
+      "slug":    "ghost",
+      "title":   "Ghost",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = post("/projects/proj/tasks/ghost/merge", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "not found")
+  end)
+
+  test("refuses to merge when the working tree is dirty", fn()
+    let proj = _tq_setup_git_proj("dirty-tree")
+    System.run_sync(["bash", "-c",
+      "cd " + proj + " && echo dirty > untracked.txt"])
+    Task.create({
+      "_key":    "proj--dirty-tree",
+      "project": "proj",
+      "slug":    "dirty-tree",
+      "title":   "Dirty",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = post("/projects/proj/tasks/dirty-tree/merge", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "uncommitted changes")
+    # Cleanup so a re-run starts clean.
+    System.run_sync(["rm", "-f", proj + "/untracked.txt"])
+  end)
+
+  test("refuses to merge when main is not checked out", fn()
+    let proj = _tq_setup_git_proj("wrong-branch")
+    System.run_sync(["git", "-C", proj, "checkout", "-q", "task/wrong-branch"])
+    Task.create({
+      "_key":    "proj--wrong-branch",
+      "project": "proj",
+      "slug":    "wrong-branch",
+      "title":   "Wrong branch",
+      "status":  "done",
+      "outcome": "local-branch"
+    })
+    let response = post("/projects/proj/tasks/wrong-branch/merge", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "Checkout main first")
+  end)
+end)

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# install-dispatcher
+#
+# One-shot setup: installs the systemd-user unit for the global task
+# dispatcher, enables it, and starts it. Idempotent — safe to re-run
+# after editing the unit file.
+#
+# After this:
+#   - the dispatcher restarts within 5s if it crashes (Restart=always)
+#   - it auto-starts on next login
+#   - it survives logout if you also run `loginctl enable-linger $USER`
+#     (printed below — opt in once per machine)
+#
+# Inspect:
+#   systemctl --user status task-dispatch.service
+#   journalctl --user -u task-dispatch.service -f
+#   tail -F ~/.local/state/task-orchestrator/dispatcher.log
+set -euo pipefail
+
+orchestrator_dir=$(dirname "$(dirname "$(realpath "$0")")")
+template_src="$orchestrator_dir/systemd/user/task-dispatch.service"
+unit_dir="$HOME/.config/systemd/user"
+template_dst="$unit_dir/task-dispatch.service"
+log_dir="$HOME/.local/state/task-orchestrator"
+
+if [[ ! -f "$template_src" ]]; then
+  echo "install-dispatcher: missing unit at $template_src" >&2
+  exit 65
+fi
+
+# StandardOutput=append: requires the directory to exist before systemd
+# tries to open the file — same chicken-and-egg as install-watcher.
+mkdir -p "$unit_dir" "$log_dir"
+touch "$log_dir/dispatcher.log"
+
+# If a hand-started dispatcher is already running, stop it before
+# enabling the unit — otherwise systemd's spawn races against it and
+# both processes fight for the same WebSocket subscription.
+existing=$(pgrep -f 'bin/task-dispatch' || true)
+if [[ -n "$existing" ]]; then
+  echo "stopping pre-existing dispatcher (pids: $existing)"
+  # shellcheck disable=SC2086
+  kill $existing 2>/dev/null || true
+  sleep 1
+fi
+
+cp "$template_src" "$template_dst"
+echo "installed unit at $template_dst"
+
+systemctl --user daemon-reload
+systemctl --user enable --now task-dispatch.service
+
+echo
+echo "task-dispatch.service is enabled and running."
+echo
+echo "Inspect:"
+echo "  systemctl --user status task-dispatch.service"
+echo "  tail -F $log_dir/dispatcher.log"
+echo
+echo "If you want it to keep running after you log out (e.g. on a server"
+echo "or laptop where you want queued tasks dispatched while you're away),"
+echo "enable user lingering once per machine:"
+echo
+echo "  sudo loginctl enable-linger \"\$USER\""

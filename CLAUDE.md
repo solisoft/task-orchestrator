@@ -13,7 +13,7 @@ You are working in a Soli MVC app. Soli looks like Ruby/JS but has its own quirk
 3. `soli test --coverage --coverage-min 90.0` — full sweep before handing off.
 4. `soli serve . --dev`, then hit the route in a browser if you changed a UI/route — confirm 200 and that the page renders.
 
-If a step fails, fix the root cause. Don't weaken assertions, lower the coverage bar, or `--no-verify` past hooks. The `/soli-verify` slash command bundles steps 1-3.
+If a step fails, fix the root cause. Don't weaken assertions, lower the coverage bar, or `--no-verify` past hooks.
 
 ### Reach for generators first
 
@@ -22,7 +22,6 @@ If a step fails, fix the root cause. Don't weaken assertions, lower the coverage
 | New controller (+ views + spec)          | `soli generate controller posts`              |
 | New model                                | `soli generate model post`                    |
 | New migration                            | `soli generate migration create_posts`        |
-| Full RESTful resource end-to-end         | `/soli-resource posts` (slash command)        |
 
 Generators encode the naming, location, and boilerplate the framework expects. Hand-writing diverges and triggers lint failures.
 

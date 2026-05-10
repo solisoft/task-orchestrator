@@ -13,6 +13,8 @@
             "project": project,
             "columns": columns,
             "indicators": indicators,
+            "totals": totals,
+            "agents": agents,
             "statuses": statuses,
             "active_tab": active_tab
         }) %>

@@ -36,15 +36,6 @@ if [[ $# -ne 2 ]]; then
   exit 64
 fi
 
-# Fail fast with an actionable error rather than ENOENT mid-run.
-for cmd in claude gh git jq curl; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "task-run: '$cmd' not on PATH" >&2
-    echo "task-run: PATH=$PATH" >&2
-    exit 127
-  fi
-done
-
 repo_name=$1
 slug=$2
 key="${repo_name}--${slug}"
@@ -56,6 +47,44 @@ project_path="$ROOT/$repo_name"
 if [[ ! -d "$project_path" ]]; then
   echo "task-run: project path not found: $project_path" >&2
   exit 65
+fi
+
+# Local-only mode: no `origin` remote means there's nowhere to push and
+# no PR to open. We still run /do-task + /review-task end-to-end, but
+# leave the resulting commit on the local task/<slug> branch for the
+# user to merge by hand. `gh` is not required in this mode.
+local_only=0
+if ! git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
+  local_only=1
+fi
+
+# Fail fast with an actionable error rather than ENOENT mid-run.
+required=(claude git jq curl)
+[[ $local_only -eq 0 ]] && required+=(gh)
+for cmd in "${required[@]}"; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "task-run: '$cmd' not on PATH" >&2
+    echo "task-run: PATH=$PATH" >&2
+    exit 127
+  fi
+done
+
+# Pick a base ref. With a remote we always want origin/main so the branch
+# is rebased on whatever's been merged upstream. Locally we fall back to
+# `main` or `master`, whichever exists; if neither does, abort early
+# rather than silently base off HEAD (we'd produce empty diffs against
+# whatever the user happened to have checked out).
+if [[ $local_only -eq 1 ]]; then
+  if git -C "$project_path" show-ref --verify --quiet refs/heads/main; then
+    base_ref="main"
+  elif git -C "$project_path" show-ref --verify --quiet refs/heads/master; then
+    base_ref="master"
+  else
+    echo "task-run: local-only mode but neither 'main' nor 'master' exists in $project_path" >&2
+    exit 65
+  fi
+else
+  base_ref="origin/main"
 fi
 
 HOST=${SOLIDB_HOST:-http://localhost:6745}
@@ -109,40 +138,58 @@ trap 'log "interrupted"; write_status "interrupted"; db_update "{\"status\":\"qu
 write_status "starting"
 log "project=$project_path slug=$slug branch=$branch"
 
-# 1. Pull the body from solidb.
+# 1. Pull the body and the user's chosen model from solidb in one round
+# trip — `body_md` carries the spec; `model` decides which agent runs
+# /do-task. An empty model means "use the legacy claude CLI default".
 write_status "fetching task body"
 body_url="$HOST/_api/database/$DB/document/tasks/$key"
-body_md=$(curl -s -u "$USER:$PASS" "$body_url" | jq -r '.body_md // empty')
+row_json=$(curl -s -u "$USER:$PASS" "$body_url")
+body_md=$(printf '%s' "$row_json" | jq -r '.body_md // empty')
+task_model=$(printf '%s' "$row_json" | jq -r '.model // empty')
 if [[ -z "$body_md" ]]; then
   fail "task body empty or row not found ($key)"
 fi
+log "task model=${task_model:-<unset, default claude>}"
 
-# 2. Refresh origin/main and build a fresh worktree from it.
+# 2. Build a fresh worktree off the chosen base ref.
 write_status "preparing worktree"
-log "fetching origin/main"
-git -C "$project_path" fetch --quiet origin main || fail "git fetch origin main"
+if [[ $local_only -eq 1 ]]; then
+  log "local-only mode (no origin remote); base=$base_ref"
+else
+  log "fetching $base_ref"
+  git -C "$project_path" fetch --quiet origin main || fail "git fetch origin main"
+fi
 
 if [[ -d "$worktree_dir" ]]; then
   log "removing stale worktree $worktree_dir"
   git -C "$project_path" worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
 fi
 
-log "creating worktree at $worktree_dir on branch $branch"
-git -C "$project_path" worktree add -B "$branch" "$worktree_dir" origin/main \
+log "creating worktree at $worktree_dir on branch $branch (base $base_ref)"
+git -C "$project_path" worktree add -B "$branch" "$worktree_dir" "$base_ref" \
   >> "$log_file" 2>&1 || fail "git worktree add"
 
 # 3. Drop the body into the worktree's tasks/todo/ where /do-task looks.
+# The spec is orchestrator-owned context (not project content) — but we
+# can't filter it via .git/info/exclude because worktrees read excludes
+# from the common git-dir, not the worktree-local one, and writing to
+# the common dir would pollute the main repo. Instead, the review-task
+# skill is responsible for unstaging it before commit.
 mkdir -p "$worktree_dir/tasks/todo"
 printf '%s' "$body_md" > "$worktree_dir/tasks/todo/$md_name"
 log "seeded worktree's tasks/todo/$md_name (${#body_md} bytes)"
 
-# 3a. Make sure the do-task / review-task skills are present.
-canonical_skills="$HOME/workspace/soli/lang/.claude/skills"
+# 3a. Make sure the do-task / review-task skills are present. Source of
+# truth is THIS project's .claude/skills/ — the orchestrator owns the
+# skill definitions so they evolve with the dispatcher logic.
+canonical_skills="$project_root/.claude/skills"
 if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; then
   mkdir -p "$worktree_dir/.claude/skills"
   cp -r "$canonical_skills/do-task" "$worktree_dir/.claude/skills/"
   cp -r "$canonical_skills/review-task" "$worktree_dir/.claude/skills/"
   log "seeded worktree's .claude/skills/{do-task,review-task}"
+else
+  fail "canonical skills missing under $canonical_skills (expected do-task and review-task)"
 fi
 
 # 3b. Copy the project's `.env.test` into the worktree so `soli test`
@@ -160,19 +207,63 @@ if [[ -f "$project_path/.env.test" ]]; then
 fi
 
 # 4. Run /do-task and /review-task headlessly.
+# A `task_model` of "<provider>/<model>" routes through opencode CLI; a
+# bare claude-* id pins claude --model; an empty value uses claude with
+# whatever default the binary picks.
+#
+# An opencode model may carry a ":variant" suffix
+# (e.g. "deepseek/deepseek-v4-pro:low") to pick a provider-specific
+# reasoning effort — passed as `--variant` to opencode. Strip it off
+# the base id here so the routing/agent_kind detection below doesn't
+# get confused.
 claude_jq="$script_dir/_stream-format.jq"
 
-run_claude() {
+task_variant=""
+if [[ "$task_model" == */*:* ]]; then
+  task_variant="${task_model##*:}"
+  task_model="${task_model%:*}"
+  log "model variant=$task_variant"
+fi
+
+if [[ "$task_model" == */* ]]; then
+  agent_kind="opencode"
+  if ! command -v opencode >/dev/null 2>&1; then
+    fail "task picked $task_model but 'opencode' is not on PATH"
+  fi
+else
+  agent_kind="claude"
+fi
+log "agent_kind=$agent_kind"
+
+run_agent() {
   local prompt="$1" phase="$2"
   write_status "$phase"
-  log "running claude $prompt"
+  log "running $agent_kind $prompt"
   set +e
-  (
-    cd "$worktree_dir"
-    claude --dangerously-skip-permissions -p --output-format stream-json --verbose \
-      < /dev/null "$prompt" 2>>"$log_file"
-  ) | tee -a "$log_file.jsonl" \
-    | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+  case "$agent_kind" in
+    opencode)
+      local opencode_cmd=(opencode run --format json --dangerously-skip-permissions -m "$task_model")
+      if [[ -n "$task_variant" ]]; then
+        opencode_cmd+=(--variant "$task_variant")
+      fi
+      (
+        cd "$worktree_dir"
+        "${opencode_cmd[@]}" < /dev/null "$prompt" 2>>"$log_file"
+      ) | tee -a "$log_file.jsonl" \
+        | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+      ;;
+    *)
+      local claude_args=(--dangerously-skip-permissions -p --output-format stream-json --verbose)
+      if [[ -n "$task_model" ]]; then
+        claude_args+=(--model "$task_model")
+      fi
+      (
+        cd "$worktree_dir"
+        claude "${claude_args[@]}" < /dev/null "$prompt" 2>>"$log_file"
+      ) | tee -a "$log_file.jsonl" \
+        | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+      ;;
+  esac
   local rc=${PIPESTATUS[0]}
   set -e
   if [[ $rc -ne 0 ]]; then
@@ -181,12 +272,28 @@ run_claude() {
 }
 
 # Memory rule: never run /do-task and /review-task in parallel.
-run_claude "/do-task $slug" "running /do-task"
-run_claude "/review-task $slug" "running /review-task"
+run_agent "/do-task $slug" "running /do-task"
+run_agent "/review-task $slug" "running /review-task"
 
 # 5. /review-task may or may not produce a commit.
 head_sha=$(git -C "$worktree_dir" rev-parse HEAD)
-base_sha=$(git -C "$worktree_dir" rev-parse origin/main)
+base_sha=$(git -C "$worktree_dir" rev-parse "$base_ref")
+
+# Safety net: if the review-task agent missed the explicit unstage
+# step and committed the orchestrator-seeded spec md, amend it out so
+# the user's branch / PR doesn't carry the noise. Only acts when a
+# commit was actually produced (head moved off base) and only on the
+# top commit (we never rewrite history beyond the most recent commit).
+if [[ "$head_sha" != "$base_sha" ]]; then
+  if git -C "$worktree_dir" show --name-only --pretty=format: HEAD \
+       | grep -qxF "tasks/todo/$md_name"; then
+    log "safety-net: review-task committed tasks/todo/$md_name; amending it out"
+    git -C "$worktree_dir" rm --cached --quiet "tasks/todo/$md_name" >> "$log_file" 2>&1 || true
+    git -C "$worktree_dir" commit --amend --no-edit --quiet >> "$log_file" 2>&1 || \
+      log "safety-net: amend failed; spec md may remain in HEAD commit"
+    head_sha=$(git -C "$worktree_dir" rev-parse HEAD)
+  fi
+fi
 
 # Copy any new tasks/todo/*.md the agent created in the worktree back to
 # the source repo (those become new DB rows next ingest).
@@ -219,7 +326,25 @@ if [[ "$head_sha" == "$base_sha" ]]; then
   exit 0
 fi
 
-log "branch $branch ahead of origin/main: $head_sha"
+log "branch $branch ahead of $base_ref: $head_sha"
+
+if [[ $local_only -eq 1 ]]; then
+  # No remote, no PR. Leave the branch on disk for the user to merge.
+  # The worktree is still removed (it's only ever a scratch dir); the
+  # branch ref it points at survives because git worktree remove keeps
+  # the underlying ref alive.
+  sync_new_todos
+  cleanup_worktree
+
+  iso=$(date -Iseconds)
+  db_update "$(jq -n --arg iso "$iso" --arg br "$branch" \
+    '{status: "done", outcome: "local-branch", finished_at: $iso, pr_url: null}')"
+  write_status "done:local-branch:$branch"
+  log "DONE (local-only) — branch $branch in $project_path"
+  log "  inspect:  git -C $project_path log $branch --not $base_ref"
+  log "  merge:    git -C $project_path checkout $base_ref && git merge --no-ff $branch"
+  exit 0
+fi
 
 write_status "pushing branch"
 log "pushing $branch to origin"
@@ -227,7 +352,7 @@ git -C "$worktree_dir" push --quiet --set-upstream origin "$branch" \
   >> "$log_file" 2>&1 || fail "git push"
 
 write_status "opening PR"
-title=$(git -C "$worktree_dir" log -1 --format=%s "origin/main..$branch" | head -1)
+title=$(git -C "$worktree_dir" log -1 --format=%s "$base_ref..$branch" | head -1)
 body="Automated by task-orchestrator. Source: tasks DB row $key."
 log "opening PR: $title"
 pr_url=$(

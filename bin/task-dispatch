@@ -112,6 +112,13 @@ async function fetchLivequeryToken(): Promise<string> {
   return j.token;
 }
 
+// Heartbeat — solidb's WS doesn't emit periodic frames, so a TCP path
+// that goes half-closed (NAT timeout, network blip) leaves us connected
+// to nothing. We send a ping every PING_INTERVAL_MS and reconnect if no
+// pong-ish traffic arrives within PING_TIMEOUT_MS.
+const PING_INTERVAL_MS = 30_000;
+const PING_TIMEOUT_MS = 70_000;
+
 async function connect() {
   let token: string;
   try { token = await fetchLivequeryToken(); }
@@ -124,6 +131,18 @@ async function connect() {
   log(`connecting (token-auth) db=${DB}`);
   const ws = new WebSocket(url);
 
+  let lastFrameAt = Date.now();
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let reconnected = false;
+  function reconnect(why: string) {
+    if (reconnected) return;
+    reconnected = true;
+    if (pingTimer) clearInterval(pingTimer);
+    log(`reconnecting: ${why}`);
+    try { ws.close(); } catch {}
+    setTimeout(connect, 1000);
+  }
+
   ws.addEventListener("open", () => {
     log("connected; subscribing live_query queued");
     ws.send(JSON.stringify({
@@ -132,9 +151,19 @@ async function connect() {
       query: `FOR doc IN tasks FILTER doc.status == "queued" SORT doc.queued_at ASC RETURN doc`,
       id: "queued",
     }));
+    lastFrameAt = Date.now();
+    pingTimer = setInterval(() => {
+      if (Date.now() - lastFrameAt > PING_TIMEOUT_MS) {
+        reconnect(`no frames for ${Math.round((Date.now() - lastFrameAt)/1000)}s`);
+        return;
+      }
+      try { ws.send(JSON.stringify({ type: "ping" })); }
+      catch (e) { reconnect(`ping send failed: ${(e as Error).message}`); }
+    }, PING_INTERVAL_MS);
   });
 
   ws.addEventListener("message", async ev => {
+    lastFrameAt = Date.now();
     let msg: any;
     try { msg = JSON.parse(ev.data as string); }
     catch { log(`bad frame: ${ev.data}`); return; }
@@ -145,8 +174,9 @@ async function connect() {
   });
 
   ws.addEventListener("close", ev => {
+    if (pingTimer) clearInterval(pingTimer);
     log(`closed code=${ev.code} reason=${ev.reason}; retry in 5s`);
-    setTimeout(connect, 5000);
+    if (!reconnected) setTimeout(connect, 5000);
   });
 
   ws.addEventListener("error", err => {

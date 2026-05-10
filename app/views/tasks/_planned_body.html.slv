@@ -1,7 +1,156 @@
-<div id="body-md-wrapper">
-  <textarea name="body_md" required class="w-full h-[50vh] rounded-xl bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"><%= body %></textarea>
-  <p class="text-xs text-emerald-400/80 mt-1 italic">Spec drafted by /plan-task — review and edit before saving.</p>
-</div>
-<div id="title-wrapper" class="mb-4" hx-swap-oob="outerHTML">
-  <input name="title" value="<%= title %>" class="w-full rounded-lg bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
-</div>
+<!-- Stage 3 — planned spec is ready. Two columns:
+       Left  = refine panel (prompt-style textarea + agent picker + Refine button)
+       Right = title input, rendered HTML preview, editable markdown source, Create -->
+
+<!-- Left panel: refinement against the current draft. Reuses the body_md
+     from the right side as the "previous draft" the controller seeds the
+     new run with. -->
+<%
+  # Split incoming `model` into base + variant so each can preselect
+  # its own dropdown. Variant only meaningful for opencode-shape ids
+  # ("provider/model[:variant]"). Claude ids never carry a variant.
+  let _model_in    = model ?? ""
+  let _has_slash   = _model_in.index_of("/") > 0
+  let _colon_at    = _has_slash ? _model_in.index_of(":") : -1
+  let _model_base  = _colon_at > 0 ? _model_in.substring(0, _colon_at) : _model_in
+  let _model_var   = _colon_at > 0 ? _model_in.substring(_colon_at + 1, _model_in.length) : "default"
+%>
+<aside class="space-y-4">
+  <label class="block text-sm font-medium text-slate-300">Refine the draft</label>
+  <textarea name="refine_note" rows="10"
+            placeholder="What needs changing? e.g. 'add a Severity of high', 'split the migration into two steps', 'drop the destroy action'."
+            class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-amber-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"></textarea>
+
+  <div class="grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-xs text-slate-400">
+    <label for="refine-plan-model" class="text-right">Agent</label>
+    <select id="refine-plan-model" name="plan_model"
+            class="w-full rounded-md bg-slate-900/80 border border-white/10 focus:border-amber-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+      <optgroup label="Claude SDK (questions supported)">
+        <option value="claude-opus-4-7"<%= _model_base == "claude-opus-4-7" ? " selected" : "" %>>Opus 4.7</option>
+        <option value="claude-sonnet-4-6"<%= _model_base == "claude-sonnet-4-6" ? " selected" : "" %>>Sonnet 4.6</option>
+        <option value="claude-haiku-4-5-20251001"<%= _model_base == "claude-haiku-4-5-20251001" ? " selected" : "" %>>Haiku 4.5</option>
+      </optgroup>
+      <% if opencode_models != nil and opencode_models.length() > 0 %>
+        <optgroup label="opencode CLI (no questions)">
+          <% for m in opencode_models %>
+            <option value="<%= m %>"<%= _model_base == m ? " selected" : "" %>><%= m %></option>
+          <% end %>
+        </optgroup>
+      <% end %>
+    </select>
+
+    <label for="refine-plan-variant" class="text-right">Effort</label>
+    <div class="flex items-center gap-2">
+      <select id="refine-plan-variant" name="plan_variant"
+              title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
+              class="rounded-md bg-slate-900/80 border border-white/10 focus:border-amber-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+        <option value="default"<%= _model_var == "default" ? " selected" : "" %>>Default</option>
+        <option value="low"<%=     _model_var == "low"     ? " selected" : "" %>>Low</option>
+        <option value="medium"<%=  _model_var == "medium"  ? " selected" : "" %>>Medium</option>
+        <option value="high"<%=    _model_var == "high"    ? " selected" : "" %>>High</option>
+      </select>
+      <span class="text-[11px] text-slate-500 italic">opencode only</span>
+    </div>
+  </div>
+
+  <div class="flex gap-2 pt-2">
+    <button type="button"
+            hx-post="/projects/<%= project["name"] %>/tasks/plan-refine/<%= plan_id %>"
+            hx-include="textarea[name=refine_note], textarea[name=body_md], select[name=plan_model], select[name=plan_variant]"
+            hx-target="#form-stage"
+            hx-swap="innerHTML"
+            class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+      Refine with agent
+    </button>
+  </div>
+
+  <p class="text-xs text-slate-500 italic pt-2">
+    Refining starts a new planning run seeded with the current draft and your note. The previous run's log stays at <span class="font-mono text-slate-400"><%= plan_id %></span>.
+  </p>
+</aside>
+
+<!-- Right panel: the spec itself. Rendered HTML on top, editable markdown
+     source below. The textarea is the source of truth — /do-task downstream
+     consumes markdown. -->
+<section class="space-y-4">
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Title</label>
+    <input type="text" name="title" value="<%= title %>"
+           class="w-full rounded-lg bg-slate-900/80 border border-emerald-400/40 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+  </div>
+
+  <!-- Tabs let one pane (Markdown OR Source) take the full vertical
+       space — the spec is long and a stacked layout cuts off too much.
+       Tab state is local to this partial; clicks toggle data-active on
+       the wrapper. The textarea is always in the DOM (so form submit
+       always picks up edits) — the inactive tab just hides via CSS. -->
+  <div data-tabs="spec" data-active="markdown">
+    <div class="flex items-center justify-between mb-2">
+      <div class="inline-flex rounded-lg bg-slate-900/60 border border-white/10 p-0.5 text-xs">
+        <button type="button" data-tab-target="markdown"
+                class="tab-btn px-3 py-1 rounded-md text-slate-300 hover:text-white">Markdown</button>
+        <button type="button" data-tab-target="source"
+                class="tab-btn px-3 py-1 rounded-md text-slate-300 hover:text-white">Source</button>
+      </div>
+      <span class="text-xs text-emerald-400/80 italic">drafted by /plan-task</span>
+    </div>
+
+    <article data-tab-pane="markdown"
+             class="task-md rounded-xl bg-slate-900/40 border border-white/5 p-6 text-sm overflow-y-auto"
+             style="min-height: 60vh; max-height: calc(100vh - 22rem);">
+      <%- Markdown.to_safe_html(body) %>
+    </article>
+
+    <div data-tab-pane="source" class="hidden">
+      <textarea name="body_md" required
+                class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"
+                style="min-height: 60vh; height: calc(100vh - 22rem);"><%= body %></textarea>
+      <p class="text-xs text-slate-500 mt-1 italic">Edits here update the markdown the task is created from. Switch to Markdown to re-read; Refine to ask the agent for a deeper rewrite.</p>
+    </div>
+
+    <!-- When the source tab is hidden the textarea is `hidden` but still
+         in the form, so its value submits. -->
+  </div>
+
+  <script>
+  (function () {
+    if (document.body.dataset.specTabsBound) return;
+    document.body.dataset.specTabsBound = '1';
+    var ACTIVE_BTN = 'bg-slate-700 text-white shadow-sm';
+    function paint(scope) {
+      var active = scope.dataset.active;
+      scope.querySelectorAll('[data-tab-pane]').forEach(function (el) {
+        el.classList.toggle('hidden', el.dataset.tabPane !== active);
+      });
+      scope.querySelectorAll('[data-tab-target]').forEach(function (el) {
+        var on = el.dataset.tabTarget === active;
+        ACTIVE_BTN.split(' ').forEach(function (c) { el.classList.toggle(c, on); });
+      });
+    }
+    function init() {
+      document.querySelectorAll('[data-tabs]').forEach(function (scope) {
+        if (scope.dataset.bound) return;
+        scope.dataset.bound = '1';
+        paint(scope);
+        scope.querySelectorAll('[data-tab-target]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            scope.dataset.active = btn.dataset.tabTarget;
+            paint(scope);
+          });
+        });
+      });
+    }
+    init();
+    document.body.addEventListener('htmx:afterSwap', init);
+  })();
+  </script>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <a href="/projects/<%= project["name"] %>"
+       class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
+    <button type="submit"
+            class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+      Create
+    </button>
+  </div>
+</section>

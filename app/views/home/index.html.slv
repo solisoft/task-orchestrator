@@ -23,14 +23,14 @@
                     <% let weekly_cap = limits[a]["weekly"] %>
                     <article class="rounded-xl border border-white/10 bg-slate-900/60 p-4">
                         <header class="flex items-baseline justify-between mb-3">
-                            <h3 class="font-mono text-sm text-slate-100"><%= a %></h3>
+                            <h3 class="font-mono text-sm text-slate-100"><%- a %></h3>
                         </header>
-                        <%= partial("home/agent_usage_row", {
+                        <%- partial("home/agent_usage_row", {
                             "label": "today",
                             "used":  daily_used,
                             "cap":   daily_cap
                         }) %>
-                        <%= partial("home/agent_usage_row", {
+                        <%- partial("home/agent_usage_row", {
                             "label": "this week",
                             "used":  weekly_used,
                             "cap":   weekly_cap
