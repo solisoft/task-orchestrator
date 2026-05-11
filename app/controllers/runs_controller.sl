@@ -20,7 +20,8 @@ fn show(req)
     "status": run_current_status(project["name"], slug),
     "pr_url": run_pr_url(project["name"], slug),
     "tail": run_log_tail(project["name"], slug, 16384),
-    "todos": run_latest_todos(project["name"], slug)
+    "todos": run_latest_todos(project["name"], slug),
+    "branch_info": _branch_info_for(task, project)
   })
 end
 

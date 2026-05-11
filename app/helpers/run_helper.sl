@@ -135,3 +135,17 @@ end
 def task_run_pr_url(repo: String, slug: String) -> Any
   return run_pr_url(repo, slug)
 end
+
+def task_worktree_branch_exists(repo: String, slug: String) -> Any
+  let wt = run_worktree_path(repo, slug)
+  if not Trusted.is_dir(wt)
+    return false
+  end
+  let branch = "task/" + slug
+  let res = System.run_sync([
+    "git", "-C", wt,
+    "show-ref", "--verify", "--quiet",
+    "refs/heads/" + branch
+  ])
+  res["exit_code"] == 0
+end

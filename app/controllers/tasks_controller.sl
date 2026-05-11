@@ -225,20 +225,27 @@ fn show(req)
 end
 
 # Hash describing the per-task git branch for the merge UI on the
-# task page, or nil when the task isn't a candidate (only "done"
-# rows with `outcome=local-branch` are — PR-mode tasks already show
-# the PR link in the run log). Returns:
+# task page, or nil when the task isn't a candidate (only "inprogress",
+# "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks
+# already show the PR link in the run log). Returns:
 #   { "name": "task/<slug>", "main": "main"|"master",
-#     "exists": Bool, "merged": Bool }
+#     "exists": Bool, "merged": Bool, "worktree_path": String|nil }
 fn _branch_info_for(task, project)
-  if task.status != "done" or task.outcome != "local-branch"
+  if (task.status != "inprogress" and task.status != "review" and task.status != "done") or task.outcome != "local-branch"
     return nil
   end
+  let branch_name = task_branch_name(task.slug)
+  let project_path = project["path"]
+  let exists_in_project = task_branch_exists(project_path, task.slug)
+  let wt_path = run_worktree_path(project["name"], task.slug)
+  let exists_in_worktree = Trusted.is_dir(wt_path) and task_worktree_branch_exists(project["name"], task.slug)
+  let exists = exists_in_project or exists_in_worktree
   {
-    "name":   task_branch_name(task.slug),
-    "main":   project_main_branch(project["path"]),
-    "exists": task_branch_exists(project["path"], task.slug),
-    "merged": task_branch_merged(project["path"], task.slug)
+    "name":   branch_name,
+    "main":   project_main_branch(project_path),
+    "exists": exists,
+    "merged": task_branch_merged(project_path, task.slug),
+    "worktree_path": exists_in_worktree ? wt_path : nil
   }
 end
 
@@ -253,10 +260,10 @@ fn _can_commit_push(task, project)
 end
 
 # POST /projects/:name/tasks/:slug/merge — merge the per-task branch
-# into the project's main branch. Only valid for `done` tasks whose
-# outcome was `local-branch` (no PR was opened). The merge itself is
-# guarded by `merge_task_branch` (refuses to switch branches or run
-# on a dirty tree).
+# into the project's main branch. Only valid for `inprogress`, `review`
+# or `done` tasks whose outcome was `local-branch` (no PR was opened).
+# The merge itself is guarded by `merge_task_branch` (refuses to switch
+# branches or run on a dirty tree).
 fn merge_branch(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -266,9 +273,9 @@ fn merge_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
     return {"status": 422,
-            "body": "merge is only available for done tasks with a local branch"}
+            "body": "merge is only available for inprogress/review/done tasks with a local branch"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,
@@ -291,9 +298,9 @@ fn checkout_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
     return {"status": 422,
-            "body": "checkout is only available for done tasks with a local branch"}
+            "body": "checkout is only available for inprogress/review/done tasks with a local branch"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,
@@ -329,9 +336,10 @@ fn mark_done(req)
             "body": "mark-done is only available for review tasks (current: " +
                     task.status + ")"}
   end
+  let force = (req["all"] ?? {})["force"]
   if task.pr_url != nil and task.pr_url != ""
-    if not pr_merged(task.pr_url)
-      return {"status": 422, "body": "PR is not merged yet"}
+    if not force and not pr_merged(task.pr_url)
+      return {"status": 422, "body": "PR not merged"}
     end
   end
   task.status = "done"
@@ -795,6 +803,51 @@ fn read_plan_state(plan_id)
     "pending_question": plan.pending_question,
     "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
     "prompt":           plan.prompt ?? "" }
+end
+
+fn archive(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "done" and task.status != "failed"
+    return {"status": 422,
+            "body": "archive is only available for done or failed tasks (current: " +
+                    task.status + ")"}
+  end
+  task.status = "archived"
+  task.save()
+  if task._errors
+    return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
+fn unarchive(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "archived"
+    return {"status": 422,
+            "body": "unarchive is only available for archived tasks (current: " +
+                    task.status + ")"}
+  end
+  task.status = "todo"
+  task.finished_at = null
+  task.save()
+  if task._errors
+    return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
 fn read_last_status(path)

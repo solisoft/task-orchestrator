@@ -8,7 +8,8 @@
   <!-- tab strip -->
   <nav class="flex items-center gap-1 border-b border-white/10 mb-4 overflow-x-auto animate-fade-in">
     <% for status in statuses %>
-      <% let count = columns[status].length %>
+      <% let col = columns[status] ?? [] %>
+      <% let count = col.length %>
       <% let is_active = status == active_tab %>
       <a href="/projects/<%= project["name"] %>?tab=<%= status %>"
          class="<%= is_active ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
@@ -44,7 +45,7 @@
           <% if indicators[task.slug] != nil %>
             <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/run" title="View run log" class="px-2 py-1 text-sm text-slate-400 hover:text-indigo-300 hover:bg-indigo-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity">📜</a>
           <% end %>
-          <% if active_tab == "todo" or active_tab == "inprogress" or active_tab == "queued" or active_tab == "review" or active_tab == "done" or active_tab == "failed" %>
+          <% if active_tab == "todo" or active_tab == "inprogress" or active_tab == "queued" or active_tab == "review" or active_tab == "done" or active_tab == "failed" or active_tab == "archived" %>
             <% let t = totals[task.slug] %>
             <% if t != nil and (t["total_cost_usd"] > 0 or t["duration_ms"] > 0) %>
               <span class="text-[10px] font-mono text-slate-400" title="time spent">
@@ -67,6 +68,9 @@
           <% end %>
           <% if active_tab == "failed" %>
             <button title="Move back to todo to edit and re-queue" hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/unqueue" hx-target="#board" hx-swap="outerHTML" class="px-3 py-1 text-sm text-amber-400 hover:bg-amber-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity" type="button">↩ Reset</button>
+          <% end %>
+          <% if active_tab == "archived" %>
+            <button title="Restore to todo" hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/unarchive" hx-target="#board" hx-swap="outerHTML" class="px-3 py-1 text-sm text-emerald-400 hover:bg-emerald-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity" type="button">↩ Restore</button>
           <% end %>
         </li>
       <% end %>
