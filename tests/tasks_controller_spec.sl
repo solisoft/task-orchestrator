@@ -409,6 +409,98 @@ describe("TasksController#mark_done", fn()
   end)
 end)
 
+describe("TasksController#archive", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("archives a done task", fn()
+    Task.create({
+      "_key":    "proj--archive-done",
+      "project": "proj",
+      "slug":    "archive-done",
+      "title":   "Archive done",
+      "status":  "done"
+    })
+    let response = post("/projects/proj/tasks/archive-done/archive", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "archive-done")
+    assert_eq(t.status, "archived")
+  end)
+
+  test("archives a failed task", fn()
+    Task.create({
+      "_key":    "proj--archive-failed",
+      "project": "proj",
+      "slug":    "archive-failed",
+      "title":   "Archive failed",
+      "status":  "failed"
+    })
+    let response = post("/projects/proj/tasks/archive-failed/archive", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "archive-failed")
+    assert_eq(t.status, "archived")
+  end)
+
+  test("returns 422 for non-done/failed status", fn()
+    Task.create({
+      "_key":    "proj--archive-todo",
+      "project": "proj",
+      "slug":    "archive-todo",
+      "title":   "Archive todo",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/archive-todo/archive", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available for done or failed")
+    let t = Task.find_by_slug("proj", "archive-todo")
+    assert_eq(t.status, "todo")
+  end)
+end)
+
+describe("TasksController#unarchive", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("unarchives a task back to todo", fn()
+    Task.create({
+      "_key":    "proj--unarchive-me",
+      "project": "proj",
+      "slug":    "unarchive-me",
+      "title":   "Unarchive me",
+      "status":  "archived"
+    })
+    let response = post("/projects/proj/tasks/unarchive-me/unarchive", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "unarchive-me")
+    assert_eq(t.status, "todo")
+  end)
+
+  test("returns 422 for non-archived status", fn()
+    Task.create({
+      "_key":    "proj--unarchive-queued",
+      "project": "proj",
+      "slug":    "unarchive-queued",
+      "title":   "Unarchive queued",
+      "status":  "queued"
+    })
+    let response = post("/projects/proj/tasks/unarchive-queued/unarchive", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available for archived")
+    let t = Task.find_by_slug("proj", "unarchive-queued")
+    assert_eq(t.status, "queued")
+  end)
+end)
+
 # --- plan_log polling shape ----------------------------------------
 #
 # Regression coverage for the prompt-panel-flash bug: while a plan is

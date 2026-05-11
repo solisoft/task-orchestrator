@@ -35,6 +35,16 @@
             <button type="submit" class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-medium px-4 py-2 transition-colors">Cancel &larr; back to todo</button>
           </form>
         <% end %>
+        <% if task.status == "done" or task.status == "failed" %>
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/archive">
+            <button type="submit" class="rounded-lg bg-slate-600/90 hover:bg-slate-500 text-white text-sm font-medium px-4 py-2 transition-colors">Archive</button>
+          </form>
+        <% end %>
+        <% if task.status == "archived" %>
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/unarchive">
+            <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Restore to todo</button>
+          </form>
+        <% end %>
       </div>
     </header>
 
