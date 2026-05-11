@@ -318,9 +318,10 @@ fn mark_done(req)
             "body": "mark-done is only available for review tasks (current: " +
                     task.status + ")"}
   end
+  let force = (req["all"] ?? {})["force"]
   if task.pr_url != nil and task.pr_url != ""
-    if not pr_merged(task.pr_url)
-      return {"status": 422, "body": "PR is not merged yet"}
+    if not force and not pr_merged(task.pr_url)
+      return {"status": 422, "body": "PR not merged"}
     end
   end
   task.status = "done"

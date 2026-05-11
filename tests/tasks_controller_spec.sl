@@ -388,9 +388,26 @@ describe("TasksController#mark_done", fn()
     let response = post("/projects/proj/tasks/open-pr/mark-done", {})
     set_pr_merged_mock(nil)
     assert_eq(res_status(response), 422)
-    assert_contains(res_body(response), "PR is not merged yet")
+    assert_contains(res_body(response), "PR not merged")
     let t = Task.find_by_slug("proj", "open-pr")
     assert_eq(t.status, "review")
+  end)
+
+  test("force-marks a review task as done even when PR is not merged", fn()
+    set_pr_merged_mock(false)
+    Task.create({
+      "_key":    "proj--force-pr",
+      "project": "proj",
+      "slug":    "force-pr",
+      "title":   "Force PR task",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/3"
+    })
+    let response = post("/projects/proj/tasks/force-pr/mark-done", { "force": "true" })
+    set_pr_merged_mock(nil)
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "force-pr")
+    assert_eq(t.status, "done")
   end)
 
   test("returns 422 for non-review status", fn()
