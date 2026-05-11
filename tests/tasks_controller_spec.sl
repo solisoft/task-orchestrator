@@ -522,6 +522,9 @@ describe("TasksController#plan_log", fn()
     assert_contains(body, "id=\"plan-stream\"")
     assert_contains(body, "Pick one")
     assert_not(body.contains("Your prompt"))
+    # Polling is suppressed while a question is pending — otherwise an
+    # in-flight poll can race the user's click and re-render the card.
+    assert_not(body.contains("hx-trigger=\"every 2s\""))
   end)
 
   test("returns the planned-body and retargets to #form-stage when done", fn()

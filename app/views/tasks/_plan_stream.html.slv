@@ -1,4 +1,3 @@
-<% let polling = (status != "done" and not status.starts_with("failed")) %>
 <% let failed  = status.starts_with("failed") %>
 <%
   # `pending_question` carries either the question (with `input.questions`)
@@ -6,6 +5,13 @@
   # consumes it. Only treat it as a question when the input shape is there.
   let pq = pending_question
   let has_question = pq != nil and pq["input"] != nil and pq["input"]["questions"] != nil
+%>
+<%
+  # Suppress polling while a question is awaiting an answer: otherwise a
+  # poll request already in flight when the user clicks an option can
+  # return *after* the answer response, re-rendering the question card
+  # and making the click feel like it did nothing.
+  let polling = (status != "done" and not failed and not has_question)
 %>
 
 <!-- Right panel: log + question card + status. The polling element

@@ -739,6 +739,10 @@ img, video {
   margin-top: 1rem;
 }
 
+.mt-8 {
+  margin-top: 2rem;
+}
+
 .block {
   display: block;
 }
@@ -877,6 +881,10 @@ img, video {
 
 .max-w-7xl {
   max-width: 80rem;
+}
+
+.max-w-\[16ch\] {
+  max-width: 16ch;
 }
 
 .max-w-md {
@@ -1213,6 +1221,11 @@ img, video {
 
 .bg-emerald-400\/15 {
   background-color: rgb(52 211 153 / 0.15);
+}
+
+.bg-emerald-500 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
 }
 
 .bg-emerald-500\/90 {
@@ -1651,6 +1664,10 @@ img, video {
   opacity: 0;
 }
 
+.opacity-75 {
+  opacity: 0.75;
+}
+
 .shadow-sm {
   --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
@@ -2058,6 +2075,10 @@ img, video {
   background-color: rgb(251 191 36 / 0.15);
 }
 
+.hover\:bg-amber-400\/20:hover {
+  background-color: rgb(251 191 36 / 0.2);
+}
+
 .hover\:bg-amber-400\/25:hover {
   background-color: rgb(251 191 36 / 0.25);
 }
@@ -2069,6 +2090,10 @@ img, video {
 
 .hover\:bg-emerald-400\/15:hover {
   background-color: rgb(52 211 153 / 0.15);
+}
+
+.hover\:bg-emerald-400\/20:hover {
+  background-color: rgb(52 211 153 / 0.2);
 }
 
 .hover\:bg-indigo-400:hover {
@@ -2088,8 +2113,17 @@ img, video {
   background-color: rgb(99 102 241 / 0.25);
 }
 
+.hover\:bg-red-400\/20:hover {
+  background-color: rgb(248 113 113 / 0.2);
+}
+
 .hover\:bg-sky-400\/20:hover {
   background-color: rgb(56 189 248 / 0.2);
+}
+
+.hover\:bg-slate-600:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(71 85 105 / var(--tw-bg-opacity, 1));
 }
 
 .hover\:bg-white\/10:hover {
