@@ -55,7 +55,7 @@ db_update() {
        bindVars: { plan_id: $plan_id, patch: $patch }
      }')
   curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
-    -H 'content-type: application/json' -d "$body" >&2 \
+    -H 'content-type: application/json' -d "$body" 2>/dev/null \
     || log "db_update failed: $patch_json"
 }
 
@@ -70,7 +70,7 @@ append_log() {
        bindVars: { plan_id: $plan_id, line: $line }
      }')
   curl -s -u "$USER:$PASS" -X POST "$HOST/_api/database/$DB/cursor" \
-    -H 'content-type: application/json' -d "$body" >&2 \
+    -H 'content-type: application/json' -d "$body" 2>/dev/null \
     || log "append_log failed: $1"
 }
 
