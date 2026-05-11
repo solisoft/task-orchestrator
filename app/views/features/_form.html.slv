@@ -1,0 +1,44 @@
+<form method="post" action="<%= feature == nil ? "/features" : "/features/" + feature._key + "?_method=put" %>" class="rounded-xl glass-card p-6 space-y-4">
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Project</label>
+    <% if feature == nil and project != nil %>
+      <input type="text" name="project" value="<%= project["name"] %>" readonly class="w-full rounded-lg bg-slate-900/80 border border-white/10 opacity-60 outline-none px-4 py-2 text-sm text-slate-100">
+    <% elsif feature == nil %>
+      <select name="project" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+        <option value="">Select a project</option>
+        <% for proj in projects %>
+          <option value="<%= proj["name"] %>"><%= proj["name"] %></option>
+        <% end %>
+      </select>
+    <% else %>
+      <input type="text" name="project" value="<%= feature.project %>" readonly class="w-full rounded-lg bg-slate-900/80 border border-white/10 opacity-60 outline-none px-4 py-2 text-sm text-slate-100">
+    <% end %>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Title</label>
+    <input type="text" name="title" required value="<%= feature == nil ? "" : (feature.title ?? "") %>" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100" placeholder="e.g. Add dark mode support">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Description (Markdown)</label>
+    <textarea name="description" rows="12" class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y" placeholder="Describe the feature, UI/UX brief, acceptance criteria..."><%= feature == nil ? "" : (feature.description ?? "") %></textarea>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Status</label>
+    <select name="status" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+      <option value="draft" <%= (feature != nil and feature.status == "draft") ? "selected" : "" %>>Draft</option>
+      <option value="ready" <%= (feature != nil and feature.status == "ready") ? "selected" : "" %>>Ready</option>
+      <option value="in-progress" <%= (feature != nil and feature.status == "in-progress") ? "selected" : "" %>>In Progress</option>
+      <option value="done" <%= (feature != nil and feature.status == "done") ? "selected" : "" %>>Done</option>
+    </select>
+  </div>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <a href="<%= feature == nil ? "/features" : "/features/" + feature._key %>" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
+    <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+      <%= feature == nil ? "Create Feature" : "Save Changes" %>
+    </button>
+  </div>
+</form>

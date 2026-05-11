@@ -1,0 +1,45 @@
+<div class="min-h-screen text-white">
+  <div class="max-w-6xl mx-auto px-6 py-8">
+    <nav class="text-sm text-slate-500 mb-6 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-300">Features</span>
+    </nav>
+
+    <header class="flex items-baseline justify-between flex-wrap gap-3 mb-6 animate-fade-in">
+      <h1 class="text-2xl font-bold gradient-text">Feature Briefs</h1>
+      <a href="/features/new" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">New Feature</a>
+    </header>
+
+    <% if project_filter != nil %>
+      <p class="text-sm text-slate-400 mb-4">
+        Filtering by project: <span class="text-indigo-300 font-medium"><%= project_filter %></span>
+        <a href="/features" class="text-slate-500 hover:text-slate-300 ml-2">show all</a>
+      </p>
+    <% end %>
+
+    <% if features.length() == 0 %>
+      <div class="rounded-2xl border border-slate-500/30 bg-slate-500/5 p-8 text-center animate-fade-in">
+        <p class="text-slate-400">No feature briefs yet.</p>
+        <a href="/features/new" class="inline-block mt-3 text-indigo-400 hover:text-indigo-300 text-sm font-medium">Create the first one</a>
+      </div>
+    <% else %>
+      <div class="space-y-3">
+        <% for feature in features %>
+          <a href="/features/<%= feature._key %>" class="block rounded-xl glass-card p-4 hover:bg-white/5 transition-colors group">
+            <div class="flex items-baseline justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="text-base font-semibold text-slate-100 group-hover:text-indigo-200 transition-colors truncate"><%= feature.title %></h2>
+                <p class="text-xs text-slate-500 mt-0.5 font-mono"><%= feature.project %></p>
+              </div>
+              <span class="shrink-0 inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium"><%= feature.status %></span>
+            </div>
+            <% if feature.description != nil and feature.description != "" %>
+              <p class="text-sm text-slate-400 mt-2 line-clamp-2"><%= truncate_text(feature.description, 200) %></p>
+            <% end %>
+          </a>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>

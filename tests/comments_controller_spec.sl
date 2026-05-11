@@ -1,0 +1,58 @@
+# CommentsController and Comment model — covers comment creation and
+# listing on feature briefs.
+
+describe("Comment model", fn()
+  before_each(fn()
+    assert_test_db()
+    Comment.delete_all()
+    Feature.delete_all()
+  end)
+
+  test("create_comment sets fields correctly", fn()
+    let comment = Comment.create_comment("myapp--feat1", "tester@example.com", "Nice!")
+    assert(comment._errors == nil)
+    assert_eq(comment.feature_slug, "myapp--feat1")
+    assert_eq(comment.author, "tester@example.com")
+    assert_eq(comment.body, "Nice!")
+    assert_not_null(comment.created_at)
+  end)
+
+  test("for_feature returns comments ordered by created_at", fn()
+    Comment.create_comment("myapp--feat1", "a@x.com", "First")
+    Comment.create_comment("myapp--feat1", "b@x.com", "Second")
+    let comments = Comment.for_feature("myapp--feat1")
+    assert_eq(comments.length(), 2)
+    assert_eq(comments[0].body, "First")
+    assert_eq(comments[1].body, "Second")
+  end)
+
+  test("validates required fields", fn()
+    let comment = Comment.create({})
+    assert(comment._errors != nil)
+  end)
+
+  test("for_feature returns empty for unknown feature", fn()
+    let comments = Comment.for_feature("unknown--feat")
+    assert_eq(comments.length(), 0)
+  end)
+
+  test("multiple comments on same feature are all retrievable", fn()
+    Comment.create_comment("myapp--feat1", "a@x.com", "One")
+    Comment.create_comment("myapp--feat1", "b@x.com", "Two")
+    Comment.create_comment("myapp--feat1", "c@x.com", "Three")
+    let comments = Comment.for_feature("myapp--feat1")
+    assert_eq(comments.length(), 3)
+  end)
+
+  test("comments on different features are independent", fn()
+    Comment.create_comment("myapp--feat1", "a@x.com", "A1")
+    Comment.create_comment("myapp--feat2", "a@x.com", "A2")
+    assert_eq(Comment.for_feature("myapp--feat1").length(), 1)
+    assert_eq(Comment.for_feature("myapp--feat2").length(), 1)
+  end)
+
+  test("_key is auto-generated with feature prefix", fn()
+    let comment = Comment.create_comment("myapp--feat1", "a@x.com", "Body")
+    assert(comment._key.starts_with("myapp--feat1--"))
+  end)
+end)
