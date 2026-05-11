@@ -126,8 +126,12 @@ fn create(req)
   if project == nil
     return {"status": 404, "body": "Unknown project"}
   end
-  let body = req["form"]["body_md"] ?? ""
-  let title = (req["form"]["title"] ?? "").trim()
+  # Read via `req["all"]` (route + query + form + JSON merged) so the
+  # same code path works for both production htmx form posts and the
+  # test client, which sends JSON. Matches the convention in plan_answer.
+  let form = req["all"] ?? {}
+  let body = form["body_md"] ?? ""
+  let title = (form["title"] ?? "").trim()
   # Title falls back to the body's first `# ...` heading; slug is derived
   # from the title (lowercased + dashed). Collisions append `-2`, `-3`, …
   # so the user never has to think about the URL piece.
@@ -142,7 +146,7 @@ fn create(req)
   # runs through the same agent they chose for planning. _allow_plan_model
   # already validates against the SDK allowlist + the opencode shape,
   # so the value is safe to store and forward to bin/task-run.
-  let model = _stitched_plan_model(req["form"])
+  let model = _stitched_plan_model(form)
   let task = Task.create({
     "_key":    Task.key_for(project["name"], slug),
     "project": project["name"],
@@ -158,6 +162,18 @@ fn create(req)
       "project": project,
       "task": task
     })
+  end
+  # Tasks created from a plan carry the originating plan_id in a hidden
+  # form input — stamp it onto the Plan so /plans can surface a "linked
+  # task" badge. A missing plan_id (manual create) or unknown plan_id
+  # (stale form) is silently ignored: the task creation itself succeeded.
+  let plan_id = (form["plan_id"] ?? "").trim()
+  if plan_id != ""
+    let plan = Plan.find_by_plan_id(plan_id)
+    if plan != nil
+      plan.task_slug = task.slug
+      plan.save()
+    end
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end

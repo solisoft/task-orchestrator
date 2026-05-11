@@ -41,6 +41,22 @@
 
               <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="<%= plan.prompt ?? "" %>"><%= plan.prompt_preview(100) %></span>
 
+              <% let linked = (linked_tasks ?? {})[plan.plan_id] %>
+              <% if linked != nil %>
+                <a href="/projects/<%= plan.project %>/tasks/<%= linked.slug %>"
+                   onclick="event.stopPropagation()"
+                   data-linked-task="<%= linked.slug %>"
+                   title="Linked task: <%= linked.title %> (<%= linked.status %>)"
+                   class="shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md border transition-colors
+                     <%= linked.status == "done" ? "bg-emerald-400/10 text-emerald-300 border-emerald-400/20 hover:bg-emerald-400/20" : "" %>
+                     <%= linked.status == "failed" ? "bg-red-400/10 text-red-300 border-red-400/20 hover:bg-red-400/20" : "" %>
+                     <%= linked.status != "done" and linked.status != "failed" ? "bg-amber-400/10 text-amber-300 border-amber-400/20 hover:bg-amber-400/20" : "" %>
+                   ">
+                  <span class="truncate max-w-[16ch]"><%= linked.title %></span>
+                  <span class="text-[10px] uppercase tracking-wide opacity-75"><%= linked.status %></span>
+                </a>
+              <% end %>
+
               <% if plan.project != nil and plan.project != "" %>
                 <a href="/projects/<%= plan.project %>/tasks/new?plan_id=<%= plan.plan_id %>"
                    onclick="event.stopPropagation()"
