@@ -231,7 +231,7 @@ end
 #   { "name": "task/<slug>", "main": "main"|"master",
 #     "exists": Bool, "merged": Bool, "worktree_path": String|nil }
 fn _branch_info_for(task, project)
-  if (task.status != "inprogress" and task.status != "review" and task.status != "done") or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
     return nil
   end
   let branch_name = task_branch_name(task.slug)
