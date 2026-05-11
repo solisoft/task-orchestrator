@@ -355,6 +355,29 @@ fn project_current_branch(project_path)
   (res["stdout"] ?? "").trim()
 end
 
+# Checkout the per-task branch (`task/<slug>`). Refuses to act if the
+# working tree is dirty — we will not stash for the user.
+# Returns `{ "ok": true }` or `{ "ok": false, "error": <reason> }`.
+fn checkout_task_branch(project_path, slug)
+  if project_worktree_dirty(project_path)
+    return { "ok": false,
+             "error": "working tree has uncommitted changes — commit or stash first." }
+  end
+  let branch = task_branch_name(slug)
+  let res = System.run_sync([
+    "git", "-C", project_path,
+    "checkout", branch
+  ])
+  if res["exit_code"] != 0
+    let err = ((res["stderr"] ?? "") + (res["stdout"] ?? "")).trim()
+    if err == ""
+      err = "git checkout exited " + str(res["exit_code"])
+    end
+    return { "ok": false, "error": err }
+  end
+  return { "ok": true }
+end
+
 # `true` when there are uncommitted changes (staged, unstaged, or
 # untracked). We treat an unparseable response as dirty — the merge
 # guard refuses to act if it can't prove the tree is clean.

@@ -255,6 +255,31 @@ fn merge_branch(req)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
+fn checkout_branch(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "done" or task.outcome != "local-branch"
+    return {"status": 422,
+            "body": "checkout is only available for done tasks with a local branch"}
+  end
+  if not task_branch_exists(project["path"], task.slug)
+    return {"status": 422,
+            "body": "branch " + task_branch_name(task.slug) + " not found in " +
+                    project["path"]}
+  end
+  let result = checkout_task_branch(project["path"], task.slug)
+  if not result["ok"]
+    return {"status": 422, "body": "checkout failed: " + result["error"]}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
 fn mark_done(req)
   let project = find_project(req["params"]["name"])
   if project == nil

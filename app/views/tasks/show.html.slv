@@ -67,6 +67,13 @@
               </button>
             </form>
           <% end %>
+          <% if branch_info["exists"] %>
+            <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/checkout">
+              <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+                Switch to branch
+              </button>
+            </form>
+          <% end %>
         </div>
         <% if branch_info["exists"] and not branch_info["merged"] %>
           <p class="text-xs text-slate-500 mt-2">
