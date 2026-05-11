@@ -3,12 +3,16 @@
 # against the configured daily / weekly caps).
 
 fn index(req)
-  # Single `Task.all()` scan covers both usage tiles (day + week)
-  # instead of the previous two back-to-back scans.
-  let usage = Task.usage_by_agent_for_windows(["day", "week"])
+  # Single `Task.all()` scan covers project tile counts AND the
+  # day/week usage tiles — `Task.dashboard_scan` walks the rows once
+  # and bucketises into both shapes. Previously `/` ran two
+  # back-to-back scans (one inside `list_projects` via
+  # `Task.counts_by_project`, one for `usage_by_agent_for_windows`).
+  let scan = Task.dashboard_scan(["day", "week"])
+  let usage = scan["usage"]
   render("home/index", {
     "title": "Task Orchestrator",
-    "projects": list_projects(),
+    "projects": list_projects(scan["counts_by_project"]),
     "root": workspace_root(),
     "statuses": Task.kanban_statuses(),
     "agents": Task.known_agents(),

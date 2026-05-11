@@ -89,5 +89,19 @@ describe("HomeController", fn()
       let response = get("/")
       assert_contains(res_body(response), "/settings")
     end)
+
+    # Regression: empty-on-disk projects used to make `project_summary`
+    # fall back to `Task.counts_by_status(name)` — one filtered scan
+    # per project. With `list_projects` default-filling missing entries
+    # the dashboard renders 200 and the tile carries a zero-filled
+    # counts row instead.
+    test("renders 200 for a project that exists on disk with no tasks", fn()
+      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
+      System.run_sync(["mkdir", "-p", root + "/empty_proj/tasks/todo"])
+      let response = get("/")
+      assert_eq(res_status(response), 200)
+      let body = res_body(response)
+      assert_contains(body, "empty_proj")
+    end)
   end)
 end)

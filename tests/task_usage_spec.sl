@@ -237,3 +237,47 @@ describe("Task.counts_by_project", fn()
     assert_null(h["beta"])
   end)
 end)
+
+describe("Task.empty_status_counts", fn()
+  test("returns a zero-filled hash for every kanban status", fn()
+    let h = Task.empty_status_counts()
+    for s in Task.statuses()
+      assert_hash_has_key(h, s)
+      assert_eq(h[s], 0)
+    end
+  end)
+end)
+
+describe("Task.dashboard_scan", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+  end)
+
+  test("counts_by_project matches the standalone helper", fn()
+    _seed_task("a1", _iso_seconds_ago(60), "claude")
+    Task.create({
+      "_key": "beta--b1", "project": "beta", "slug": "b1",
+      "title": "x", "status": "done"
+    })
+    let scan = Task.dashboard_scan(["day", "week"])
+    assert_eq(scan["counts_by_project"], Task.counts_by_project())
+  end)
+
+  test("usage matches usage_by_agent_for_windows", fn()
+    _seed_task("recent", _iso_seconds_ago(60), "claude")
+    _seed_task("older",  _iso_seconds_ago(86400 * 3), "opencode")
+    let scan = Task.dashboard_scan(["day", "week"])
+    assert_eq(scan["usage"], Task.usage_by_agent_for_windows(["day", "week"]))
+  end)
+
+  test("returns empty counts_by_project and zero-filled usage on empty DB", fn()
+    let scan = Task.dashboard_scan(["day", "week"])
+    assert_eq(len(scan["counts_by_project"]), 0)
+    for a in Task.known_agents()
+      assert_eq(scan["usage"]["day"][a], 0)
+      assert_eq(scan["usage"]["week"][a], 0)
+    end
+  end)
+end)

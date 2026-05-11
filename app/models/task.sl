@@ -91,13 +91,13 @@ class Task < Model
   # scan, so the home dashboard can render N project tiles without
   # issuing N `FOR doc IN tasks FILTER doc.project == @project`
   # queries. Projects with no tasks are absent from the result —
-  # callers should default-fill with `_empty_status_counts()`.
+  # callers should default-fill with `empty_status_counts()`.
   static def counts_by_project()
     let result = {}
     for t in Task.all()
       let project = t.project
       if result[project] == nil
-        result[project] = Task._empty_status_counts()
+        result[project] = Task.empty_status_counts()
       end
       let status = t.status
       if result[project][status] != nil
@@ -107,15 +107,65 @@ class Task < Model
     result
   end
 
-  # Status -> 0 hash, zero-filled for every kanban status. Pulled
-  # out so `counts_by_project` and any default-fill caller agree on
-  # the shape (every status key present even when count is zero).
-  static def _empty_status_counts()
+  # Status -> 0 hash, zero-filled for every kanban status. Public so
+  # `list_projects` can default-fill rows for projects that exist on
+  # disk but have no tasks yet — otherwise `project_summary` would
+  # fall back to `Task.counts_by_status(name)` and fan out one
+  # `FILTER doc.project == @project` query per empty-on-disk project.
+  static def empty_status_counts()
     let h = {}
     for s in Task.statuses()
       h[s] = 0
     end
     h
+  end
+
+  # Combined bulk scan for the home dashboard. One `Task.all()` loop
+  # produces both `counts_by_project` (status hash per project) and
+  # `usage` (agent counts per window). The home page formerly fired
+  # two back-to-back `Task.all()` scans — this collapses them to one,
+  # so `/` issues a single `FOR doc IN tasks RETURN doc` per request.
+  #
+  # Returns `{ "counts_by_project": {project: {status: N}},
+  #            "usage":             {window:  {agent:  N}} }`.
+  # Each shape matches its standalone helper exactly so callers can
+  # swap to this without behaviour changes.
+  static def dashboard_scan(windows)
+    let counts_by_project = {}
+    let usage = {}
+    let cutoffs = {}
+    for w in windows
+      let buckets = {}
+      for a in Task.known_agents()
+        buckets[a] = 0
+      end
+      usage[w] = buckets
+      cutoffs[w] = Task._window_cutoff_unix(w)
+    end
+    let default_agent = Task.default_agent()
+    for t in Task.all()
+      let project = t.project
+      if counts_by_project[project] == nil
+        counts_by_project[project] = Task.empty_status_counts()
+      end
+      let status = t.status
+      if counts_by_project[project][status] != nil
+        counts_by_project[project][status] = counts_by_project[project][status] + 1
+      end
+      let unix = Task._started_at_unix(t)
+      if unix != nil
+        let agent = Task._effective_agent_with_default(t, default_agent)
+        if agent == nil or agent == ""
+          agent = default_agent
+        end
+        for w in windows
+          if unix >= cutoffs[w] and usage[w][agent] != nil
+            usage[w][agent] = usage[w][agent] + 1
+          end
+        end
+      end
+    end
+    { "counts_by_project": counts_by_project, "usage": usage }
   end
 
   # Default agent for tasks that have no per-task `agent_type` set yet.
