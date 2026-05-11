@@ -699,7 +699,7 @@ fn read_plan_state(plan_id)
       "prompt":           "" }
   end
   {
-    "status":           plan.status,
+    "status":           plan.effective_status,
     "log":              plan.log ?? "",
     "body":             plan.body ?? "",
     "pending_question": plan.pending_question,

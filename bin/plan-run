@@ -78,12 +78,20 @@ write_status() { db_update "$(jq -n --arg s "$1" '{status: $s, updated_at: now |
 write_log()    { append_log "$1"; }
 write_body()   { db_update "$(jq -n --arg b "$1" '{body: $b}')"; }
 write_pq()     { db_update "$(jq -n --argjson p "$1" '{pending_question: $p}')"; }
+write_pid()    { db_update "$(jq -n --argjson p "$1" '{pid: $p}')"; }
 
 jsonl_file=$(mktemp -t plan-run.XXXXXX.jsonl)
 state_dir=$(mktemp -d -t plan-run.XXXXXX)
-trap 'rm -f "$notes_path" "$jsonl_file"; rm -rf "$state_dir"' EXIT
+# Heartbeat for the planner viewer: the DB row only flips to `failed:` /
+# `done` when this script exits cleanly. On SIGKILL/OOM/reboot the trap
+# never runs and the row sticks at "starting" forever. Drop our PID so
+# the Plan model can spot a zombie via `kill -0` and synthesize a failed
+# indicator. The EXIT trap nulls it back out on clean termination.
+trap 'rm -f "$notes_path" "$jsonl_file"; rm -rf "$state_dir"; \
+      db_update "$(jq -n "{pid: null}")" >/dev/null 2>&1 || true' EXIT
 
 write_status "starting"
+write_pid "$$"
 log "plan-run plan_id=$plan_id notes=$notes_path model=${model:-default} project=${project_dir:-<orchestrator cwd>}"
 
 if [[ -n "$project_dir" && ! -d "$project_dir" ]]; then

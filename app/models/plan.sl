@@ -71,9 +71,65 @@ class Plan < Model
     s.substring(0, n).gsub("\n", " ")
   end
 
+  # Single-line teaser for the index summary row. Newlines collapsed to
+  # spaces, hard-capped at `max` chars with an ellipsis when longer.
+  def prompt_preview(max)
+    let s = (self.prompt ?? "").gsub("\n", " ").trim()
+    if s.length() <= max
+      return s
+    end
+    s.substring(0, max) + "…"
+  end
+
   def write_pending_answer(qid, value)
     let answer = { "id": qid, "value": value }
     self.pending_question = answer
     self.save()
+  end
+
+  # `kill -0 <pid>` is a signal-0 liveness probe — does not kill anything.
+  # Mirrors `_run_pid_alive` in run.sl. nil = no pid recorded; true/false
+  # = recorded pid is alive / gone.
+  static def _pid_alive(pid)
+    if pid == nil
+      return nil
+    end
+    let res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
+    res["exit_code"] == 0
+  end
+
+  # Seconds since `updated_at`, or nil if the field is missing/unparseable.
+  # Heartbeat fallback for rows written before the pid convention shipped.
+  def _stale_seconds()
+    if self.updated_at == nil or self.updated_at == ""
+      return nil
+    end
+    let prior = DateTime.parse(self.updated_at).to_unix() rescue nil
+    if prior == nil
+      return nil
+    end
+    DateTime.now().to_unix() - prior
+  end
+
+  # Synthesizes `failed:zombie` when the row says "starting" but the
+  # runner is gone. Leaves the persisted status untouched — the retry
+  # button (plan_retry) drives any re-spawn. Terminal statuses
+  # (done / failed:*) pass through unchanged.
+  def effective_status()
+    let s = self.status ?? ""
+    if s == "done" or s.starts_with("failed:")
+      return s
+    end
+    let alive = Plan._pid_alive(self.pid)
+    if alive == false
+      return "failed:zombie (no live process)"
+    end
+    if alive == nil
+      let age = self._stale_seconds()
+      if age != nil and age > 600
+        return "failed:zombie (no heartbeat for " + str(age / 60) + "m)"
+      end
+    end
+    s
   end
 end

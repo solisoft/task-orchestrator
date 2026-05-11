@@ -18,11 +18,12 @@
     <% else %>
       <div class="space-y-4 animate-fade-in animate-fade-in-1">
         <% for plan in plans %>
+          <% let status = plan.effective_status %>
           <details class="rounded-xl glass-card border border-white/10 group">
             <summary class="flex items-center gap-4 px-5 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors rounded-xl select-none marker:hidden">
-              <% if plan.status == "done" %>
+              <% if status == "done" %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-emerald-400 shadow-glow-emerald"></span>
-              <% elsif plan.status.starts_with("failed") %>
+              <% elsif status.starts_with("failed") %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-red-400 shadow-glow-red"></span>
               <% else %>
                 <span class="shrink-0 w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -31,21 +32,50 @@
               <span class="text-sm font-mono text-slate-300 shrink-0"><%= plan.plan_id %></span>
 
               <span class="text-xs font-mono uppercase px-2 py-0.5 rounded-full shrink-0
-                <%= plan.status == "done" ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/20" : "" %>
-                <%= plan.status.starts_with("failed") ? "bg-red-400/10 text-red-300 border border-red-400/20" : "" %>
-                <%= plan.status != "done" and not plan.status.starts_with("failed") ? "bg-amber-400/10 text-amber-300 border border-amber-400/20" : "" %>
-              "><%= plan.status %></span>
+                <%= status == "done" ? "bg-emerald-400/10 text-emerald-300 border border-emerald-400/20" : "" %>
+                <%= status.starts_with("failed") ? "bg-red-400/10 text-red-300 border border-red-400/20" : "" %>
+                <%= status != "done" and not status.starts_with("failed") ? "bg-amber-400/10 text-amber-300 border border-amber-400/20" : "" %>
+              "><%= status %></span>
 
               <span class="text-xs text-slate-500 font-mono shrink-0"><%= plan.model %></span>
 
-              <span class="text-xs text-slate-400 flex-1 break-words"><%= plan.prompt_emoji %></span>
+              <span class="text-xs text-slate-400 flex-1 min-w-0 truncate" title="<%= plan.prompt ?? "" %>"><%= plan.prompt_preview(100) %></span>
+
+              <% if plan.project != nil and plan.project != "" %>
+                <a href="/projects/<%= plan.project %>/tasks/new?plan_id=<%= plan.plan_id %>"
+                   onclick="event.stopPropagation()"
+                   class="shrink-0 text-xs font-medium px-2.5 py-1 rounded-md bg-sky-400/10 text-sky-300 border border-sky-400/20 hover:bg-sky-400/20 transition-colors">
+                  Open
+                </a>
+              <% end %>
 
               <svg class="w-4 h-4 text-slate-500 shrink-0 transition-transform details-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path d="M6 9l6 6 6-6"/>
               </svg>
             </summary>
 
-            <% if plan.status == "done" and plan.body != "" and plan.body != nil %>
+            <div class="border-t border-white/5 px-5 py-4 space-y-3">
+              <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-400">
+                <% if plan.project != nil and plan.project != "" %>
+                  <span><span class="text-slate-500">Project:</span> <span class="font-mono text-slate-300"><%= plan.project %></span></span>
+                <% end %>
+                <% if plan.created_at != nil and plan.created_at != "" %>
+                  <span><span class="text-slate-500">Created:</span> <span class="font-mono text-slate-300"><%= plan.created_at %></span></span>
+                <% end %>
+                <% if plan.updated_at != nil and plan.updated_at != "" %>
+                  <span><span class="text-slate-500">Updated:</span> <span class="font-mono text-slate-300"><%= plan.updated_at %></span></span>
+                <% end %>
+              </div>
+
+              <% if plan.prompt != nil and plan.prompt != "" %>
+                <div>
+                  <div class="text-xs font-semibold uppercase tracking-wider text-slate-400/80 mb-2">Prompt</div>
+                  <pre class="rounded-lg bg-slate-900/60 border border-white/5 p-3 font-mono text-xs text-slate-300 max-h-[30vh] overflow-y-auto whitespace-pre-wrap break-words"><%= plan.prompt %></pre>
+                </div>
+              <% end %>
+            </div>
+
+            <% if status == "done" and plan.body != "" and plan.body != nil %>
               <div class="border-t border-white/5 px-5 py-4">
                 <div class="flex items-center justify-between mb-3">
                   <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400/70">Spec preview</span>
@@ -69,12 +99,6 @@
               </div>
             <% end %>
 
-            <% if plan.status == "done" and plan.body != "" and plan.body != nil and plan.prompt != "" and plan.prompt != nil %>
-              <div class="border-t border-white/5 px-5 py-2 flex items-center gap-2">
-                <span class="text-[11px] text-slate-500 italic">Original prompt:</span>
-                <span class="text-xs text-slate-400 font-mono truncate"><%= plan.prompt_emoji %></span>
-              </div>
-            <% end %>
           </details>
         <% end %>
       </div>
