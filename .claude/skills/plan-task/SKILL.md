@@ -49,6 +49,7 @@ The spec must follow this shape, in this order:
 
 ## Constraints
 
+- **Never** use `pkill`, `kill`, `killall`, or any process-killing command.
 - Output **only** the markdown spec. No "Here's the plan:", no trailing summary. The orchestrator captures stdout verbatim and shoves it into the form's body field.
 - Only use a `SLUG-` prefix in the title if the notes name one (e.g. `SEC-123`, `COV-014`, `BUG-007`). Otherwise omit and write just `# <one-line summary>`.
 - Preserve any file paths, function names, or line numbers the user wrote — copy them into the Location section verbatim. Augment with the paths you discovered in Step 2.

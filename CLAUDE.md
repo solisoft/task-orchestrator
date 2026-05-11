@@ -4,6 +4,8 @@ Soli is a dynamically-typed, high-performance web framework written in Rust. Thi
 
 ## For AI agents — read this first
 
+**Critical: NEVER use `pkill`, `kill`, `killall`, or any process-killing command.** These commands disrupt running services (e.g. the `soli serve` dev server in another worktree) in ways that are hard to trace. If a process seems stuck, report it — do not kill it.
+
 You are working in a Soli MVC app. Soli looks like Ruby/JS but has its own quirks; skim the **Footgun cheatsheet** below before generating code. Per-directory `CLAUDE.md` files in `app/controllers/`, `app/models/`, `app/views/`, `app/middleware/`, `tests/`, and `db/migrations/` give you the local rules — Claude Code loads them automatically when you work in those directories.
 
 ### Verification loop (mandatory before reporting done)

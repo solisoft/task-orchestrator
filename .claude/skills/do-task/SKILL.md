@@ -54,6 +54,7 @@ End with a short summary to the user:
 ## Constraints
 
 - Process exactly **one** task per invocation.
+- **Never** use `pkill`, `kill`, `killall`, or any process-killing command.
 - **Never** commit, push, or skip hooks.
 - **Never** edit the spec md content. It's the historical record. Surface follow-ups via new `tasks/todo/<slug>.md` files instead.
 - **Never** `git mv` the spec between `tasks/todo/`, `tasks/inprogress/`, `tasks/review/`, etc. The DB tracks status; folder-shuffling is the old file-based queue.

@@ -88,6 +88,7 @@ After commit, run `git status` to confirm the working tree is clean (the spec md
 
 ## Constraints
 
+- **Never** use `pkill`, `kill`, `killall`, or any process-killing command.
 - **Never** commit if the verdict is Rejected.
 - **Never** skip hooks (`--no-verify`) or bypass signing. If a pre-commit hook fails, fix the underlying issue and create a new commit.
 - **Never** push. The orchestrator handles push + PR after this skill returns.
