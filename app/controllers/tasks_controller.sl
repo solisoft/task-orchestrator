@@ -756,6 +756,51 @@ fn read_plan_state(plan_id)
     "prompt":           plan.prompt ?? "" }
 end
 
+fn archive(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "done" and task.status != "failed"
+    return {"status": 422,
+            "body": "archive is only available for done or failed tasks (current: " +
+                    task.status + ")"}
+  end
+  task.status = "archived"
+  task.save()
+  if task._errors
+    return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
+fn unarchive(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "archived"
+    return {"status": 422,
+            "body": "unarchive is only available for archived tasks (current: " +
+                    task.status + ")"}
+  end
+  task.status = "todo"
+  task.finished_at = null
+  task.save()
+  if task._errors
+    return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
 fn read_last_status(path)
   let txt = (Trusted.read(path) rescue "").trim()
   if txt == ""
