@@ -24,6 +24,17 @@ def _rs_reset(repo, slug)
     let path = dir + "/" + slug + ext
     Trusted.delete(path) rescue null
   end
+  Task.delete(Task.key_for(repo, slug)) rescue null
+end
+
+def _rs_seed_done_task(repo, slug)
+  Task.create({
+    "_key":    Task.key_for(repo, slug),
+    "project": repo,
+    "slug":    slug,
+    "title":   "run spec task",
+    "status":  "done"
+  })
 end
 
 def _rs_write_status(repo, slug, token)
@@ -86,6 +97,17 @@ describe("run_current_status zombie detection", fn()
     let s = run_current_status("rs_repo", "rs_slug")
     assert_eq(s["status"], "running /do-task")
   end)
+
+  # Regression: a row the success path moved to `done` must not be
+  # repainted `failed:agent died` just because the journal's last line
+  # is non-terminal and the pidfile points at a gone process.
+  test("does NOT synthesize failed: when the Task row is already 'done'", fn()
+    _rs_write_status("rs_repo", "rs_slug", "running /do-task")
+    _rs_write_pid("rs_repo", "rs_slug", _rs_dead_pid)
+    _rs_seed_done_task("rs_repo", "rs_slug")
+    let s = run_current_status("rs_repo", "rs_slug")
+    assert_eq(s["status"], "running /do-task")
+  end)
 end)
 
 describe("run_indicator", fn()
@@ -97,5 +119,15 @@ describe("run_indicator", fn()
     _rs_write_status("rs_repo", "rs_slug", "running /do-task")
     _rs_write_pid("rs_repo", "rs_slug", _rs_dead_pid)
     assert_eq(run_indicator("rs_repo", "rs_slug"), "failed")
+  end)
+
+  # Acceptance: kanban dot stays green for a `done` row even when the
+  # on-disk artefacts (zombie pid, stale `running` journal) would
+  # otherwise route through the failure path.
+  test("returns 'done' for a zombie run whose Task row is 'done'", fn()
+    _rs_write_status("rs_repo", "rs_slug", "running /do-task")
+    _rs_write_pid("rs_repo", "rs_slug", _rs_dead_pid)
+    _rs_seed_done_task("rs_repo", "rs_slug")
+    assert_eq(run_indicator("rs_repo", "rs_slug"), "done")
   end)
 end)

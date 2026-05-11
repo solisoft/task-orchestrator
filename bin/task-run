@@ -160,16 +160,27 @@ fetch_status() {
   curl -s -u "$USER:$PASS" "$HOST/_api/database/$DB/document/tasks/$key" | jq -r '.status // empty'
 }
 
-fail() {
-  log "FAIL: $*"
-  write_status "failed:$*"
+# Single chokepoint for {status: "failed", ...} writes. The journal write
+# (`write_status`) stays on the caller — it's the local record of what
+# the wrapper tried to do — but the DB row is gated: a late fail path
+# (trap, zombie heuristic, future writer) must NEVER flip a row the
+# success path already moved to `done`.
+db_update_failed() {
+  local reason="$1"
   local current_status
   current_status=$(fetch_status)
   if [[ "$current_status" == "done" ]]; then
     log "not overwriting DB row: status is already 'done'"
-  else
-    db_update "$(jq -n --arg r "$*" '{status: "failed", failure_reason: $r, finished_at: now | todateiso8601}')"
+    return 0
   fi
+  db_update "$(jq -n --arg r "$reason" \
+    '{status: "failed", failure_reason: $r, finished_at: now | todateiso8601}')"
+}
+
+fail() {
+  log "FAIL: $*"
+  write_status "failed:$*"
+  db_update_failed "$*"
   exit 1
 }
 
@@ -180,13 +191,7 @@ fail() {
 mark_interrupted() {
   log "interrupted"
   write_status "failed:interrupted"
-  local current_status
-  current_status=$(fetch_status)
-  if [[ "$current_status" == "done" ]]; then
-    log "not overwriting DB row: status is already 'done'"
-  else
-    db_update "$(jq -n '{status: "failed", failure_reason: "interrupted", finished_at: now | todateiso8601}')"
-  fi
+  db_update_failed "interrupted"
   exit 130
 }
 trap mark_interrupted INT TERM

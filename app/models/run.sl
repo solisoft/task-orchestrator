@@ -98,6 +98,18 @@ fn _is_terminal_status(token)
   token.starts_with("done:") or token.starts_with("failed:")
 end
 
+# Persisted status of the DB row backing this run, or nil if the row
+# doesn't exist / lookup fails. Used as the success-side authority that
+# fail detectors must defer to — a row that already moved to `done`
+# must not be repainted by a stale journal or a zombie pidfile.
+fn _task_row_status(repo, slug)
+  let task = Task.find_by("_key", Task.key_for(repo, slug)) rescue nil
+  if task == nil
+    return nil
+  end
+  task.status
+end
+
 # Most recent status line, or nil if no run has happened.
 fn run_current_status(repo, slug)
   let path = run_status_path(repo, slug)
@@ -126,7 +138,15 @@ fn run_current_status(repo, slug)
   # wrapper bash is gone. Synthesize `failed:` so run_indicator and
   # the status pill flip — without rewriting the on-disk journal,
   # which a manual reaper / re-queue path is responsible for.
+  #
+  # The DB row is the success-side authority: when it's already `done`,
+  # the agent reached a terminal success state and the wrapper just
+  # exited before the journal got a terminal write. Skip synthesis so
+  # the kanban doesn't paint a `done` row red.
   if not _is_terminal_status(token)
+    if _task_row_status(repo, slug) == "done"
+      return { "at": at, "status": token }
+    end
     let alive = _run_pid_alive(repo, slug)
     if alive == false
       return { "at": at, "status": "failed:agent died (no live process)" }
@@ -278,7 +298,14 @@ fn pr_merged(pr_url)
 end
 
 # A short status token for the kanban indicator: nil / running / done / failed.
+#
+# The DB row wins for `done`: if the success path already moved the row,
+# nothing on disk (stale `failed:` journal line, zombie pidfile) is
+# allowed to flip the indicator back to red.
 fn run_indicator(repo, slug)
+  if _task_row_status(repo, slug) == "done"
+    return "done"
+  end
   let s = run_current_status(repo, slug)
   if s == nil
     return nil
