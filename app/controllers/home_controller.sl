@@ -3,14 +3,17 @@
 # against the configured daily / weekly caps).
 
 fn index(req)
+  # Single `Task.all()` scan covers both usage tiles (day + week)
+  # instead of the previous two back-to-back scans.
+  let usage = Task.usage_by_agent_for_windows(["day", "week"])
   render("home/index", {
     "title": "Task Orchestrator",
     "projects": list_projects(),
     "root": workspace_root(),
     "statuses": Task.kanban_statuses(),
     "agents": Task.known_agents(),
-    "usage_day":   Task.usage_by_agent("day"),
-    "usage_week":  Task.usage_by_agent("week"),
+    "usage_day":   usage["day"],
+    "usage_week":  usage["week"],
     "limits":      _home_load_limits()
   })
 end
@@ -26,12 +29,17 @@ end
 # { "claude": { "daily": N, "weekly": N }, ... } — the home view reads
 # this to decide whether to draw a progress bar (limit > 0) or just the
 # raw count (limit = 0 → unlimited, hide the bar).
+#
+# Bulk-loads Settings once and reads from the hash so the per-agent
+# loop is O(1) DB calls — `Setting.get_or` would have fanned out
+# `2 × known_agents()` `FILTER doc._key == @val` queries.
 fn _home_load_limits()
+  let settings = Setting.all_as_hash()
   let h = {}
   for a in Task.known_agents()
     h[a] = {
-      "daily":  Setting.get_or("limit_daily_"  + a, 0),
-      "weekly": Setting.get_or("limit_weekly_" + a, 0)
+      "daily":  settings["limit_daily_"  + a] ?? 0,
+      "weekly": settings["limit_weekly_" + a] ?? 0
     }
   end
   h

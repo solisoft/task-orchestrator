@@ -157,3 +157,83 @@ describe("Task.effective_agent", fn()
     assert_eq(Task.effective_agent(t), "opencode")
   end)
 end)
+
+describe("Task.usage_by_agent_for_windows", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+  end)
+
+  test("returns a zero-filled hash for each requested window", fn()
+    let h = Task.usage_by_agent_for_windows(["day", "week"])
+    assert_hash_has_key(h, "day")
+    assert_hash_has_key(h, "week")
+    for a in Task.known_agents()
+      assert_eq(h["day"][a], 0)
+      assert_eq(h["week"][a], 0)
+    end
+  end)
+
+  test("bucketises in-window tasks into both day and week from a single scan", fn()
+    _seed_task("recent", _iso_seconds_ago(60), "claude")
+    _seed_task("older", _iso_seconds_ago(86400 * 3), "opencode")
+    let h = Task.usage_by_agent_for_windows(["day", "week"])
+    # 1m-old run shows up in both windows.
+    assert_eq(h["day"]["claude"], 1)
+    assert_eq(h["week"]["claude"], 1)
+    # 3d-old run is outside the day window but inside the week window.
+    assert_eq(h["day"]["opencode"], 0)
+    assert_eq(h["week"]["opencode"], 1)
+  end)
+
+  test("usage_by_agent(window) delegates to the multi-window helper", fn()
+    _seed_task("c1", _iso_seconds_ago(60), "claude")
+    # The single-window wrapper must agree with the multi-window slice.
+    let h = Task.usage_by_agent_for_windows(["day"])
+    assert_eq(Task.usage_by_agent("day"), h["day"])
+  end)
+end)
+
+describe("Task.counts_by_project", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+  end)
+
+  test("returns an empty hash when the tasks collection is empty", fn()
+    let h = Task.counts_by_project()
+    assert_eq(len(h), 0)
+  end)
+
+  test("groups rows by project and zero-fills every status", fn()
+    Task.create({
+      "_key": "alpha--a1", "project": "alpha", "slug": "a1",
+      "title": "x", "status": "todo"
+    })
+    Task.create({
+      "_key": "alpha--a2", "project": "alpha", "slug": "a2",
+      "title": "x", "status": "done"
+    })
+    Task.create({
+      "_key": "beta--b1", "project": "beta", "slug": "b1",
+      "title": "x", "status": "review"
+    })
+    let h = Task.counts_by_project()
+    assert_eq(h["alpha"]["todo"], 1)
+    assert_eq(h["alpha"]["done"], 1)
+    assert_eq(h["alpha"]["queued"], 0)
+    assert_eq(h["beta"]["review"], 1)
+    assert_eq(h["beta"]["todo"], 0)
+  end)
+
+  test("omits projects with no tasks (caller handles default)", fn()
+    Task.create({
+      "_key": "alpha--a1", "project": "alpha", "slug": "a1",
+      "title": "x", "status": "todo"
+    })
+    let h = Task.counts_by_project()
+    # `beta` was never seeded — the hash simply has no key for it.
+    assert_null(h["beta"])
+  end)
+end)

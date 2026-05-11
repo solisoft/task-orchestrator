@@ -86,6 +86,38 @@ class Task < Model
     h
   end
 
+  # Bulk counterpart to `counts_by_status`. Returns
+  # `{ project_name: { status: count } }` from a single `Task.all()`
+  # scan, so the home dashboard can render N project tiles without
+  # issuing N `FOR doc IN tasks FILTER doc.project == @project`
+  # queries. Projects with no tasks are absent from the result —
+  # callers should default-fill with `_empty_status_counts()`.
+  static def counts_by_project()
+    let result = {}
+    for t in Task.all()
+      let project = t.project
+      if result[project] == nil
+        result[project] = Task._empty_status_counts()
+      end
+      let status = t.status
+      if result[project][status] != nil
+        result[project][status] = result[project][status] + 1
+      end
+    end
+    result
+  end
+
+  # Status -> 0 hash, zero-filled for every kanban status. Pulled
+  # out so `counts_by_project` and any default-fill caller agree on
+  # the shape (every status key present even when count is zero).
+  static def _empty_status_counts()
+    let h = {}
+    for s in Task.statuses()
+      h[s] = 0
+    end
+    h
+  end
+
   # Default agent for tasks that have no per-task `agent_type` set yet.
   # Reads the global `Setting.get("agent_type")` value; falls back to
   # the first enabled agent so the dashboard never NPEs on a clean DB.
@@ -142,29 +174,70 @@ class Task < Model
   #
   # The returned hash has every entry from `known_agents()` populated
   # (zero-filled) so the view can iterate without nil-checking.
+  #
+  # Thin wrapper around `usage_by_agent_for_windows` so callers asking
+  # for both windows back-to-back issue a single `Task.all()` scan.
   static def usage_by_agent(window)
-    let buckets = {}
-    for a in Task.known_agents()
-      buckets[a] = 0
+    Task.usage_by_agent_for_windows([window])[window]
+  end
+
+  # Same shape as `usage_by_agent` but for several windows in one go.
+  # Returns `{ window: { agent: count } }`. The home dashboard renders
+  # the day and week tiles side by side; running a single scan for
+  # both halves the `FOR doc IN tasks RETURN doc` traffic per request.
+  #
+  # Each window is independent — every entry has the full
+  # `known_agents()` zero-fill, and tasks outside a window's cutoff
+  # simply don't increment that window's buckets.
+  static def usage_by_agent_for_windows(windows)
+    let result = {}
+    let cutoffs = {}
+    for w in windows
+      let buckets = {}
+      for a in Task.known_agents()
+        buckets[a] = 0
+      end
+      result[w] = buckets
+      cutoffs[w] = Task._window_cutoff_unix(w)
     end
-    let cutoff_unix = Task._window_cutoff_unix(window)
-    let fallback = Task.default_agent()
+    # Resolve the global default agent ONCE outside the loop. Inside
+    # the per-task scan we then bucket via
+    # `_effective_agent_with_default`, which never re-reads
+    # `Setting.get("agent_type")` — turning the previous O(N) settings
+    # fan-out into a single query.
+    let default_agent = Task.default_agent()
     for t in Task.all()
       let unix = Task._started_at_unix(t)
-      if unix != nil and unix >= cutoff_unix
-        # Use effective_agent so per-task `model` (claude-* or
-        # provider/model) buckets correctly without needing a separate
-        # legacy `agent_type` value on the row.
-        let agent = Task.effective_agent(t)
-        if agent == nil or agent == ""
-          agent = fallback
-        end
-        if buckets[agent] != nil
-          buckets[agent] = buckets[agent] + 1
+      next if unix == nil
+      let agent = Task._effective_agent_with_default(t, default_agent)
+      if agent == nil or agent == ""
+        agent = default_agent
+      end
+      for w in windows
+        if unix >= cutoffs[w] and result[w][agent] != nil
+          result[w][agent] = result[w][agent] + 1
         end
       end
     end
-    buckets
+    result
+  end
+
+  # Variant of `effective_agent(t)` that uses a precomputed default
+  # instead of calling `Task.default_agent()` (which hits Settings)
+  # per task. Same precedence: `model` -> `agent_type` -> default.
+  # Pulled out so bulk scans like `usage_by_agent_for_windows` can
+  # resolve the default once and read it back N times.
+  static def _effective_agent_with_default(t, default_agent)
+    if t.model != nil and t.model != ""
+      if t.model.contains("/")
+        return "opencode"
+      end
+      return "claude"
+    end
+    if t.agent_type != nil and t.agent_type != ""
+      return t.agent_type
+    end
+    return default_agent
   end
 
   # Parse `started_at` to a unix-second value, or nil if the task has no
