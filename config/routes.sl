@@ -29,6 +29,7 @@ post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
 post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
 post("/projects/:name/tasks/:slug/checkout", "tasks#checkout_branch")
 post("/projects/:name/tasks/:slug/mark-done", "tasks#mark_done")
+post("/projects/:name/tasks/:slug/commit-push", "tasks#commit_push")
 
 # ── Plans (per-project) ──────────────
 

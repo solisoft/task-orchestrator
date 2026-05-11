@@ -429,6 +429,46 @@ fn merge_task_branch(project_path, slug)
   return { "ok": true }
 end
 
+# Stage all changes, commit, and push the per-task branch to origin.
+# Only works when the worktree is on the `task/<slug>` branch and has
+# uncommitted changes. Returns `{ "ok": true }` or `{ "ok": false, "error": <reason> }`.
+fn commit_and_push(worktree_path, slug)
+  let branch = task_branch_name(slug)
+  let current = project_current_branch(worktree_path)
+  if current != branch
+    return { "ok": false,
+             "error": "current branch is '" + current + "', not '" + branch +
+                      "'. Checkout " + branch + " first." }
+  end
+  if not project_worktree_dirty(worktree_path)
+    return { "ok": false,
+             "error": "working tree has no uncommitted changes — nothing to commit." }
+  end
+  let add = System.run_sync(["git", "-C", worktree_path, "add", "-A"])
+  if add["exit_code"] != 0
+    return { "ok": false,
+             "error": "git add failed: " + (add["stderr"] ?? "unknown error") }
+  end
+  let msg = "fix(review): address PR feedback for " + branch
+  let commit = System.run_sync(["git", "-C", worktree_path, "commit", "-m", msg])
+  if commit["exit_code"] != 0
+    let err = ((commit["stderr"] ?? "") + (commit["stdout"] ?? "")).trim()
+    if err == ""
+      err = "git commit exited " + str(commit["exit_code"])
+    end
+    return { "ok": false, "error": err }
+  end
+  let push = System.run_sync(["git", "-C", worktree_path, "push", "origin", branch])
+  if push["exit_code"] != 0
+    let err = ((push["stderr"] ?? "") + (push["stdout"] ?? "")).trim()
+    if err == ""
+      err = "git push exited " + str(push["exit_code"])
+    end
+    return { "ok": false, "error": err }
+  end
+  { "ok": true }
+end
+
 # Wipe every on-disk artefact from a previous run for this task —
 # .log, .log.jsonl, .status, .pr — so a re-queue starts from a clean
 # slate. The DB row's transient fields are reset by `Task.unqueue!()`

@@ -26,6 +26,11 @@
           </form>
         <% end %>
         <% if task.status == "review" %>
+          <% if can_commit_push %>
+            <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/commit-push" onsubmit="return confirm('Commit and push all local changes in the worktree to the PR branch?')">
+              <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Commit &amp; push fixes &rarr; PR</button>
+            </form>
+          <% end %>
           <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/mark-done" onsubmit="return confirm('Mark this task as done?')">
             <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Mark as done</button>
           </form>
