@@ -73,6 +73,11 @@
      source below. The textarea is the source of truth — /do-task downstream
      consumes markdown. -->
 <section class="space-y-4">
+  <!-- Carries the originating plan_id through the Create POST so
+       tasks_controller#create can stamp `task_slug` onto the matching
+       Plan row, which lets /plans render a "linked task" badge. -->
+  <input type="hidden" name="plan_id" value="<%= plan_id %>">
+
   <div>
     <label class="block text-sm font-medium text-slate-300 mb-1">Title</label>
     <input type="text" name="title" value="<%= title %>"

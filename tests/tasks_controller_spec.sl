@@ -436,6 +436,58 @@ def _tq_seed_plan(plan_id, status, log_text, body_text, pending_question)
   })
 end
 
+describe("TasksController#create plan linkage", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Plan.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("stamps task_slug on the matching plan when plan_id is in the form", fn()
+    _tq_seed_plan("plan-link-1", "done", "", "# Linked", nil)
+    let response = post("/projects/proj/tasks", {
+      "title":        "Linked task",
+      "body_md":      "# Linked task\n\nbody",
+      "plan_model":   "claude-sonnet-4-6",
+      "plan_variant": "default",
+      "plan_id":      "plan-link-1"
+    })
+    assert_eq(res_status(response), 302)
+    let plan = Plan.find_by_plan_id("plan-link-1")
+    assert_eq(plan.task_slug, "linked-task")
+    let task = Task.find_by_slug("proj", "linked-task")
+    assert_not_null(task)
+  end)
+
+  test("leaves plan rows unchanged when no plan_id is in the form", fn()
+    _tq_seed_plan("plan-link-2", "done", "", "# Untouched", nil)
+    let response = post("/projects/proj/tasks", {
+      "title":   "Standalone task",
+      "body_md": "# Standalone task\n\nbody"
+    })
+    assert_eq(res_status(response), 302)
+    let plan = Plan.find_by_plan_id("plan-link-2")
+    assert_null(plan.task_slug)
+  end)
+
+  test("silently ignores an unknown plan_id", fn()
+    # Stale form post (plan was deleted between render and submit). The
+    # task creation itself must still succeed — the linkage is a
+    # nice-to-have, not a precondition.
+    let response = post("/projects/proj/tasks", {
+      "title":   "Orphan task",
+      "body_md": "# Orphan",
+      "plan_id": "plan-does-not-exist"
+    })
+    assert_eq(res_status(response), 302)
+    let task = Task.find_by_slug("proj", "orphan-task")
+    assert_not_null(task)
+  end)
+end)
+
 describe("TasksController#plan_log", fn()
   before_each(fn()
     assert_test_db()

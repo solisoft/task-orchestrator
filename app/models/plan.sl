@@ -87,6 +87,18 @@ class Plan < Model
     self.save()
   end
 
+  # The Task this plan was turned into, or nil if `task_slug` is unset
+  # or the linked Task row has been deleted. Used by the show / refine
+  # flows; the plans index page does NOT call this in the view loop —
+  # plans_controller#index batches the lookup off the N+1 path.
+  def linked_task()
+    let slug = (self.task_slug ?? "").trim()
+    if slug == ""
+      return nil
+    end
+    Task.find_by_slug(self.project, slug)
+  end
+
   # `kill -0 <pid>` is a signal-0 liveness probe — does not kill anything.
   # Mirrors `_run_pid_alive` in run.sl. nil = no pid recorded; true/false
   # = recorded pid is alive / gone.
