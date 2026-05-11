@@ -34,20 +34,24 @@ fn list_dir(dir)
   entries
 end
 
-fn list_projects()
-  # One `Task.all()` scan for the whole dashboard instead of one
-  # `Task.where({project: name}).all()` per project tile — the home
-  # page renders ~10 tiles, so the old shape fanned out 10× the same
-  # FILTER. Missing entries (a project on disk with no tasks yet)
-  # fall back to the zero-filled status hash inside `project_summary`.
-  let counts_by_project = Task.counts_by_project()
+fn list_projects(counts_by_project)
+  # `counts_by_project` comes from `Task.dashboard_scan` in the home
+  # controller — one `Task.all()` scan shared with the usage tiles,
+  # instead of one `Task.where({project: name}).all()` per project.
+  #
+  # Missing entries (a project on disk with no tasks yet) are
+  # default-filled with `Task.empty_status_counts()` *here* so that
+  # `project_summary` never enters its `Task.counts_by_status`
+  # fallback — that fallback would have fired one
+  # `FILTER doc.project == @project` query per empty-on-disk project.
   let projects = []
   for path in list_dir(workspace_root())
     let segs = path.split("/")
     let name = segs[len(segs) - 1]
     # Skip hidden dirs (.git, .vscode, etc.) and non-directories.
     if Trusted.is_dir(path) and not name.starts_with(".")
-      projects.push(project_summary(path, counts_by_project[name]))
+      let counts = counts_by_project[name] ?? Task.empty_status_counts()
+      projects.push(project_summary(path, counts))
     end
   end
   projects.sort_by(fn(p) p["name"])
