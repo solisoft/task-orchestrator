@@ -1,0 +1,25 @@
+<div class="min-h-screen text-white">
+  <div class="max-w-3xl mx-auto px-6 py-8">
+    <nav class="text-sm text-slate-500 mb-6 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
+      <span class="mx-2">/</span>
+      <a href="/features" class="hover:text-slate-300">Features</a>
+      <span class="mx-2">/</span>
+      <a href="/features/<%= feature._key %>" class="hover:text-slate-300"><%= feature.title %></a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-300">edit</span>
+    </nav>
+
+    <h1 class="text-2xl font-bold mb-6 animate-fade-in">Edit Feature Brief</h1>
+
+    <% if feature._errors %>
+      <div class="rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3 mb-4">
+        <% for field, errs in feature._errors %>
+          <div><strong><%= field %>:</strong> <%= errs.join(", ") %></div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%- partial("features/form", { "feature": feature, "projects": projects }) %>
+  </div>
+</div>

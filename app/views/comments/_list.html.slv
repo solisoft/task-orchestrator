@@ -1,0 +1,13 @@
+<div id="comments-thread">
+  <% for comment in comments %>
+    <div class="border-b border-white/5 last:border-b-0 py-3">
+      <div class="flex items-baseline justify-between gap-2 mb-1">
+        <span class="text-xs font-medium text-indigo-300"><%= comment.author %></span>
+        <span class="text-xs text-slate-600"><%= comment.created_at %></span>
+      </div>
+      <article class="task-md text-sm">
+        <%- Markdown.to_safe_html(comment.body) %>
+      </article>
+    </div>
+  <% end %>
+</div>

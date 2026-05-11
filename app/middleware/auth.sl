@@ -2,18 +2,17 @@
 # Authentication Middleware (Scope-Only)
 # ============================================================================
 #
-# This middleware checks for authentication.
-# It only runs when explicitly scoped to routes.
+# Session-based authentication. Reads a `soli_session` cookie and looks
+# up the corresponding User. Attaches `req["current_user"]` on success
+# and passes through; short-circuits with a redirect to /login on failure.
 #
 # Usage in routes.sl:
 #   middleware("authenticate", -> {
-#       get("/admin", "admin#index")
-#       get("/admin/settings", "admin#settings")
+#       get("/", "home#index")
+#       resources("features")
 #   })
 #
-# Configuration:
-# - `# order: N` - Execution order (lower runs first)
-# - `# scope_only: true` - Only runs when explicitly scoped
+# Unscoped routes (e.g. /login) are unaffected.
 #
 # ============================================================================
 
@@ -21,35 +20,35 @@
 # scope_only: true
 
 def authenticate(req: Any) -> Any
-    headers = req["headers"]
-
-    # Example: Check for API key in header
-    api_key = ""
-    if has_key(headers, "X-Api-Key")
-        api_key = headers["X-Api-Key"]
-    elsif has_key(headers, "x-api-key")
-        api_key = headers["x-api-key"]
-    end
-
-    # TODO: Replace with your authentication logic
-    # For example, verify JWT token, check session, etc.
-    if api_key == ""
-        return {
-            "continue": false,
-            "response": {
-                "status": 401,
-                "headers": {"Content-Type": "application/json"},
-                "body": JSON.stringify({
-                    "error": "Unauthorized",
-                    "message": "Authentication required"
-                })
-            }
-        }
-    end
-
-    # Authentication passed, continue to handler
+  let cookie = req["cookies"]["soli_session"] ?? ""
+  if cookie == ""
     return {
-        "continue": true,
-        "request": req
+      "continue": false,
+      "response": {
+        "status": 302,
+        "headers": { "Location": "/login" },
+        "body": ""
+      }
     }
+  end
+
+  let email = cookie.trim().downcase()
+  let user = User.find_by_email(email)
+  if user == nil
+    return {
+      "continue": false,
+      "response": {
+        "status": 302,
+        "headers": {
+          "Location": "/login",
+          "Set-Cookie": "soli_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+        },
+        "body": ""
+      }
+    }
+  end
+
+  req["current_user"] = user
+
+  return { "continue": true, "request": req }
 end

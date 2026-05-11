@@ -1,5 +1,11 @@
 # Routes
 
+# ── Authentication (unscoped) ────────
+
+get("/login", "auth#login_form")
+post("/login", "auth#login")
+get("/logout", "auth#logout")
+
 # ── Root & Utility ──────────────────
 
 get("/", "home#index")
@@ -52,3 +58,19 @@ post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
 post("/push_subscriptions", "push_subscriptions#create")
 post("/push_subscriptions/delete", "push_subscriptions#destroy")
 get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
+
+# ── Auth-gated routes ─────────────────
+
+middleware("authenticate", -> {
+
+  # ── Features ─────────────────────────
+
+  resources("features")
+  post("/features/:id/generate_tasks", "features#generate_tasks")
+  get("/features/:id/generate_tasks_log/:plan_id", "features#generate_tasks_log")
+
+  # ── Comments (nested under features) ─
+
+  post("/features/:id/comments", "comments#create")
+
+})
