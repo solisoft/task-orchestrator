@@ -71,5 +71,73 @@
         </button>
       </div>
     </form>
+
+    <fieldset class="mt-8 rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
+      <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Browser notifications</legend>
+      <p class="mt-2 text-sm text-slate-400">
+        Get a desktop notification when a task flips status (review / done / failed)
+        even if the dashboard tab is closed. Per-browser; subscribe on every device.
+      </p>
+      <div class="mt-4 flex items-center gap-3">
+        <button type="button" id="push-subscribe-btn"
+                class="px-5 py-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-medium transition-colors">
+          Enable browser notifications
+        </button>
+        <button type="button" id="push-unsubscribe-btn"
+                class="px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors hidden">
+          Disable
+        </button>
+        <span id="push-state" class="text-sm text-slate-400">checking…</span>
+      </div>
+    </fieldset>
+
+    <script>
+      (function () {
+        const subscribeBtn   = document.getElementById('push-subscribe-btn');
+        const unsubscribeBtn = document.getElementById('push-unsubscribe-btn');
+        const stateLabel     = document.getElementById('push-state');
+        if (!subscribeBtn || !stateLabel) return;
+        async function refresh() {
+          if (!window.taskOrchPush) {
+            stateLabel.textContent = 'this browser does not support push';
+            subscribeBtn.disabled = true;
+            return;
+          }
+          const s = await window.taskOrchPush.currentState();
+          if (s === 'subscribed') {
+            stateLabel.textContent = 'enabled on this browser';
+            subscribeBtn.classList.add('hidden');
+            unsubscribeBtn.classList.remove('hidden');
+          } else if (s === 'denied') {
+            stateLabel.textContent = 'permission denied — re-enable in your browser settings';
+            subscribeBtn.disabled = true;
+          } else {
+            stateLabel.textContent = 'not yet enabled';
+            subscribeBtn.classList.remove('hidden');
+            unsubscribeBtn.classList.add('hidden');
+          }
+        }
+        subscribeBtn.addEventListener('click', async () => {
+          stateLabel.textContent = 'subscribing…';
+          try {
+            await window.taskOrchPush.subscribe();
+            await refresh();
+          } catch (e) {
+            stateLabel.textContent = 'subscribe failed: ' + e.message;
+          }
+        });
+        unsubscribeBtn.addEventListener('click', async () => {
+          stateLabel.textContent = 'unsubscribing…';
+          try {
+            await window.taskOrchPush.unsubscribe();
+            await refresh();
+          } catch (e) {
+            stateLabel.textContent = 'unsubscribe failed: ' + e.message;
+          }
+        });
+        // Wait a tick so push.js has time to define window.taskOrchPush.
+        window.addEventListener('load', refresh);
+      })();
+    </script>
   </div>
 </div>
