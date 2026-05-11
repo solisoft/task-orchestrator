@@ -219,7 +219,8 @@ fn show(req)
     "title": task.slug,
     "project": project,
     "task": task,
-    "branch_info": _branch_info_for(task, project)
+    "branch_info": _branch_info_for(task, project),
+    "can_commit_push": _can_commit_push(task, project)
   })
 end
 
@@ -246,6 +247,16 @@ fn _branch_info_for(task, project)
     "merged": task_branch_merged(project_path, task.slug),
     "worktree_path": exists_in_worktree ? wt_path : nil
   }
+end
+
+fn _can_commit_push(task, project)
+  if task.status != "review"
+    return false
+  end
+  if task.pr_url == nil or task.pr_url == ""
+    return false
+  end
+  run_worktree_exists(project["name"], task.slug)
 end
 
 # POST /projects/:name/tasks/:slug/merge — merge the per-task branch
@@ -336,6 +347,36 @@ fn mark_done(req)
   task.save()
   if task._errors
     return {"status": 422, "body": "Save failed"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
+fn commit_push(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "commit-push is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if task.pr_url == nil or task.pr_url == ""
+    return {"status": 422,
+            "body": "commit-push is only available for tasks with an open PR"}
+  end
+  if not run_worktree_exists(project["name"], task.slug)
+    return {"status": 422,
+            "body": "worktree not found — task may not have been run yet"}
+  end
+  let worktree_path = run_worktree_path(project["name"], task.slug)
+  let result = commit_and_push(worktree_path, task.slug)
+  if not result["ok"]
+    return {"status": 422, "body": "commit-push failed: " + result["error"]}
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end

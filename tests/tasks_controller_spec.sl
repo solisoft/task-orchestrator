@@ -702,3 +702,134 @@ describe("TasksController#plan_answer", fn()
     assert_eq(res_status(response), 422)
   end)
 end)
+
+def _tq_worktree_path(slug)
+  let root = getenv("TASK_ORCH_WORKTREES") ?? "/tmp/task-orch-spec-worktree"
+  root + "/proj/" + slug
+end
+
+# Create a bare origin repo and clone it into the expected
+# run_worktree_path, with a `task/<slug>` branch checked out and pushed.
+# Returns the worktree path. Used by the commit_push tests so the
+# controller can find the worktree via run_worktree_exists / run_worktree_path.
+def _tq_setup_worktree_repo(slug)
+  let worktree = _tq_worktree_path(slug)
+  let origin = "/tmp/worktree-origin-" + slug + ".git"
+  System.run_sync(["rm", "-rf", worktree, origin])
+  System.run_sync(["mkdir", "-p", worktree + "/../"])
+  System.run_sync(["git", "init", "-q", "--bare", origin])
+  System.run_sync(["git", "init", "-q", "-b", "main", worktree])
+  let cmd = "cd " + worktree + " && " +
+            "git config user.email t@example.com && " +
+            "git config user.name Test && " +
+            "git remote add origin " + origin + " && " +
+            "git commit --allow-empty -q -m initial && " +
+            "git push -q -u origin main && " +
+            "git checkout -q -b task/" + slug + " && " +
+            "git commit --allow-empty -q -m feature && " +
+            "git push -q -u origin task/" + slug
+  System.run_sync(["bash", "-c", cmd])
+  return worktree
+end
+
+# Create a worktree repo WITHOUT an origin remote — the bare repo is
+# created but the worktree never adds it. Used for the push-failure test.
+def _tq_setup_worktree_repo_no_origin(slug)
+  let worktree = _tq_worktree_path(slug)
+  System.run_sync(["rm", "-rf", worktree])
+  System.run_sync(["mkdir", "-p", worktree + "/../"])
+  System.run_sync(["git", "init", "-q", "-b", "main", worktree])
+  let cmd = "cd " + worktree + " && " +
+            "git config user.email t@example.com && " +
+            "git config user.name Test && " +
+            "git commit --allow-empty -q -m initial && " +
+            "git checkout -q -b task/" + slug + " && " +
+            "git commit --allow-empty -q -m feature"
+  System.run_sync(["bash", "-c", cmd])
+  return worktree
+end
+
+describe("TasksController#commit_push", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("stages, commits, and pushes uncommitted changes in the worktree", fn()
+    let slug = "push-me"
+    _tq_setup_worktree_repo(slug)
+    let worktree = _tq_worktree_path(slug)
+    System.run_sync(["bash", "-c",
+      "cd " + worktree + " && echo 'review fix' > dirty.txt"])
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "Push me",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    assert_eq(res_status(response), 302)
+    let log = System.run_sync(["git", "-C", worktree,
+      "log", "--oneline", "-1"])
+    let msg = (log["stdout"] ?? "").trim()
+    assert(msg.contains("fix(review)"))
+  end)
+
+  test("returns 422 when the task has no pr_url set", fn()
+    let slug = "no-pr"
+    _tq_setup_worktree_repo(slug)
+    let worktree = _tq_worktree_path(slug)
+    System.run_sync(["bash", "-c",
+      "cd " + worktree + " && echo 'fix' > dirty.txt"])
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "No PR",
+      "status":  "review"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available for tasks with an open PR")
+  end)
+
+  test("returns 422 when the worktree has no uncommitted changes", fn()
+    let slug = "clean-tree"
+    _tq_setup_worktree_repo(slug)
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "Clean tree",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "commit-push failed")
+  end)
+
+  test("returns 422 when the push fails (no remote)", fn()
+    let slug = "push-fail"
+    _tq_setup_worktree_repo_no_origin(slug)
+    let worktree = _tq_worktree_path(slug)
+    System.run_sync(["bash", "-c",
+      "cd " + worktree + " && echo 'fix' > dirty.txt"])
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "Push fail",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "commit-push failed")
+  end)
+end)
