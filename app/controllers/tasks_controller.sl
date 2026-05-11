@@ -224,13 +224,13 @@ fn show(req)
 end
 
 # Hash describing the per-task git branch for the merge UI on the
-# task page, or nil when the task isn't a candidate (only "done"
-# rows with `outcome=local-branch` are — PR-mode tasks already show
-# the PR link in the run log). Returns:
+# task page, or nil when the task isn't a candidate (only "inprogress",
+# "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks
+# already show the PR link in the run log). Returns:
 #   { "name": "task/<slug>", "main": "main"|"master",
 #     "exists": Bool, "merged": Bool }
 fn _branch_info_for(task, project)
-  if task.status != "done" or task.outcome != "local-branch"
+  if (task.status != "inprogress" and task.status != "review" and task.status != "done") or task.outcome != "local-branch"
     return nil
   end
   {
@@ -242,10 +242,10 @@ fn _branch_info_for(task, project)
 end
 
 # POST /projects/:name/tasks/:slug/merge — merge the per-task branch
-# into the project's main branch. Only valid for `done` tasks whose
-# outcome was `local-branch` (no PR was opened). The merge itself is
-# guarded by `merge_task_branch` (refuses to switch branches or run
-# on a dirty tree).
+# into the project's main branch. Only valid for `inprogress`, `review`
+# or `done` tasks whose outcome was `local-branch` (no PR was opened).
+# The merge itself is guarded by `merge_task_branch` (refuses to switch
+# branches or run on a dirty tree).
 fn merge_branch(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -255,9 +255,9 @@ fn merge_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
     return {"status": 422,
-            "body": "merge is only available for done tasks with a local branch"}
+            "body": "merge is only available for inprogress/review/done tasks with a local branch"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,
@@ -280,9 +280,9 @@ fn checkout_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
     return {"status": 422,
-            "body": "checkout is only available for done tasks with a local branch"}
+            "body": "checkout is only available for inprogress/review/done tasks with a local branch"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,

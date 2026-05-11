@@ -1275,6 +1275,10 @@ img, video {
   background-color: rgb(56 189 248 / 0.1);
 }
 
+.bg-slate-600\/90 {
+  background-color: rgb(71 85 105 / 0.9);
+}
+
 .bg-slate-700 {
   --tw-bg-opacity: 1;
   background-color: rgb(51 65 85 / var(--tw-bg-opacity, 1));
@@ -2119,6 +2123,11 @@ img, video {
 
 .hover\:bg-sky-400\/20:hover {
   background-color: rgb(56 189 248 / 0.2);
+}
+
+.hover\:bg-slate-500:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(100 116 139 / var(--tw-bg-opacity, 1));
 }
 
 .hover\:bg-slate-600:hover {
