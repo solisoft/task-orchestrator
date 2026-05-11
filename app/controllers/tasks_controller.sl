@@ -228,16 +228,23 @@ end
 # "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks
 # already show the PR link in the run log). Returns:
 #   { "name": "task/<slug>", "main": "main"|"master",
-#     "exists": Bool, "merged": Bool }
+#     "exists": Bool, "merged": Bool, "worktree_path": String|nil }
 fn _branch_info_for(task, project)
   if (task.status != "inprogress" and task.status != "review" and task.status != "done") or task.outcome != "local-branch"
     return nil
   end
+  let branch_name = task_branch_name(task.slug)
+  let project_path = project["path"]
+  let exists_in_project = task_branch_exists(project_path, task.slug)
+  let wt_path = run_worktree_path(project["name"], task.slug)
+  let exists_in_worktree = Trusted.is_dir(wt_path) and task_worktree_branch_exists(project["name"], task.slug)
+  let exists = exists_in_project or exists_in_worktree
   {
-    "name":   task_branch_name(task.slug),
-    "main":   project_main_branch(project["path"]),
-    "exists": task_branch_exists(project["path"], task.slug),
-    "merged": task_branch_merged(project["path"], task.slug)
+    "name":   branch_name,
+    "main":   project_main_branch(project_path),
+    "exists": exists,
+    "merged": task_branch_merged(project_path, task.slug),
+    "worktree_path": exists_in_worktree ? wt_path : nil
   }
 end
 
