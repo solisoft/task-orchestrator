@@ -59,22 +59,35 @@ end
 
 # { "claude": true, "opencode": false, ... } — reflects whether each
 # agent is currently enabled. Unset means true (enabled by default).
+#
+# Bulk-loads the agent_configs collection once and reads from the hash
+# so the per-agent loop is O(1) DB calls — `AgentConfig.get_or` would
+# have fanned out one `FILTER doc._key == @val` query per known agent.
 fn _settings_load_agents_config()
+  let configs = AgentConfig.all_as_hash()
   let h = {}
   for a in Task.known_agents()
-    h[a] = AgentConfig.get_or(a, true)
+    let v = configs[a]
+    if v == nil
+      v = true
+    end
+    h[a] = v
   end
   h
 end
 
 # { "claude": { "daily": N, "weekly": N }, ... } — every known agent
 # is present (zero-filled) so the view can iterate without nil-checking.
+#
+# Mirrors `_home_load_limits`: one `Setting.all()` scan, read from the
+# hash inside the loop.
 fn _settings_load_limits()
+  let settings = Setting.all_as_hash()
   let h = {}
   for a in Task.known_agents()
     h[a] = {
-      "daily":  Setting.get_or("limit_daily_"  + a, 0),
-      "weekly": Setting.get_or("limit_weekly_" + a, 0)
+      "daily":  settings["limit_daily_"  + a] ?? 0,
+      "weekly": settings["limit_weekly_" + a] ?? 0
     }
   end
   h

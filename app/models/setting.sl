@@ -35,6 +35,21 @@ class Setting < Model
     return v
   end
 
+  # Bulk load every Setting row into `{ _key: value }`. Callers that
+  # would otherwise issue `Setting.get_or(k, d)` N times in a loop
+  # (e.g. the dashboard's per-agent daily/weekly limits) read once
+  # from this hash instead, saving N-1 round-trips to solidb. Read
+  # `hash[key] ?? default` to mirror `get_or`'s default-when-missing
+  # semantics — `??` short-circuits on nil only, so a stored falsy 0
+  # round-trips correctly.
+  static def all_as_hash()
+    let h = {}
+    for s in Setting.all()
+      h[s._key] = s.value
+    end
+    h
+  end
+
   # Upsert: creates the row if missing, otherwise overwrites `value`.
   # Returns the persisted instance (or nil when the underlying update
   # didn't return one — Model.update is a static that returns the raw

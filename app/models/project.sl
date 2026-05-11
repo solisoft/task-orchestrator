@@ -35,13 +35,19 @@ fn list_dir(dir)
 end
 
 fn list_projects()
+  # One `Task.all()` scan for the whole dashboard instead of one
+  # `Task.where({project: name}).all()` per project tile — the home
+  # page renders ~10 tiles, so the old shape fanned out 10× the same
+  # FILTER. Missing entries (a project on disk with no tasks yet)
+  # fall back to the zero-filled status hash inside `project_summary`.
+  let counts_by_project = Task.counts_by_project()
   let projects = []
   for path in list_dir(workspace_root())
     let segs = path.split("/")
     let name = segs[len(segs) - 1]
     # Skip hidden dirs (.git, .vscode, etc.) and non-directories.
     if Trusted.is_dir(path) and not name.starts_with(".")
-      projects.push(project_summary(path))
+      projects.push(project_summary(path, counts_by_project[name]))
     end
   end
   projects.sort_by(fn(p) p["name"])
@@ -52,13 +58,20 @@ fn find_project(name)
   if not Trusted.is_dir(path)
     return nil
   end
-  project_summary(path)
+  project_summary(path, nil)
 end
 
-fn project_summary(path)
+# `counts` is optional — pass a `{status: N}` hash to avoid the
+# per-project `Task.counts_by_status(name)` round-trip (used by
+# `list_projects`, which bulk-loads via `Task.counts_by_project()`).
+# Pass `nil` for the single-project case and we fall back to the
+# direct query.
+fn project_summary(path, counts)
   let segments = path.split("/")
   let name = segments[len(segments) - 1]
-  let counts = Task.counts_by_status(name)
+  if counts == nil
+    counts = Task.counts_by_status(name)
+  end
   let total = 0
   for s in Task.statuses()
     total = total + (counts[s] ?? 0)

@@ -36,10 +36,27 @@ class AgentConfig < Model
     return AgentConfig.find_by("_key", key)
   end
 
+  # Bulk load every AgentConfig row into `{ _key: value }`. Lets
+  # callers that read many keys in a loop (`enabled_agents`, the
+  # settings form's per-agent checkbox state) issue one query instead
+  # of N. Missing keys are simply absent from the hash; callers read
+  # `hash[key] ?? default` to recover the "unset means enabled" rule.
+  static def all_as_hash()
+    let h = {}
+    for c in AgentConfig.all()
+      h[c._key] = c.value
+    end
+    h
+  end
+
   static def enabled_agents(all_agents)
+    let configs = AgentConfig.all_as_hash()
     let enabled = []
     for a in all_agents
-      if AgentConfig.get_or(a, true) != false
+      let v = configs[a]
+      # Unset (`nil`) means enabled by default — the row only exists
+      # once the user has explicitly flipped the agent off (or on).
+      if v == nil or v != false
         enabled.push(a)
       end
     end
