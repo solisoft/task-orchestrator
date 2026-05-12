@@ -6,7 +6,8 @@ fn login_form(req)
     "title": "Sign in",
     "error": nil,
     "email": "",
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "hide_header": true
   })
 end
 
@@ -20,7 +21,8 @@ fn login(req)
       "title": "Sign in",
       "error": "Email and password are required.",
       "email": email,
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "hide_header": true
     })
   end
   let user = User.authenticate(email, password)
@@ -29,7 +31,8 @@ fn login(req)
       "title": "Sign in",
       "error": "Invalid email or password.",
       "email": email,
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "hide_header": true
     })
   end
   let resp = redirect("/")
