@@ -1,0 +1,22 @@
+<% let _user = locals["current_user"] ?? nil %>
+<nav data-shared-header class="border-b border-white/10 bg-slate-900/40 backdrop-blur-sm">
+  <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight gradient-text">
+      <span class="inline-block w-2 h-2 rounded-full bg-indigo-400"></span>
+      Task Orchestrator
+    </a>
+    <div class="flex items-center gap-1 text-sm">
+      <a href="/" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Dashboard</a>
+      <a href="/features" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Features</a>
+      <a href="/plans" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Plans</a>
+      <a href="/docs" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Docs</a>
+      <a href="/settings" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Settings</a>
+      <% if _user != nil %>
+        <span class="text-xs text-slate-500 ml-2 hidden sm:inline"><%= _user.email ?? "" %></span>
+        <a href="/logout" class="ml-2 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-medium px-3 py-1.5 transition-colors">Logout</a>
+      <% else %>
+        <a href="/login" class="ml-2 rounded-md bg-indigo-500/80 hover:bg-indigo-400 text-white text-xs font-medium px-3 py-1.5 transition-colors">Sign in</a>
+      <% end %>
+    </div>
+  </div>
+</nav>
