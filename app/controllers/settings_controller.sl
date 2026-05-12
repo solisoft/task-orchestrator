@@ -7,7 +7,8 @@ fn show(req)
     "agent_type": Setting.get_or("agent_type", Task.known_agents()[0]),
     "agents": Task.known_agents(),
     "agents_config": _settings_load_agents_config(),
-    "limits": _settings_load_limits()
+    "limits": _settings_load_limits(),
+    "theme": Setting.current_theme()
   })
 end
 
@@ -21,6 +22,10 @@ fn update(req)
   let agent_type = (form["agent_type"] ?? "").trim()
   if agent_type != "" and _settings_known_agent(agent_type)
     Setting.set("agent_type", agent_type)
+  end
+  let theme = (form["theme"] ?? "").trim()
+  if theme != "" and _settings_known_theme(theme)
+    Setting.set("theme", theme)
   end
   for a in Task.known_agents()
     let enabled_key = "enabled_" + a
@@ -118,4 +123,11 @@ fn _settings_known_agent(name)
     end
   end
   return false
+end
+
+# Whitelist for the theme setting — the layout only knows how to render
+# these two values, so anything else gets dropped on POST rather than
+# silently persisting a value that produces a broken page.
+fn _settings_known_theme(name)
+  return name == "dark" or name == "light"
 end

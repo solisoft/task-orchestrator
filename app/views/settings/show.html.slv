@@ -37,6 +37,21 @@
       </fieldset>
 
       <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-3">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Theme</legend>
+        <p class="mt-2 text-sm text-slate-400">Pick the UI palette. Saved server-side so the page renders in the correct theme on first paint.</p>
+        <div class="mt-4 flex items-center gap-6 text-sm">
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="theme" value="dark" <%= theme == "dark" ? "checked" : "" %> class="h-4 w-4 border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
+            <span class="font-mono text-slate-200">dark</span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="radio" name="theme" value="light" <%= theme == "light" ? "checked" : "" %> class="h-4 w-4 border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
+            <span class="font-mono text-slate-200">light</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Run limits</legend>
         <p class="mt-2 text-sm text-slate-400">Cap how many runs an agent may start per rolling 24h / 7d window. <code>0</code> means unlimited.</p>
         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-slate-400">
@@ -72,7 +87,7 @@
       </div>
     </form>
 
-    <fieldset class="mt-8 rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
+    <fieldset class="mt-8 rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-5">
       <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Browser notifications</legend>
       <p class="mt-2 text-sm text-slate-400">
         Get a desktop notification when a task flips status (review / done / failed)

@@ -18,7 +18,8 @@ fn index(req)
     "agents": Task.known_agents(),
     "usage_day":   usage["day"],
     "usage_week":  usage["week"],
-    "limits":      _home_load_limits()
+    "limits":      _home_load_limits(),
+    "theme":       Setting.current_theme()
   })
 end
 
