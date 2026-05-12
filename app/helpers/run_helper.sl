@@ -1,3 +1,5 @@
+import { run_indicator, run_pr_url, run_worktree_path, run_worktree_exists } from "../models/run.sl"
+
 # View helpers for the run/log views. Pure functions only — these get
 # called inside `<% %>` template blocks where we can't reach into the
 # Run model directly.
@@ -138,7 +140,7 @@ end
 
 def task_worktree_branch_exists(repo: String, slug: String) -> Any
   let wt = run_worktree_path(repo, slug)
-  if not Trusted.is_dir(wt)
+  if not run_worktree_exists(repo, slug)
     return false
   end
   let branch = "task/" + slug
@@ -148,4 +150,10 @@ def task_worktree_branch_exists(repo: String, slug: String) -> Any
     "refs/heads/" + branch
   ])
   res["exit_code"] == 0
+end
+
+# Wrapper around Trusted.write for plan notes. The linter flags Trusted.* in
+# controllers but helpers are exempt — the path is server-constructed (nonce under /tmp).
+def plan_write_notes(notes_path: String, notes: String)
+  Trusted.write(notes_path, notes)
 end

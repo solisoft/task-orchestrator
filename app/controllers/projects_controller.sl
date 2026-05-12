@@ -1,3 +1,5 @@
+import { find_project, run_indicator } from "../helpers/model_exports.sl"
+
 # Projects controller — kanban view per project, backed by Task model.
 
 fn show(req)

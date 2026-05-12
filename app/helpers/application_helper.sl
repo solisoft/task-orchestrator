@@ -32,7 +32,7 @@ def truncate_text(text: String, length: Int, suffix: String) -> String
     if len(text) <= length
         return text
     end
-    return substring(text, 0, length - len(suffix)) + suffix
+    return text.substring(0, length - len(suffix)) + suffix
 end
 
 # Capitalize first letter of a string
@@ -40,7 +40,7 @@ def capitalize(text: String) -> String
     if len(text) == 0
         return text
     end
-    return upcase(substring(text, 0, 1)) + substring(text, 1, len(text))
+    return text.substring(0, 1).upcase() + text.substring(1, len(text))
 end
 
 # SEC-012: Reject href values that would let an attacker run JS through
@@ -83,12 +83,12 @@ end
 
 # Generate an HTML link
 def link_to(text: String, url: String) -> String
-    return "<a href=\"" + html_escape(_safe_link_url(url)) + "\">" + html_escape(text) + "</a>"
+    return "<a href=\"" + h(_safe_link_url(url)) + "\">" + h(text) + "</a>"
 end
 
 # Generate an HTML link with CSS class
 def link_to_class(text: String, url: String, css_class: String) -> String
-    return "<a href=\"" + html_escape(_safe_link_url(url)) + "\" class=\"" + html_escape(css_class) + "\">" + html_escape(text) + "</a>"
+    return "<a href=\"" + h(_safe_link_url(url)) + "\" class=\"" + h(css_class) + "\">" + h(text) + "</a>"
 end
 
 # Pluralize a word based on count

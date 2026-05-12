@@ -1,3 +1,5 @@
+import { list_projects, workspace_root } from "../helpers/model_exports.sl"
+
 # Home — list every project under workspace_root() with task counts,
 # plus a per-agent usage dashboard tile (today / this-week run counts
 # against the configured daily / weekly caps).
