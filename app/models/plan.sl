@@ -51,6 +51,119 @@ class Plan < Model
     end
   end
 
+  # ── Plan model selection ──
+  #
+  # These statics are the single source of truth for resolving and
+  # validating the model id used to spawn a plan-agent run. Both
+  # controllers (`features_controller`'s feature-brief planner and
+  # `tasks_controller`'s task planner) reach into them so the same
+  # allowlist and precedence rules apply everywhere.
+
+  # Global default model used when nothing more specific is set.
+  # Persisted under the `plan_model` Setting key by the settings page.
+  static def default_plan_model()
+    Setting.get_or("plan_model", "claude-sonnet-4-6")
+  end
+
+  # Resolve the plan model id for a feature run. Precedence:
+  #   1. form override (`plan_model` + optional `plan_variant`)
+  #   2. per-feature `plan_model` field
+  #   3. global Setting "plan_model" (falls back to "claude-sonnet-4-6")
+  # Every branch passes through `allow_plan_model` so the result is
+  # safe to splice into the `bin/plan-run` shell command line.
+  static def resolve_plan_model(feature, form)
+    let f = form ?? {}
+    let form_model = (f["plan_model"] ?? "").trim()
+    if form_model != ""
+      let variant = (f["plan_variant"] ?? "").trim()
+      let is_opencode = form_model.index_of("/") > 0
+      if is_opencode and variant != "" and variant != "default" and Plan._matches_segment(variant, "variant")
+        return Plan.allow_plan_model(form_model + ":" + variant)
+      end
+      return Plan.allow_plan_model(form_model)
+    end
+    if feature != nil
+      let fm = (feature.plan_model ?? "").trim()
+      if fm != ""
+        return Plan.allow_plan_model(fm)
+      end
+    end
+    Plan.default_plan_model()
+  end
+
+  # Shell-safe allowlist for plan-step models. Two shapes are valid:
+  #   - Claude SDK ids ("claude-opus-4-7", "claude-sonnet-4-6", ...)
+  #   - opencode "provider/model[:variant]" ids whose segments use a
+  #     narrow charset.
+  # Anything else collapses to the canonical default — never raises,
+  # never echoes the bad value back.
+  static def allow_plan_model(value)
+    let v = (value ?? "").trim()
+    let claude_allowed = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+    for a in claude_allowed
+      if v == a
+        return v
+      end
+    end
+    if Plan._is_opencode_model_id(v)
+      return v
+    end
+    "claude-sonnet-4-6"
+  end
+
+  # Shape gate for an opencode model id ("provider/model" with an
+  # optional ":variant" reasoning-effort suffix). Same rules as the
+  # validator used in tasks_controller; kept here so model-level callers
+  # don't need to reach across the controller boundary.
+  static def _is_opencode_model_id(s)
+    if s.length() == 0 or s.length() > 200
+      return false
+    end
+    let slash = s.index_of("/")
+    if slash <= 0 or slash == s.length() - 1
+      return false
+    end
+    let provider = s.substring(0, slash)
+    let rest     = s.substring(slash + 1, s.length)
+    let colon    = rest.index_of(":")
+    let model    = rest
+    let variant  = ""
+    if colon > 0
+      model   = rest.substring(0, colon)
+      variant = rest.substring(colon + 1, rest.length)
+    end
+    if not Plan._matches_segment(provider, "provider") or not Plan._matches_segment(model, "model")
+      return false
+    end
+    if variant.length() > 0 and not Plan._matches_segment(variant, "variant")
+      return false
+    end
+    return true
+  end
+
+  static def _matches_segment(s, kind)
+    if s.length() == 0
+      return false
+    end
+    let i = 0
+    while i < s.length()
+      let c = s.substring(i, i + 1)
+      let ok = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
+              or (c >= "0" and c <= "9") or c == "-" or c == "_"
+      if not ok and kind == "model" and c == "."
+        ok = true
+      end
+      if kind == "variant"
+        ok = c >= "a" and c <= "z"
+      end
+      if not ok
+        return false
+      end
+      i = i + 1
+    end
+    return true
+  end
+
   def touch_timestamps()
     let now = DateTime.now().to_iso()
     if self.created_at == nil

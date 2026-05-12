@@ -105,6 +105,16 @@
               <textarea name="refinement" rows="3" required
                         class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-xs text-slate-100 resize-y mb-2"
                         placeholder="e.g. focus on the auth layer; split into smaller, parallelizable units; reuse existing helpers in app/services/"></textarea>
+              <div class="mb-2">
+                <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
+                <%- partial("features/plan_model_select", {
+                  "name":            "plan_model",
+                  "current":         (feature.plan_model ?? ""),
+                  "opencode_models": opencode_models,
+                  "include_blank":   true,
+                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                }) %>
+              </div>
               <div class="flex items-center justify-between gap-2">
                 <p class="text-xs text-slate-500">Replaces the current proposed tasks with a new run.</p>
                 <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
@@ -114,43 +124,65 @@
               </div>
             </form>
 
-            <div class="flex items-center justify-between gap-2 pt-3 border-t border-white/5">
-              <p class="text-xs text-slate-500">Or start over from the original brief.</p>
-              <form method="post" action="/features/<%= feature._key %>/regenerate_tasks" onsubmit="return confirm('Wipe proposed tasks and regenerate from the original brief?')">
-                <button type="submit" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                  Discard &amp; regenerate
-                </button>
-              </form>
-            </div>
+            <form method="post" action="/features/<%= feature._key %>/regenerate_tasks" class="flex items-end justify-between gap-3 pt-3 border-t border-white/5 flex-wrap" onsubmit="return confirm('Wipe proposed tasks and regenerate from the original brief?')">
+              <div class="min-w-0 flex-1">
+                <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
+                <%- partial("features/plan_model_select", {
+                  "name":            "plan_model",
+                  "current":         (feature.plan_model ?? ""),
+                  "opencode_models": opencode_models,
+                  "include_blank":   true,
+                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                }) %>
+                <p class="text-xs text-slate-500 mt-1">Or start over from the original brief with this model.</p>
+              </div>
+              <button type="submit" class="shrink-0 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Discard &amp; regenerate
+              </button>
+            </form>
           </div>
         </div>
       <% elsif feature.status == "draft" or feature.status == "ready" %>
         <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1 card-glow">
           <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none"></div>
-          <div class="relative flex items-start justify-between gap-6 flex-wrap">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="ai-sparkle text-lg">&#x2728;</span>
-                <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+          <div class="relative">
+            <div class="flex items-start justify-between gap-6 flex-wrap mb-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="ai-sparkle text-lg">&#x2728;</span>
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-100 mb-1">Turn this brief into tasks</h3>
+                <p class="text-sm text-slate-400 leading-relaxed max-w-lg">
+                  The planner reads your description and produces 3&ndash;7 focused, linked tasks &mdash;
+                  each picked up by an agent in its own worktree.
+                </p>
               </div>
-              <h3 class="text-lg font-semibold text-slate-100 mb-1">Turn this brief into tasks</h3>
-              <p class="text-sm text-slate-400 leading-relaxed max-w-lg">
-                The planner reads your description and produces 3&ndash;7 focused, linked tasks &mdash;
-                each picked up by an agent in its own worktree.
-              </p>
+              <button type="button"
+                      hx-post="/features/<%= feature._key %>/generate_tasks"
+                      hx-include="#generate-tasks-form select[name=plan_model], #generate-tasks-form select[name=plan_variant]"
+                      hx-target="#generate-tasks-area"
+                      hx-swap="innerHTML"
+                      hx-indicator="#generate-spinner"
+                      class="shrink-0 cta-shimmer rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-5 py-2.5 transition-all btn-glow shadow-lg shadow-fuchsia-500/25 inline-flex items-center gap-2">
+                <span>Generate Tasks</span>
+                <span id="generate-spinner" class="htmx-indicator">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                </span>
+              </button>
             </div>
-            <button type="button"
-                    hx-post="/features/<%= feature._key %>/generate_tasks"
-                    hx-target="#generate-tasks-area"
-                    hx-swap="innerHTML"
-                    hx-indicator="#generate-spinner"
-                    class="shrink-0 cta-shimmer rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-5 py-2.5 transition-all btn-glow shadow-lg shadow-fuchsia-500/25 inline-flex items-center gap-2">
-              <span>Generate Tasks</span>
-              <span id="generate-spinner" class="htmx-indicator">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-              </span>
-            </button>
+            <div id="generate-tasks-form" class="pt-3 border-t border-white/5">
+              <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Plan model</label>
+              <%- partial("features/plan_model_select", {
+                "name":            "plan_model",
+                "current":         (feature.plan_model ?? ""),
+                "opencode_models": opencode_models,
+                "include_blank":   true,
+                "blank_label":     "Use global default (" + default_plan_model + ")"
+              }) %>
+              <p class="text-xs text-slate-500 mt-1">Per-run override. Empty falls back to this feature&rsquo;s saved model, then the global default.</p>
+            </div>
           </div>
         </div>
       <% end %>

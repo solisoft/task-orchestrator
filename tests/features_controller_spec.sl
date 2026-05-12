@@ -339,4 +339,120 @@ describe("Feature model", fn()
     })
     assert_null(Feature.refresh_for_task(t))
   end)
+
+  test("persists plan_model on the feature row", fn()
+    let f = Feature.create({
+      "_key":       "myapp--feat1",
+      "project":    "myapp",
+      "slug":       "feat1",
+      "title":      "Test Feature",
+      "status":     "draft",
+      "plan_model": "claude-opus-4-7"
+    })
+    assert(f._errors == nil)
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.plan_model, "claude-opus-4-7")
+  end)
+end)
+
+describe("Plan model resolution", fn()
+  before_each(fn()
+    assert_test_db()
+    Setting.delete_all()
+    Feature.delete_all()
+  end)
+
+  test("default_plan_model returns the canonical default when nothing is set", fn()
+    assert_eq(Plan.default_plan_model(), "claude-sonnet-4-6")
+  end)
+
+  test("default_plan_model reads the plan_model setting when set", fn()
+    Setting.set("plan_model", "claude-opus-4-7")
+    assert_eq(Plan.default_plan_model(), "claude-opus-4-7")
+  end)
+
+  test("resolve_plan_model prefers the form override over feature + setting", fn()
+    Setting.set("plan_model", "claude-sonnet-4-6")
+    let f = Feature.create({
+      "_key":       "myapp--feat1",
+      "project":    "myapp",
+      "slug":       "feat1",
+      "title":      "F",
+      "status":     "draft",
+      "plan_model": "claude-haiku-4-5-20251001"
+    })
+    let resolved = Plan.resolve_plan_model(f, { "plan_model": "claude-opus-4-7" })
+    assert_eq(resolved, "claude-opus-4-7")
+  end)
+
+  test("resolve_plan_model falls back to feature.plan_model when form is empty", fn()
+    Setting.set("plan_model", "claude-sonnet-4-6")
+    let f = Feature.create({
+      "_key":       "myapp--feat1",
+      "project":    "myapp",
+      "slug":       "feat1",
+      "title":      "F",
+      "status":     "draft",
+      "plan_model": "claude-opus-4-7"
+    })
+    let resolved = Plan.resolve_plan_model(f, { "plan_model": "" })
+    assert_eq(resolved, "claude-opus-4-7")
+  end)
+
+  test("resolve_plan_model falls back to the global setting when neither form nor feature has a value", fn()
+    Setting.set("plan_model", "claude-opus-4-7")
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "F",
+      "status":  "draft"
+    })
+    let resolved = Plan.resolve_plan_model(f, {})
+    assert_eq(resolved, "claude-opus-4-7")
+  end)
+
+  test("resolve_plan_model falls back to the canonical default when nothing is set anywhere", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "F",
+      "status":  "draft"
+    })
+    let resolved = Plan.resolve_plan_model(f, {})
+    assert_eq(resolved, "claude-sonnet-4-6")
+  end)
+
+  test("resolve_plan_model rejects an unknown form model and falls back to the default", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "F",
+      "status":  "draft"
+    })
+    # Shell-injection attempt — must be scrubbed by `allow_plan_model`.
+    let resolved = Plan.resolve_plan_model(f, { "plan_model": "evil; rm -rf /" })
+    assert_eq(resolved, "claude-sonnet-4-6")
+  end)
+
+  test("resolve_plan_model accepts an opencode model id verbatim", fn()
+    let resolved = Plan.resolve_plan_model(nil, { "plan_model": "deepseek/deepseek-chat" })
+    assert_eq(resolved, "deepseek/deepseek-chat")
+  end)
+
+  test("resolve_plan_model stitches a variant onto an opencode id", fn()
+    let resolved = Plan.resolve_plan_model(nil, {
+      "plan_model":   "deepseek/deepseek-chat",
+      "plan_variant": "high"
+    })
+    assert_eq(resolved, "deepseek/deepseek-chat:high")
+  end)
+
+  test("allow_plan_model accepts every Claude SDK id from the allowlist", fn()
+    assert_eq(Plan.allow_plan_model("claude-opus-4-7"), "claude-opus-4-7")
+    assert_eq(Plan.allow_plan_model("claude-sonnet-4-6"), "claude-sonnet-4-6")
+    assert_eq(Plan.allow_plan_model("claude-haiku-4-5-20251001"), "claude-haiku-4-5-20251001")
+  end)
 end)

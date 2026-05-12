@@ -18,6 +18,30 @@
             <% end %>
           </select>
         </div>
+        <div class="mt-5">
+          <label for="plan_model" class="block text-xs font-medium text-slate-300 mb-1">Plan model</label>
+          <p class="text-xs text-slate-500 mb-2">Default model used by the feature-brief planner. Per-feature and per-run dropdowns can override this.</p>
+          <% let _claude_plan_models = [
+            { "id": "claude-opus-4-7",           "label": "Opus 4.7" },
+            { "id": "claude-sonnet-4-6",         "label": "Sonnet 4.6" },
+            { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5" }
+          ] %>
+          <select id="plan_model" name="plan_model"
+                  class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+            <optgroup label="Claude SDK (questions supported)">
+              <% for m in _claude_plan_models %>
+                <option value="<%= m["id"] %>" <%= plan_model == m["id"] ? "selected" : "" %>><%= m["label"] %></option>
+              <% end %>
+            </optgroup>
+            <% if opencode_models != nil and opencode_models.length() > 0 %>
+              <optgroup label="opencode CLI (no questions)">
+                <% for m in opencode_models %>
+                  <option value="<%= m %>" <%= plan_model == m ? "selected" : "" %>><%= m %></option>
+                <% end %>
+              </optgroup>
+            <% end %>
+          </select>
+        </div>
       </fieldset>
 
       <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-2">

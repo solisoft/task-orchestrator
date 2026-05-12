@@ -8,6 +8,8 @@ fn show(req)
     "agents": Task.known_agents(),
     "agents_config": _settings_load_agents_config(),
     "limits": _settings_load_limits(),
+    "plan_model": Setting.get_or("plan_model", "claude-sonnet-4-6"),
+    "opencode_models": list_opencode_models(),
     "theme": Setting.current_theme()
   })
 end
@@ -26,6 +28,23 @@ fn update(req)
   let theme = (form["theme"] ?? "").trim()
   if theme != "" and _settings_known_theme(theme)
     Setting.set("theme", theme)
+  end
+  let raw_plan_model = (form["plan_model"] ?? "").trim()
+  if raw_plan_model != ""
+    let variant = (form["plan_variant"] ?? "").trim()
+    let candidate = raw_plan_model
+    let is_opencode = raw_plan_model.index_of("/") > 0
+    if is_opencode and variant != "" and variant != "default" and _matches_charset(variant, "variant")
+      candidate = raw_plan_model + ":" + variant
+    end
+    let resolved = _allow_plan_model(candidate)
+    # `_allow_plan_model` returns the canonical default for any value
+    # that didn't match the allowlist. Persist only when the user's
+    # input actually round-trips — otherwise we'd silently rewrite
+    # their saved choice to "claude-sonnet-4-6" on every junk POST.
+    if resolved == candidate
+      Setting.set("plan_model", resolved)
+    end
   end
   for a in Task.known_agents()
     let enabled_key = "enabled_" + a

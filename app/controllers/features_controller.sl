@@ -86,6 +86,8 @@ fn show(req)
     "active_plan": _active_plan_for(feature),
     "latest_plan": _latest_plan_for(feature),
     "current_user": req["current_user"],
+    "opencode_models": list_opencode_models(),
+    "default_plan_model": _default_plan_model(),
     "theme": Setting.current_theme()
   })
 end
@@ -156,6 +158,8 @@ fn new(req)
     "feature": nil,
     "projects": list_projects() rescue [],
     "project": project,
+    "opencode_models": list_opencode_models(),
+    "default_plan_model": _default_plan_model(),
     "theme": Setting.current_theme()
   })
 end
@@ -167,6 +171,7 @@ fn create(req)
   let title = (form["title"] ?? "").trim()
   let description = (form["description"] ?? "").trim()
   let status = (form["status"] ?? "draft").trim()
+  let plan_model = _persisted_plan_model(form)
   let slug = title.slugify()
   if project == "" or title == ""
     return {"status": 422, "body": "Project and title are required"}
@@ -177,13 +182,16 @@ fn create(req)
     "slug":        slug,
     "title":       title,
     "description": description,
-    "status":      status
+    "status":      status,
+    "plan_model":  plan_model
   })
   if feature._errors
     return render("features/new", {
       "title": "New Feature",
       "feature": feature,
       "projects": list_projects() rescue [],
+      "opencode_models": list_opencode_models(),
+      "default_plan_model": _default_plan_model(),
       "theme": Setting.current_theme()
     })
   end
@@ -200,6 +208,8 @@ fn edit(req)
     "title": "Edit — " + feature.title,
     "feature": feature,
     "projects": list_projects() rescue [],
+    "opencode_models": list_opencode_models(),
+    "default_plan_model": _default_plan_model(),
     "theme": Setting.current_theme()
   })
 end
@@ -220,12 +230,15 @@ fn update(req)
   feature.title = title
   feature.description = description
   feature.status = status
+  feature.plan_model = _persisted_plan_model(form)
   feature.save()
   if feature._errors
     return render("features/edit", {
       "title": "Edit — " + title,
       "feature": feature,
       "projects": list_projects() rescue [],
+      "opencode_models": list_opencode_models(),
+      "default_plan_model": _default_plan_model(),
       "theme": Setting.current_theme()
     })
   end
@@ -353,7 +366,7 @@ fn generate_tasks(req)
     return {"status": 422,
             "body": "Feature has no description — write one before generating tasks"}
   end
-  _spawn_generation(feature, "")
+  _spawn_generation(feature, "", req["all"] ?? {})
   let plan = _latest_plan_for(feature)
   if plan == nil
     return {
@@ -380,7 +393,7 @@ fn regenerate_tasks(req)
     return {"status": 404, "body": "Feature not found"}
   end
   _wipe_proposed_tasks(feature)
-  _spawn_generation(feature, "")
+  _spawn_generation(feature, "", req["all"] ?? {})
   redirect("/features/" + feature._key)
 end
 
@@ -398,7 +411,7 @@ fn refine_tasks(req)
     return {"status": 422, "body": "Refinement text is required"}
   end
   _wipe_proposed_tasks(feature)
-  _spawn_generation(feature, refinement)
+  _spawn_generation(feature, refinement, form)
   redirect("/features/" + feature._key)
 end
 
@@ -427,7 +440,9 @@ end
 
 # Shared spawn helper: assembles the prompt (brief + optional
 # refinement) and starts a plan-agent run tagged with this feature.
-fn _spawn_generation(feature, refinement)
+# `form` carries the optional per-run model override; falls back to
+# `feature.plan_model` then the global `plan_model` setting.
+fn _spawn_generation(feature, refinement, form)
   let description = (feature.description ?? "").trim()
   let prompt = "Feature brief: " + feature.title + "\n\n" + description
   if refinement != ""
@@ -443,7 +458,7 @@ fn _spawn_generation(feature, refinement)
            "## Task 2: <title>\n\n" +
            "<markdown description>\n\n" +
            "Keep each task focused and actionable. Produce 3-7 tasks."
-  let model = _default_plan_model()
+  let model = Plan.resolve_plan_model(feature, form)
   let project_path = _feature_project_path(feature)
   let plan_id = spawn_plan_agent(prompt, model, project_path)
   if plan_id == nil
@@ -506,7 +521,19 @@ fn _feature_project_path(feature)
 end
 
 fn _default_plan_model()
-  Setting.get_or("agent_type", "claude-sonnet-4-6")
+  Plan.default_plan_model()
+end
+
+# Used by create/update to decide whether to store a non-empty value
+# on the Feature row. Returns "" when the form didn't include a model
+# (so the row falls back to the global default) — `Plan.resolve_plan_model`
+# treats both nil and "" as "not set".
+fn _persisted_plan_model(form)
+  let raw = ((form ?? {})["plan_model"] ?? "").trim()
+  if raw == ""
+    return ""
+  end
+  Plan.resolve_plan_model(nil, form)
 end
 
 # Find the plan associated with this feature that still needs the
