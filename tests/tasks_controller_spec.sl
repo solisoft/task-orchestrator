@@ -749,6 +749,48 @@ def _tq_setup_worktree_repo_no_origin(slug)
   return worktree
 end
 
+describe("TasksController#sidebar", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("returns 200 with the sidebar fragment for an existing task", fn()
+    Task.create({
+      "_key":    "proj--sidebar-task",
+      "project": "proj",
+      "slug":    "sidebar-task",
+      "title":   "Sidebar task",
+      "body_md": "# Sidebar task\n\nMarkdown body content.",
+      "status":  "todo"
+    })
+    let response = get("/projects/proj/tasks/sidebar-task/sidebar")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # Fragment must carry the task's title, status badge, rendered
+    # markdown body, and the "View full page" escape hatch — no layout.
+    assert_contains(body, "Sidebar task")
+    assert_contains(body, "Markdown body content.")
+    assert_contains(body, "View full page")
+    assert_contains(body, "todo")
+    # No outer chrome — the partial is just the fragment.
+    assert_not(body.contains("<html"))
+  end)
+
+  test("returns 404 for an unknown slug", fn()
+    let response = get("/projects/proj/tasks/does-not-exist/sidebar")
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("returns 404 for an unknown project", fn()
+    let response = get("/projects/no-such-proj/tasks/anything/sidebar")
+    assert_eq(res_status(response), 404)
+  end)
+end)
+
 describe("TasksController#commit_push", fn()
   before_each(fn()
     assert_test_db()

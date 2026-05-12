@@ -332,3 +332,74 @@ html.dark {
 .task-md pre {
     box-shadow: inset 0 0 30px var(--md-pre-glow-inset);
 }
+
+/* ── Right-side task sidebar overlay ──
+   Used by the feature show page. The overlay wraps a translucent
+   blurred backdrop and a 70%-wide panel; `.is-open` flips both visible
+   and slides the panel in from the right edge. */
+.task-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.task-sidebar-overlay.is-open {
+    pointer-events: auto;
+    opacity: 1;
+}
+.task-sidebar-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.45);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+.task-sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 70%;
+    max-width: 70vw;
+    background: var(--bg-base);
+    border-left: 1px solid var(--glass-border);
+    box-shadow: -16px 0 48px rgba(2, 6, 23, 0.55);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+}
+.task-sidebar-overlay.is-open .task-sidebar {
+    transform: translateX(0);
+}
+.task-sidebar-close {
+    position: sticky;
+    top: 0.75rem;
+    float: right;
+    margin: 0.75rem 0.75rem 0 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--glass-bg-light);
+    border: 1px solid var(--glass-border);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+    z-index: 1;
+}
+.task-sidebar-close:hover {
+    color: var(--text-primary);
+    background: var(--glass-bg);
+}
+.task-sidebar-body {
+    padding: 1.5rem 2rem 2rem;
+}
+body.task-sidebar-open {
+    overflow: hidden;
+}

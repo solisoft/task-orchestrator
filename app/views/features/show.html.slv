@@ -52,7 +52,12 @@
         <h2 class="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Linked Tasks</h2>
         <div class="space-y-2">
           <% for task in tasks %>
-            <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>" class="block rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2.5 transition-colors group">
+            <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>"
+               hx-get="/projects/<%= task.project %>/tasks/<%= task.slug %>/sidebar"
+               hx-target="#task-sidebar-body"
+               hx-swap="innerHTML"
+               onclick="openTaskSidebar()"
+               class="block rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2.5 transition-colors group cursor-pointer">
               <div class="flex items-baseline justify-between gap-2">
                 <span class="text-sm text-slate-200 group-hover:text-indigo-200 transition-colors font-medium"><%= task.title %></span>
                 <span class="text-xs rounded-md bg-slate-700/70 text-slate-400 px-2 py-0.5 font-mono"><%= task.status %></span>
@@ -78,3 +83,37 @@
     <% end %>
   </div>
 </div>
+
+<!-- Sliding right-side panel for a linked task. The anchors above swap
+     the task fragment into `#task-sidebar-body` via HTMX while
+     `openTaskSidebar()` toggles the overlay visible; the backdrop and
+     Escape key both call `closeTaskSidebar()`. -->
+<div id="task-sidebar-overlay" class="task-sidebar-overlay" aria-hidden="true">
+  <div class="task-sidebar-backdrop" onclick="closeTaskSidebar()"></div>
+  <aside class="task-sidebar" role="dialog" aria-modal="true" aria-label="Task details">
+    <button type="button" class="task-sidebar-close" onclick="closeTaskSidebar()" aria-label="Close task panel">&times;</button>
+    <div id="task-sidebar-body" class="task-sidebar-body">
+      <p class="text-sm text-slate-500 italic">Loading…</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+  function openTaskSidebar() {
+    var el = document.getElementById('task-sidebar-overlay');
+    if (!el) return;
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('task-sidebar-open');
+  }
+  function closeTaskSidebar() {
+    var el = document.getElementById('task-sidebar-overlay');
+    if (!el) return;
+    el.classList.remove('is-open');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('task-sidebar-open');
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeTaskSidebar();
+  });
+</script>
