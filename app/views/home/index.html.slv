@@ -8,23 +8,9 @@
         </nav>
 
         <header class="mb-12 animate-fade-in">
-            <div class="flex items-baseline justify-between flex-wrap gap-3 mb-6">
-                <div>
-                    <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Agents Dashboard</h1>
-                    <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <a href="/features" class="rounded-lg bg-gradient-to-r from-indigo-500/90 to-fuchsia-500/90 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-medium px-4 py-2 transition-all btn-glow shadow-lg shadow-indigo-500/15 inline-flex items-center gap-1.5">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        Features
-                    </a>
-                    <a href="/plans" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Plans</a>
-                    <a href="/settings" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Settings</a>
-                    <a href="/docs" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Docs</a>
-                    <% if current_user != nil %>
-                        <a href="/logout" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow" title="Sign out as <%= current_user.email %>">Logout</a>
-                    <% end %>
-                </div>
+            <div class="mb-6">
+                <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Agents Dashboard</h1>
+                <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
             </div>
             <p class="text-slate-400 text-sm max-w-2xl leading-relaxed">
                 Per-project task counts, agent usage, and the entry points into each repo.

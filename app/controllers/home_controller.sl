@@ -48,7 +48,8 @@ fn landing(req)
     "title":          "Task Orchestrator — product briefs that ship",
     "project_count":  project_count.length(),
     "feature_total":  feature_total,
-    "current_user":   req["current_user"]
+    "current_user":   req["current_user"],
+    "hide_header":    true
   })
 end
 

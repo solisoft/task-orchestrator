@@ -68,3 +68,24 @@ describe("User model", fn()
     assert_eq(user1.password_hash, user2.password_hash)
   end)
 end)
+
+describe("AuthController", fn()
+  describe("GET /login", fn()
+    before_each(fn()
+      as_guest()
+    end)
+
+    test("returns 200", fn()
+      let response = get("/login")
+      assert_eq(res_status(response), 200)
+    end)
+
+    test("hides the shared header (hide_header is truthy)", fn()
+      let response = get("/login")
+      let body = res_body(response)
+      # The shared header carries a `data-shared-header` marker; with
+      # `hide_header: true` the layout must skip it entirely.
+      assert_not(body.contains("data-shared-header"))
+    end)
+  end)
+end)

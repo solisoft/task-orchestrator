@@ -5,7 +5,8 @@ fn login_form(req)
   render("auth/login", {
     "title": "Sign in",
     "error": nil,
-    "email": ""
+    "email": "",
+    "hide_header": true
   })
 end
 
@@ -18,7 +19,8 @@ fn login(req)
     return render("auth/login", {
       "title": "Sign in",
       "error": "Email and password are required.",
-      "email": email
+      "email": email,
+      "hide_header": true
     })
   end
   let user = User.authenticate(email, password)
@@ -26,7 +28,8 @@ fn login(req)
     return render("auth/login", {
       "title": "Sign in",
       "error": "Invalid email or password.",
-      "email": email
+      "email": email,
+      "hide_header": true
     })
   end
   session_set("user_email", user.email)

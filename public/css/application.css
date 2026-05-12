@@ -1571,6 +1571,10 @@ img, video {
   background-color: rgb(99 102 241 / 0.2);
 }
 
+.bg-indigo-500\/80 {
+  background-color: rgb(99 102 241 / 0.8);
+}
+
 .bg-indigo-500\/90 {
   background-color: rgb(99 102 241 / 0.9);
 }
@@ -1685,12 +1689,6 @@ img, video {
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
 }
 
-.from-indigo-500\/90 {
-  --tw-gradient-from: rgb(99 102 241 / 0.9) var(--tw-gradient-from-position);
-  --tw-gradient-to: rgb(99 102 241 / 0) var(--tw-gradient-to-position);
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
-}
-
 .from-white\/10 {
   --tw-gradient-from: rgb(255 255 255 / 0.1) var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
@@ -1703,10 +1701,6 @@ img, video {
 
 .to-fuchsia-500\/30 {
   --tw-gradient-to: rgb(217 70 239 / 0.3) var(--tw-gradient-to-position);
-}
-
-.to-fuchsia-500\/90 {
-  --tw-gradient-to: rgb(217 70 239 / 0.9) var(--tw-gradient-to-position);
 }
 
 .to-teal-500 {
@@ -2208,11 +2202,6 @@ img, video {
   --tw-shadow: var(--tw-shadow-colored);
 }
 
-.shadow-indigo-500\/15 {
-  --tw-shadow-color: rgb(99 102 241 / 0.15);
-  --tw-shadow: var(--tw-shadow-colored);
-}
-
 .shadow-indigo-500\/20 {
   --tw-shadow-color: rgb(99 102 241 / 0.2);
   --tw-shadow: var(--tw-shadow-colored);
@@ -2246,6 +2235,12 @@ img, video {
 .blur-3xl {
   --tw-blur: blur(64px);
   filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow);
+}
+
+.backdrop-blur-sm {
+  --tw-backdrop-blur: blur(4px);
+  -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
+  backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
 
 .transition {
@@ -3084,6 +3079,10 @@ img, video {
 @media (min-width: 640px) {
   .sm\:inline-block {
     display: inline-block;
+  }
+
+  .sm\:inline {
+    display: inline;
   }
 
   .sm\:grid-cols-2 {

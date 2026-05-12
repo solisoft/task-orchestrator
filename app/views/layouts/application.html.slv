@@ -51,6 +51,9 @@
 </head>
 <body class="min-h-full text-white font-sans antialiased gradient-mesh" style="font-family: 'Space Grotesk', system-ui, sans-serif">
     <div class="gradient-accent-bar"></div>
+    <% if !(locals["hide_header"] ?? false) %>
+      <%- partial("layouts/header", {}) %>
+    <% end %>
     <%= yield %>
 </body>
 </html>
