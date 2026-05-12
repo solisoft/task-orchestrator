@@ -20,7 +20,8 @@ fn index(req)
     "usage_week":  usage["week"],
     "limits":      _home_load_limits(),
     "features_by_project": _home_feature_counts(),
-    "current_user": req["current_user"]
+    "current_user": req["current_user"],
+    "theme":       Setting.current_theme()
   })
 end
 
@@ -49,7 +50,8 @@ fn landing(req)
     "project_count":  project_count.length(),
     "feature_total":  feature_total,
     "current_user":   req["current_user"],
-    "hide_header":    true
+    "hide_header":    true,
+    "theme":          Setting.current_theme()
   })
 end
 

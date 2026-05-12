@@ -8,7 +8,8 @@ fn index(req)
     render("plans/index", {
         "title": "Plans",
         "plans": plans,
-        "linked_tasks": _linked_tasks_for(plans)
+        "linked_tasks": _linked_tasks_for(plans),
+        "theme": Setting.current_theme()
     })
 end
 

@@ -2279,6 +2279,91 @@ img, video {
   transition-duration: 200ms;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Theme tokens
+   ═══════════════════════════════════════════════════════════════
+   `:root` holds the light palette. `html.dark` re-binds each token
+   to its dark counterpart. Custom classes below read tokens via
+   `var(--…)`, so a single class toggle on `<html>` swaps the whole
+   surface. Tailwind's `dark:` utility prefix uses the same `dark`
+   class (configured in tailwind.config.js as `darkMode: 'class'`). */
+
+:root {
+  --bg-base: rgb(248, 250, 252);
+  --text-primary: rgb(15, 23, 42);
+  --text-muted: rgb(71, 85, 105);
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-light: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border-light: rgba(15, 23, 42, 0.1);
+  --scrollbar-thumb: rgba(99, 102, 241, 0.35);
+  --scrollbar-thumb-hover: rgba(99, 102, 241, 0.55);
+  --mesh-tint-1: rgba(99, 102, 241, 0.08);
+  --mesh-tint-2: rgba(147, 51, 234, 0.06);
+  --mesh-tint-3: rgba(192, 132, 252, 0.04);
+  --terminal-bg: rgb(241, 245, 249);
+  --terminal-border: rgba(99, 102, 241, 0.2);
+  --terminal-text: rgb(30, 41, 59);
+  --terminal-glow-inset: rgba(99, 102, 241, 0.05);
+  --terminal-glow-outer: rgba(99, 102, 241, 0.08);
+  --md-text: rgb(51, 65, 85);
+  --md-heading: rgb(15, 23, 42);
+  --md-heading-border: rgba(15, 23, 42, 0.1);
+  --md-strong: rgb(15, 23, 42);
+  --md-em: rgb(30, 41, 59);
+  --md-code-text: rgb(67, 56, 202);
+  --md-code-bg: rgba(99, 102, 241, 0.1);
+  --md-pre-bg: rgb(241, 245, 249);
+  --md-pre-border: rgba(15, 23, 42, 0.1);
+  --md-pre-text: rgb(30, 41, 59);
+  --md-pre-glow-inset: rgba(99, 102, 241, 0.04);
+  --md-link: rgb(79, 70, 229);
+  --md-link-hover: rgb(55, 48, 163);
+  --md-blockquote-text: rgb(71, 85, 105);
+  --md-blockquote-border: rgba(99, 102, 241, 0.5);
+  --md-table-border: rgba(15, 23, 42, 0.1);
+  --md-table-head-bg: rgba(15, 23, 42, 0.04);
+  --md-hr-border: rgba(15, 23, 42, 0.1);
+}
+
+html.dark {
+  --bg-base: rgb(2, 6, 23);
+  --text-primary: rgb(255, 255, 255);
+  --text-muted: rgb(148, 163, 184);
+  --glass-bg: rgba(15, 23, 42, 0.5);
+  --glass-bg-light: rgba(30, 41, 59, 0.35);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border-light: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb: rgba(99, 102, 241, 0.3);
+  --scrollbar-thumb-hover: rgba(99, 102, 241, 0.5);
+  --mesh-tint-1: rgba(99, 102, 241, 0.07);
+  --mesh-tint-2: rgba(147, 51, 234, 0.05);
+  --mesh-tint-3: rgba(192, 132, 252, 0.03);
+  --terminal-bg: rgb(2, 6, 23);
+  --terminal-border: rgba(99, 102, 241, 0.15);
+  --terminal-text: rgb(203, 213, 225);
+  --terminal-glow-inset: rgba(99, 102, 241, 0.04);
+  --terminal-glow-outer: rgba(99, 102, 241, 0.06);
+  --md-text: rgb(203, 213, 225);
+  --md-heading: rgb(241, 245, 249);
+  --md-heading-border: rgba(255, 255, 255, 0.08);
+  --md-strong: rgb(241, 245, 249);
+  --md-em: rgb(226, 232, 240);
+  --md-code-text: rgb(165, 180, 252);
+  --md-code-bg: rgba(99, 102, 241, 0.12);
+  --md-pre-bg: rgb(2, 6, 23);
+  --md-pre-border: rgba(255, 255, 255, 0.1);
+  --md-pre-text: rgb(226, 232, 240);
+  --md-pre-glow-inset: rgba(99, 102, 241, 0.04);
+  --md-link: rgb(165, 180, 252);
+  --md-link-hover: rgb(199, 210, 254);
+  --md-blockquote-text: rgb(148, 163, 184);
+  --md-blockquote-border: rgba(99, 102, 241, 0.5);
+  --md-table-border: rgba(255, 255, 255, 0.1);
+  --md-table-head-bg: rgba(255, 255, 255, 0.05);
+  --md-hr-border: rgba(255, 255, 255, 0.1);
+}
+
 /* Base styles */
 
 /* Custom animations */
@@ -2309,12 +2394,12 @@ img, video {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2324,17 +2409,17 @@ img, video {
 /* ── Glass cards ── */
 
 .glass-card {
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--glass-bg);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
 }
 
 .glass-card-light {
-  background: rgba(30, 41, 59, 0.35);
+  background: var(--glass-bg-light);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border-light);
 }
 
 /* ── Gradient text ── */
@@ -2374,10 +2459,10 @@ img, video {
 
 .gradient-mesh {
   background:
-        radial-gradient(ellipse 60% 50% at 15% 0%, rgba(99, 102, 241, 0.07), transparent 50%),
-        radial-gradient(ellipse 60% 50% at 85% 100%, rgba(147, 51, 234, 0.05), transparent 50%),
-        radial-gradient(ellipse 40% 40% at 50% 50%, rgba(192, 132, 252, 0.03), transparent 50%),
-        rgb(2, 6, 23);
+        radial-gradient(ellipse 60% 50% at 15% 0%, var(--mesh-tint-1), transparent 50%),
+        radial-gradient(ellipse 60% 50% at 85% 100%, var(--mesh-tint-2), transparent 50%),
+        radial-gradient(ellipse 40% 40% at 50% 50%, var(--mesh-tint-3), transparent 50%),
+        var(--bg-base);
   background-attachment: fixed;
 }
 
@@ -2506,16 +2591,16 @@ img, video {
 /* ── Neon terminal ── */
 
 .neon-terminal {
-  background: rgb(2, 6, 23);
-  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
   box-shadow:
-        inset 0 0 40px rgba(99, 102, 241, 0.04),
-        0 0 20px rgba(99, 102, 241, 0.06);
+        inset 0 0 40px var(--terminal-glow-inset),
+        0 0 20px var(--terminal-glow-outer);
 }
 
 .neon-terminal pre,
 .neon-terminal code {
-  color: rgb(203, 213, 225);
+  color: var(--terminal-text);
 }
 
 /* ── Animated tab underline ── */
@@ -2613,7 +2698,7 @@ img, video {
 /* ── Refined markdown code blocks ── */
 
 .task-md pre {
-  box-shadow: inset 0 0 30px rgba(99, 102, 241, 0.04);
+  box-shadow: inset 0 0 30px var(--md-pre-glow-inset);
 }
 
 /* ── Login: floating gradient orbs (decorative bg) ── */
@@ -3074,6 +3159,11 @@ img, video {
 
 .group:hover .group-hover\:opacity-100 {
   opacity: 1;
+}
+
+.dark\:text-white:is(.dark *) {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
 }
 
 @media (min-width: 640px) {

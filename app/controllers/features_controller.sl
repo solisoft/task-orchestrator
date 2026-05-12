@@ -22,7 +22,8 @@ fn index(req)
     "features": features,
     "groups": groups,
     "projects": list_projects() rescue [],
-    "project_filter": project_filter == "" ? nil : project_filter
+    "project_filter": project_filter == "" ? nil : project_filter,
+    "theme": Setting.current_theme()
   })
 end
 
@@ -84,7 +85,8 @@ fn show(req)
     "attachments_meta": _attachments_meta_for(comment_list),
     "active_plan": _active_plan_for(feature),
     "latest_plan": _latest_plan_for(feature),
-    "current_user": req["current_user"]
+    "current_user": req["current_user"],
+    "theme": Setting.current_theme()
   })
 end
 
@@ -153,7 +155,8 @@ fn new(req)
     "title": "New Feature",
     "feature": nil,
     "projects": list_projects() rescue [],
-    "project": project
+    "project": project,
+    "theme": Setting.current_theme()
   })
 end
 
@@ -180,7 +183,8 @@ fn create(req)
     return render("features/new", {
       "title": "New Feature",
       "feature": feature,
-      "projects": list_projects() rescue []
+      "projects": list_projects() rescue [],
+      "theme": Setting.current_theme()
     })
   end
   redirect("/features/" + feature._key)
@@ -195,7 +199,8 @@ fn edit(req)
   render("features/edit", {
     "title": "Edit — " + feature.title,
     "feature": feature,
-    "projects": list_projects() rescue []
+    "projects": list_projects() rescue [],
+    "theme": Setting.current_theme()
   })
 end
 
@@ -220,7 +225,8 @@ fn update(req)
     return render("features/edit", {
       "title": "Edit — " + title,
       "feature": feature,
-      "projects": list_projects() rescue []
+      "projects": list_projects() rescue [],
+      "theme": Setting.current_theme()
     })
   end
   redirect("/features/" + feature._key)
