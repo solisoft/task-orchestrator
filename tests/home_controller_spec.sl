@@ -90,6 +90,11 @@ describe("HomeController", fn()
       assert_contains(res_body(response), "/settings")
     end)
 
+    test("renders the shared header (hide_header not set on dashboard)", fn()
+      let response = get("/")
+      assert_contains(res_body(response), "data-shared-header")
+    end)
+
     # Regression: empty-on-disk projects used to make `project_summary`
     # fall back to `Task.counts_by_status(name)` — one filtered scan
     # per project. With `list_projects` default-filling missing entries
