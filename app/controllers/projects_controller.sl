@@ -42,7 +42,7 @@ fn pick_active_tab(requested, columns)
     end
   end
   for s in all_statuses
-    if columns[s].length > 0
+    if columns[s] != nil and columns[s].length() > 0
       return s
     end
   end

@@ -34,6 +34,7 @@
       </div>
     </header>
 
+    <% if feature.status != "done" %>
     <div id="generate-tasks-area">
       <% let _plan_status = (latest_plan != nil ? (latest_plan.status ?? "") : "") %>
       <% let _plan_running = (active_plan != nil) %>
@@ -154,6 +155,24 @@
         </div>
       <% end %>
     </div>
+    <% else %>
+      <% if latest_plan != nil %>
+        <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="status-pill status-pill-done">done</span>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+            <span class="text-xs text-slate-500 font-mono truncate"><%= latest_plan.plan_id %></span>
+          </div>
+          <details class="rounded-lg bg-slate-900/40 border border-white/5">
+            <summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200 px-3 py-2 select-none flex items-center justify-between">
+              <span>Show last run log</span>
+              <span class="text-slate-600 font-mono"><%= (latest_plan.log ?? "").length() %> bytes</span>
+            </summary>
+            <pre class="text-xs font-mono text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto border-t border-white/5 p-3"><%= latest_plan.log ?? "" %></pre>
+          </details>
+        </div>
+      <% end %>
+    <% end %>
 
     <% if feature.description != nil and feature.description != "" %>
       <div class="rounded-xl glass-card p-6 mb-6 animate-fade-in animate-fade-in-2">
@@ -184,7 +203,12 @@
               <div class="rounded-lg bg-white/[0.04] border border-amber-400/20 px-4 py-3 flex items-start gap-3">
                 <span class="status-pill status-pill-draft shrink-0 mt-0.5">proposed</span>
                 <div class="flex-1 min-w-0">
-                  <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>" class="text-sm font-semibold text-slate-100 hover:text-indigo-200 transition-colors block truncate"><%= task.title %></a>
+                  <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>"
+                     hx-get="/projects/<%= task.project %>/tasks/<%= task.slug %>/sidebar"
+                     hx-target="#task-sidebar-body"
+                     hx-swap="innerHTML"
+                     onclick="openTaskSidebar()"
+                     class="text-sm font-semibold text-slate-100 hover:text-indigo-200 transition-colors block truncate"><%= task.title %></a>
                   <% let _bm = task.body_md ?? "" %>
                   <% if _bm != "" %>
                     <% let _preview = _bm %>
