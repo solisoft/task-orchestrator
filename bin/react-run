@@ -90,14 +90,16 @@ write_status "starting react"
 # ── Fetch the task row from DB
 body_url="$HOST/_api/database/$DB/document/tasks/$key"
 row_json=$(curl -s -u "$USER:$PASS" "$body_url")
+task_key=$(printf '%s' "$row_json" | jq -r '._key // empty')
 task_model=$(printf '%s' "$row_json" | jq -r '.model // empty')
 task_title=$(printf '%s' "$row_json" | jq -r '.title // empty')
-if [[ -z "$task_model" ]]; then
-  fail "task row not found or model empty ($key)"
+if [[ -z "$task_key" ]]; then
+  fail "task row not found ($key)"
 fi
-log "task_model=$task_model"
+log "task_model=${task_model:-<unset, default claude>}"
 
-# ── Resolve agent kind, variant, and binary
+# ── Resolve agent kind, variant, and binary. Mirrors bin/task-run: an
+# empty model means "use the legacy claude CLI default".
 task_variant=""
 if [[ "$task_model" == */*:* ]]; then
   task_variant="${task_model##*:}"
@@ -113,7 +115,7 @@ if [[ "$task_model" == */* ]]; then
 else
   agent_kind="claude"
   if ! command -v claude >/dev/null 2>&1; then
-    fail "task picked $task_model but 'claude' is not on PATH"
+    fail "task picked ${task_model:-claude default} but 'claude' is not on PATH"
   fi
 fi
 log "agent_kind=$agent_kind"

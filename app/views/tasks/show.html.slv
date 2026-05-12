@@ -106,7 +106,7 @@
             <% end %>
           </div>
           <% if branch_info["exists"] and not branch_info["merged"] %>
-            <% if branch_info["is_local_branch"] %>
+            <% if branch_info["is_local_branch"] and task.status == "review" %>
               <form method="post"
                     action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
                     onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
