@@ -424,6 +424,29 @@ describe("TasksController#mark_done", fn()
     let t = Task.find_by_slug("proj", "todo-task")
     assert_eq(t.status, "todo")
   end)
+
+  test("flips the linked feature to done when the last task closes", fn()
+    Feature.delete_all()
+    Feature.create({
+      "_key":    "proj--brief",
+      "project": "proj",
+      "slug":    "brief",
+      "title":   "Test brief",
+      "status":  "in-progress"
+    })
+    Task.create({
+      "_key":         "proj--linked",
+      "project":      "proj",
+      "slug":         "linked",
+      "title":        "linked review",
+      "status":       "review",
+      "feature_slug": "proj--brief"
+    })
+    let response = post("/projects/proj/tasks/linked/mark-done", {})
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "brief")
+    assert_eq(f.status, "done")
+  end)
 end)
 
 describe("TasksController#archive", fn()

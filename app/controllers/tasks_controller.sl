@@ -348,6 +348,7 @@ fn mark_done(req)
   if task._errors
     return {"status": 422, "body": "Save failed"}
   end
+  Feature.refresh_for_task(task)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 

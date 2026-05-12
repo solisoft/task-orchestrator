@@ -187,4 +187,156 @@ describe("Feature model", fn()
     assert_eq(task.feature_slug, "myapp--feat1")
     assert_eq(task.author, "user@example.com")
   end)
+
+  test("recompute_status! flips to done when every linked task is done", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "in-progress"
+    })
+    Task.create({
+      "_key":         "myapp--a",
+      "project":      "myapp",
+      "slug":         "a",
+      "title":        "a",
+      "status":       "done",
+      "feature_slug": "myapp--feat1"
+    })
+    Task.create({
+      "_key":         "myapp--b",
+      "project":      "myapp",
+      "slug":         "b",
+      "title":        "b",
+      "status":       "done",
+      "feature_slug": "myapp--feat1"
+    })
+    assert(f.recompute_status!())
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.status, "done")
+  end)
+
+  test("recompute_status! is a no-op when a linked task is still open", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "in-progress"
+    })
+    Task.create({
+      "_key":         "myapp--a",
+      "project":      "myapp",
+      "slug":         "a",
+      "title":        "a",
+      "status":       "done",
+      "feature_slug": "myapp--feat1"
+    })
+    Task.create({
+      "_key":         "myapp--b",
+      "project":      "myapp",
+      "slug":         "b",
+      "title":        "b",
+      "status":       "review",
+      "feature_slug": "myapp--feat1"
+    })
+    assert(not f.recompute_status!())
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.status, "in-progress")
+  end)
+
+  test("recompute_status! ignores archived tasks", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "in-progress"
+    })
+    Task.create({
+      "_key":         "myapp--a",
+      "project":      "myapp",
+      "slug":         "a",
+      "title":        "a",
+      "status":       "done",
+      "feature_slug": "myapp--feat1"
+    })
+    Task.create({
+      "_key":         "myapp--b",
+      "project":      "myapp",
+      "slug":         "b",
+      "title":        "b",
+      "status":       "archived",
+      "feature_slug": "myapp--feat1"
+    })
+    assert(f.recompute_status!())
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.status, "done")
+  end)
+
+  test("recompute_status! refuses to complete a feature with no done task", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "ready"
+    })
+    Task.create({
+      "_key":         "myapp--a",
+      "project":      "myapp",
+      "slug":         "a",
+      "title":        "a",
+      "status":       "archived",
+      "feature_slug": "myapp--feat1"
+    })
+    assert(not f.recompute_status!())
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.status, "ready")
+  end)
+
+  test("recompute_status! does nothing for a feature already done", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "done"
+    })
+    assert(not f.recompute_status!())
+  end)
+
+  test("refresh_for_task auto-completes the parent feature", fn()
+    Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "in-progress"
+    })
+    let t = Task.create({
+      "_key":         "myapp--solo",
+      "project":      "myapp",
+      "slug":         "solo",
+      "title":        "solo",
+      "status":       "done",
+      "feature_slug": "myapp--feat1"
+    })
+    let refreshed = Feature.refresh_for_task(t)
+    assert_not_null(refreshed)
+    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    assert_eq(reloaded.status, "done")
+  end)
+
+  test("refresh_for_task returns nil for a task with no feature_slug", fn()
+    let t = Task.create({
+      "_key":    "myapp--orphan",
+      "project": "myapp",
+      "slug":    "orphan",
+      "title":   "orphan",
+      "status":  "done"
+    })
+    assert_null(Feature.refresh_for_task(t))
+  end)
 end)

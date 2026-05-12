@@ -1,0 +1,207 @@
+/* ═══════════════════════════════════════════════════════════════
+   Light theme overrides
+   ───────────────────────────────────────────────────────────────
+   The app is dark-by-default. When <html> carries the `light`
+   class, these rules retarget the dark utility classes the views
+   were authored with. We intentionally avoid touching the source
+   markup — every override lives here so the dark theme stays the
+   reference layout and light becomes a pure CSS skin.
+   ═══════════════════════════════════════════════════════════════ */
+
+html.light body {
+  color: rgb(15, 23, 42);
+}
+
+/* ── Body / mesh / accent ── */
+
+html.light .gradient-mesh {
+  background:
+    radial-gradient(ellipse 60% 50% at 15% 0%, rgba(99, 102, 241, 0.10), transparent 50%),
+    radial-gradient(ellipse 60% 50% at 85% 100%, rgba(147, 51, 234, 0.08), transparent 50%),
+    radial-gradient(ellipse 40% 40% at 50% 50%, rgba(192, 132, 252, 0.05), transparent 50%),
+    rgb(248, 250, 252);
+  background-attachment: fixed;
+}
+
+/* ── Gradient text (page titles, "agent" chips in the usage tile) ──
+   The dark-mode gradient uses light-indigo→violet→purple which goes
+   nearly invisible on a near-white background. Re-anchor it to the
+   500/600 range so the gradient reads with comfortable contrast. */
+
+html.light .gradient-text {
+  background: linear-gradient(135deg, rgb(67, 56, 202), rgb(126, 34, 206), rgb(162, 28, 175));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+html.light .hero-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(67, 56, 202) 0%,
+    rgb(126, 34, 206) 25%,
+    rgb(162, 28, 175) 50%,
+    rgb(126, 34, 206) 75%,
+    rgb(67, 56, 202) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Glass cards ── */
+
+html.light .glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+html.light .glass-card-light {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+/* ── Text colour utilities ── */
+
+html.light .text-white                  { color: rgb(15, 23, 42); }
+
+/* `.text-white` is overloaded: it tags both body text on the dark
+   gradient AND button labels on saturated/gradient surfaces. The blanket
+   override above darkens the first case (right) and the second case
+   (wrong — black-on-indigo is unreadable). Re-whiten the label when
+   `.text-white` is paired with a coloured-background utility, which
+   lifts specificity above the generic override. */
+html.light .bg-indigo-400.text-white,
+html.light .bg-indigo-500.text-white,
+html.light .bg-indigo-600.text-white,
+html.light .bg-indigo-500\/80.text-white,
+html.light .bg-indigo-500\/90.text-white,
+html.light .bg-fuchsia-400.text-white,
+html.light .bg-fuchsia-500.text-white,
+html.light .bg-fuchsia-500\/90.text-white,
+html.light .bg-emerald-500.text-white,
+html.light .bg-emerald-500\/90.text-white,
+html.light .bg-amber-500\/80.text-white,
+html.light .bg-amber-500\/90.text-white,
+html.light .bg-slate-600\/90.text-white,
+html.light .bg-gradient-to-r.text-white,
+html.light .bg-gradient-to-br.text-white,
+html.light .bg-gradient-to-tr.text-white,
+html.light .bg-gradient-to-l.text-white,
+html.light .bg-gradient-to-bl.text-white,
+html.light .bg-gradient-to-tl.text-white,
+html.light .bg-gradient-to-b.text-white,
+html.light .bg-gradient-to-t.text-white {
+  color: rgb(255, 255, 255);
+}
+html.light .text-slate-100              { color: rgb(15, 23, 42); }
+html.light .text-slate-200              { color: rgb(30, 41, 59); }
+html.light .text-slate-300              { color: rgb(51, 65, 85); }
+html.light .text-slate-400              { color: rgb(71, 85, 105); }
+html.light .text-slate-500              { color: rgb(100, 116, 139); }
+html.light .text-slate-600              { color: rgb(148, 163, 184); }
+html.light .text-slate-700              { color: rgb(148, 163, 184); }
+html.light .hover\:text-white:hover     { color: rgb(2, 6, 23); }
+html.light .hover\:text-slate-100:hover { color: rgb(2, 6, 23); }
+html.light .hover\:text-slate-300:hover { color: rgb(15, 23, 42); }
+html.light .hover\:text-slate-200:hover { color: rgb(15, 23, 42); }
+
+/* Brand accents stay close to their dark values but pulled toward
+   the saturated mid-range so they read against a near-white surface. */
+html.light .text-indigo-200             { color: rgb(67, 56, 202); }
+html.light .text-indigo-300             { color: rgb(67, 56, 202); }
+html.light .text-indigo-400             { color: rgb(79, 70, 229); }
+html.light .text-fuchsia-200            { color: rgb(134, 25, 143); }
+html.light .text-fuchsia-300            { color: rgb(134, 25, 143); }
+html.light .text-fuchsia-400            { color: rgb(162, 28, 175); }
+html.light .text-amber-300              { color: rgb(180, 83, 9); }
+html.light .text-emerald-300            { color: rgb(4, 120, 87); }
+html.light .text-red-300                { color: rgb(185, 28, 28); }
+html.light .text-red-400                { color: rgb(185, 28, 28); }
+
+/* ── Background utilities ── */
+
+html.light .bg-slate-900                { background-color: rgb(255, 255, 255); }
+html.light .bg-slate-800                { background-color: rgb(241, 245, 249); }
+html.light .bg-slate-800\/80            { background-color: rgba(241, 245, 249, 0.85); }
+html.light .bg-slate-700                { background-color: rgb(226, 232, 240); }
+html.light .bg-slate-700\/40            { background-color: rgba(226, 232, 240, 0.55); }
+html.light .bg-slate-600                { background-color: rgb(203, 213, 225); }
+html.light .bg-slate-500                { background-color: rgb(148, 163, 184); }
+html.light .bg-slate-400\/15            { background-color: rgba(100, 116, 139, 0.12); }
+html.light .bg-slate-900\/30            { background-color: rgba(241, 245, 249, 0.6); }
+html.light .bg-slate-900\/40            { background-color: rgba(241, 245, 249, 0.7); }
+html.light .bg-slate-900\/50            { background-color: rgba(241, 245, 249, 0.7); }
+html.light .bg-slate-900\/60            { background-color: rgba(241, 245, 249, 0.8); }
+html.light .bg-slate-900\/80            { background-color: rgba(255, 255, 255, 0.9); }
+html.light .bg-white\/5                 { background-color: rgba(15, 23, 42, 0.04); }
+html.light .bg-white\/10                { background-color: rgba(15, 23, 42, 0.06); }
+html.light .hover\:bg-white\/5:hover    { background-color: rgba(15, 23, 42, 0.06); }
+html.light .hover\:bg-white\/10:hover   { background-color: rgba(15, 23, 42, 0.10); }
+
+/* ── Border utilities ── */
+
+html.light .border-white\/5             { border-color: rgba(15, 23, 42, 0.08); }
+html.light .border-white\/10            { border-color: rgba(15, 23, 42, 0.10); }
+html.light .border-white\/20            { border-color: rgba(15, 23, 42, 0.16); }
+html.light .border-slate-700            { border-color: rgb(203, 213, 225); }
+html.light .border-slate-800            { border-color: rgb(226, 232, 240); }
+
+/* ── Code blocks / pre ── */
+
+html.light pre,
+html.light code {
+  color: rgb(15, 23, 42);
+}
+
+/* ── Neon terminal (run log container) ──
+   The dark default uses near-black (rgb 2,6,23) with light-slate text
+   inlined via `.neon-terminal pre`. Both need flipping in light mode
+   — the text color is set directly on the descendant pre/code, so the
+   blanket `.text-slate-*` utility overrides above don't reach it. */
+
+html.light .neon-terminal {
+  background: rgb(248, 250, 252);
+  border-color: rgba(99, 102, 241, 0.20);
+  box-shadow:
+    inset 0 0 40px rgba(99, 102, 241, 0.04),
+    0 0 16px rgba(99, 102, 241, 0.08);
+}
+
+html.light .neon-terminal pre,
+html.light .neon-terminal code {
+  color: rgb(30, 41, 59);
+}
+
+/* ── Markdown body (inline-styled in layouts/application) ── */
+
+html.light .task-md                     { color: rgb(30, 41, 59); }
+html.light .task-md h1,
+html.light .task-md h2,
+html.light .task-md h3,
+html.light .task-md h4                  { color: rgb(15, 23, 42); }
+html.light .task-md h2                  { border-bottom-color: rgba(15, 23, 42, 0.10); }
+html.light .task-md strong              { color: rgb(15, 23, 42); }
+html.light .task-md em                  { color: rgb(51, 65, 85); }
+html.light .task-md code                { color: rgb(67, 56, 202); background: rgba(99, 102, 241, 0.10); }
+html.light .task-md pre                 { background: rgb(248, 250, 252); border-color: rgba(15, 23, 42, 0.10); }
+html.light .task-md pre code            { color: rgb(15, 23, 42); }
+html.light .task-md a                   { color: rgb(67, 56, 202); }
+html.light .task-md a:hover             { color: rgb(49, 46, 129); }
+html.light .task-md blockquote          { color: rgb(71, 85, 105); border-left-color: rgba(99, 102, 241, 0.45); }
+html.light .task-md th,
+html.light .task-md td                  { border-color: rgba(15, 23, 42, 0.12); }
+html.light .task-md th                  { background: rgba(15, 23, 42, 0.04); }
+html.light .task-md hr                  { border-top-color: rgba(15, 23, 42, 0.10); }
+
+/* ── Theme toggle button: invert the icons ──
+   Tailwind's preflight sets `svg { display: block }`, which would
+   stack the two icons inside the inline-flex button. Force the
+   visible icon back to `inline-block` (sized SVGs need block-or-
+   inline-block, never bare `inline`) and hide the other one. */
+
+[data-theme-toggle] .icon-sun             { display: inline-block; }
+[data-theme-toggle] .icon-moon            { display: none; }
+html.light [data-theme-toggle] .icon-sun  { display: none; }
+html.light [data-theme-toggle] .icon-moon { display: inline-block; }

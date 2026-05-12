@@ -59,6 +59,10 @@ fn show(req)
   # imported — happens when the user refreshed the page during the
   # polling window so generate_tasks_log never saw the done signal.
   _finalize_done_plans(feature, req["current_user"])
+  # Reconcile the feature's status from its tasks: catches the
+  # no-commit / local-branch flows where `bin/task-run` writes
+  # `status=done` straight to the DB and `mark_done` never fires.
+  feature.recompute_status!()
   let all_tasks = feature.tasks()
   let proposed = []
   let linked = []

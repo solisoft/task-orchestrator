@@ -5,8 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %> - Soli App</title>
 
+    <!-- Theme bootstrap (inline + sync) so the first paint already
+         matches the saved preference and we don't flash dark→light. -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var theme = (saved === "light" || saved === "dark")
+            ? saved
+            : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+                ? "light" : "dark");
+          document.documentElement.classList.add(theme);
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+
     <!-- Tailwind CSS (compiled) -->
     <link rel="stylesheet" href="<%= public_path("css/application.css") %>">
+    <!-- Light-theme overrides (no-op when <html> lacks `light` class) -->
+    <link rel="stylesheet" href="<%= public_path("css/theme-light.css") %>">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,6 +37,8 @@
 
     <!-- Browser push notifications (registers the service worker on every page) -->
     <script src="<%= public_path("push.js") %>" defer></script>
+    <!-- Theme toggle wiring (reads the saved preference, syncs the toggle button) -->
+    <script src="<%= public_path("theme.js") %>" defer></script>
     <style>
       /* HTMX v2 ships no CSS; replicate the canonical indicator pattern. */
       .htmx-indicator { display: none; }
