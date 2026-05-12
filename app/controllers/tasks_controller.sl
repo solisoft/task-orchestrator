@@ -227,6 +227,29 @@ fn show(req)
   })
 end
 
+# GET /projects/:name/tasks/:slug/sidebar — returns the task as an HTML
+# fragment for the feature page's right-side sidebar overlay. No layout,
+# no chrome — just the contents of `tasks/_sidebar` so HTMX can swap it
+# into `#task-sidebar-body` without a full navigation.
+fn sidebar(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found: " + req["params"]["slug"]}
+  end
+  {
+    "status": 200,
+    "headers": {"Content-Type": "text/html; charset=utf-8"},
+    "body": render_partial("tasks/sidebar", {
+      "project": project,
+      "task":    task
+    })
+  }
+end
+
 # Hash describing the per-task git branch for the merge UI on the
 # task page, or nil when the task isn't a candidate (only "inprogress",
 # "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks

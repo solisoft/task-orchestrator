@@ -1291,6 +1291,12 @@ img, video {
   margin-bottom: calc(1rem * var(--tw-space-y-reverse));
 }
 
+.space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1.25rem * var(--tw-space-y-reverse));
+}
+
 .space-y-8 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0;
   margin-top: calc(2rem * calc(1 - var(--tw-space-y-reverse)));
@@ -1952,6 +1958,11 @@ img, video {
 .text-sm {
   font-size: 0.875rem;
   line-height: 1.25rem;
+}
+
+.text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
 }
 
 .text-xs {
@@ -2918,6 +2929,86 @@ html.dark {
   transform: translateX(-100%);
   animation: shimmer-slide 3.5s ease-in-out infinite;
   pointer-events: none;
+}
+
+/* ── Right-side task sidebar overlay ──
+   Used by the feature show page. The overlay wraps a translucent
+   blurred backdrop and a 70%-wide panel; `.is-open` flips both visible
+   and slides the panel in from the right edge. */
+
+.task-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.task-sidebar-overlay.is-open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.task-sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.task-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 70%;
+  max-width: 70vw;
+  background: var(--bg-base);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -16px 0 48px rgba(2, 6, 23, 0.55);
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+}
+
+.task-sidebar-overlay.is-open .task-sidebar {
+  transform: translateX(0);
+}
+
+.task-sidebar-close {
+  position: sticky;
+  top: 0.75rem;
+  float: right;
+  margin: 0.75rem 0.75rem 0 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg-light);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  z-index: 1;
+}
+
+.task-sidebar-close:hover {
+  color: var(--text-primary);
+  background: var(--glass-bg);
+}
+
+.task-sidebar-body {
+  padding: 1.5rem 2rem 2rem;
+}
+
+body.task-sidebar-open {
+  overflow: hidden;
 }
 
 .marker\:hidden *::marker {
