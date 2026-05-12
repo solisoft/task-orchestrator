@@ -35,6 +35,19 @@
     </select>
   </div>
 
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Plan model</label>
+    <p class="text-xs text-slate-500 mb-2">Model used when this feature&rsquo;s brief is turned into tasks. Leave blank to use the global default (<span class="font-mono"><%= default_plan_model %></span>).</p>
+    <% let _cur_pm = (feature == nil ? "" : (feature.plan_model ?? "")) %>
+    <%- partial("features/plan_model_select", {
+      "name":            "plan_model",
+      "current":         _cur_pm,
+      "opencode_models": opencode_models,
+      "include_blank":   true,
+      "blank_label":     "Use global default (" + default_plan_model + ")"
+    }) %>
+  </div>
+
   <div class="flex justify-end gap-2 pt-2">
     <a href="<%= feature == nil ? "/features" : "/features/" + feature._key %>" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
     <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
