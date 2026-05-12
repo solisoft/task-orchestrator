@@ -9,7 +9,7 @@ class Task < Model
   validates("slug",       { "presence": true,
                             "format": "^[A-Za-z0-9][A-Za-z0-9._-]*$" })
   validates("status",     { "presence": true,
-                            "format": "^(todo|queued|inprogress|review|done|failed|archived)$" })
+                            "format": "^(proposed|todo|queued|inprogress|review|done|failed|archived)$" })
   validates("title",      { "presence": true })
   # `agent_type` is optional — when unset the dashboard falls back to
   # `Setting.get("agent_type")`. The format check only fires when the
@@ -19,7 +19,7 @@ class Task < Model
   before_save("touch_timestamps")
 
   static def statuses()
-    ["todo", "queued", "inprogress", "review", "done", "failed", "archived"]
+    ["proposed", "todo", "queued", "inprogress", "review", "done", "failed", "archived"]
   end
 
   # Agents the orchestrator can dispatch to. Mirrors the regex above and

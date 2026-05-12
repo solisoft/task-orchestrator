@@ -8,10 +8,17 @@ get("/logout", "auth#logout")
 
 # ── Root & Utility ──────────────────
 
-get("/", "home#index")
+get("/", "home#landing")
+get("/agents-dashboard", "home#index")
 get("/plans", "plans#index")
 get("/health", "home#health")
 get("/debug", "debug#show")
+get("/debug/features", "debug#features_probe")
+get("/debug/demote", "debug#demote_feature_todos")
+get("/debug/stamp", "debug#stamp_imported")
+get("/debug/unstamp", "debug#unstamp_imported")
+get("/debug/try-import", "debug#try_import")
+get("/debug/comments", "debug#comments_probe")
 get("/docs", "docs#index")
 
 # ── Settings ─────────────────────────
@@ -36,6 +43,7 @@ post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
 post("/projects/:name/tasks/:slug/checkout", "tasks#checkout_branch")
 post("/projects/:name/tasks/:slug/mark-done", "tasks#mark_done")
 post("/projects/:name/tasks/:slug/commit-push", "tasks#commit_push")
+post("/projects/:name/tasks/:slug/react", "tasks#react")
 post("/projects/:name/tasks/:slug/archive", "tasks#archive")
 post("/projects/:name/tasks/:slug/unarchive", "tasks#unarchive")
 
@@ -67,10 +75,21 @@ middleware("authenticate", -> {
 
   resources("features")
   post("/features/:id/generate_tasks", "features#generate_tasks")
+  post("/features/:id/regenerate_tasks", "features#regenerate_tasks")
+  post("/features/:id/refine_tasks", "features#refine_tasks")
+  post("/features/:id/cancel_plan", "features#cancel_plan")
   get("/features/:id/generate_tasks_log/:plan_id", "features#generate_tasks_log")
+  post("/features/:id/publish", "features#publish")
+  post("/features/:id/tasks/:slug/remove", "features#remove_task")
 
   # ── Comments (nested under features) ─
 
   post("/features/:id/comments", "comments#create")
+  post("/comments/:key/delete", "comments#destroy")
+  # Auto-mounts:
+  #   GET    /comments/:id/attachment/:blob_id  → attachments#show
+  #   POST   /comments/:id/attachment           → attachments#create  (unused — we attach inside comments#create)
+  #   DELETE /comments/:id/attachment/:blob_id  → attachments#destroy
+  uploads("comments", "attachment")
 
 })

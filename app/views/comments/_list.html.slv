@@ -1,13 +1,58 @@
-<div id="comments-thread">
+<div id="comments-thread" class="space-y-4">
+  <% let meta_lookup = (locals != nil and locals["attachments_meta"] != nil) ? locals["attachments_meta"] : {} %>
+  <% let me_email = (locals != nil and locals["current_user_email"] != nil) ? locals["current_user_email"] : "" %>
   <% for comment in comments %>
-    <div class="border-b border-white/5 last:border-b-0 py-3">
-      <div class="flex items-baseline justify-between gap-2 mb-1">
-        <span class="text-xs font-medium text-indigo-300"><%= comment.author %></span>
-        <span class="text-xs text-slate-600"><%= comment.created_at %></span>
+    <% let author = comment.author ?? "?" %>
+    <% let initial = (author == "" ? "?" : author.substring(0, 1).upcase()) %>
+    <% let blob_ids = comment.attachment_blob_ids ?? [] %>
+    <% let is_mine = (me_email != "" and author == me_email) %>
+    <div class="flex gap-3 group">
+      <div class="avatar-bubble"><%= initial %></div>
+      <div class="flex-1 min-w-0 rounded-lg bg-white/[0.03] border border-white/5 px-4 py-3">
+        <div class="flex items-baseline justify-between gap-2 mb-1.5">
+          <span class="text-xs font-semibold text-indigo-300"><%= author %></span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-600 font-mono"><%= comment.created_at %></span>
+            <% if is_mine %>
+              <form method="post" action="/comments/<%= comment._key %>/delete" onsubmit="return confirm('Delete this comment?')" class="inline">
+                <button type="submit" title="Delete this comment" class="text-slate-600 hover:text-red-300 hover:bg-red-500/10 rounded px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </form>
+            <% end %>
+          </div>
+        </div>
+        <% if comment.body != nil and comment.body != "" and comment.body != "(attachment)" %>
+          <article class="task-md text-sm">
+            <%- Markdown.to_safe_html(comment.body) %>
+          </article>
+        <% end %>
+        <% if blob_ids.length() > 0 %>
+          <div class="mt-3 grid sm:grid-cols-2 gap-2">
+            <% for blob_id in blob_ids %>
+              <% let meta = meta_lookup[blob_id] %>
+              <% let filename = (meta != nil and meta["name"] != nil) ? meta["name"] : blob_id %>
+              <% let ctype = (meta != nil and meta["type"] != nil) ? meta["type"] : "" %>
+              <% let href = "/comments/" + comment._key + "/attachment/" + blob_id %>
+              <% let is_image = ctype.starts_with("image/") %>
+              <% if is_image %>
+                <a href="<%= href %>" target="_blank" class="block rounded-lg overflow-hidden border border-white/5 hover:border-indigo-400/40 transition-colors group relative bg-slate-900">
+                  <img src="<%= href %>?thumb=480"
+                       srcset="<%= href %>?thumb=480 1x, <%= href %>?thumb=960 2x"
+                       alt="<%= filename %>" loading="lazy"
+                       class="block w-full h-48 object-cover">
+                  <span class="absolute bottom-0 inset-x-0 px-2 py-1 text-[10px] font-mono text-slate-300 bg-slate-900/80 opacity-0 group-hover:opacity-100 transition-opacity truncate"><%= filename %></span>
+                </a>
+              <% else %>
+                <a href="<%= href %>" target="_blank" class="flex items-center gap-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 hover:border-indigo-400/40 px-3 py-2 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span class="text-xs text-slate-200 truncate"><%= filename %></span>
+                </a>
+              <% end %>
+            <% end %>
+          </div>
+        <% end %>
       </div>
-      <article class="task-md text-sm">
-        <%- Markdown.to_safe_html(comment.body) %>
-      </article>
     </div>
   <% end %>
 </div>

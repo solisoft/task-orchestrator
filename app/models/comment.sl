@@ -9,6 +9,31 @@ class Comment < Model
   validates("author",       { "presence": true })
   validates("body",         { "presence": true })
 
+  # Built-in Soli uploader DSL — stores blobs in solidb collection
+  # `comment_attachments` and exposes `attach_attachment(file)`,
+  # `detach_attachment(blob_id)`, and the `attachment_blob_ids` field.
+  uploader("attachment", {
+    "multiple": true,
+    "content_types": [
+      "image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv", "text/plain", "application/json",
+      "application/zip", "application/x-zip-compressed"
+    ],
+    "max_size":   10_000_000,
+    "collection": "comment_attachments"
+  })
+
+  before_delete("cleanup_uploads")
+
+  def cleanup_uploads()
+    detach_all_uploads(self)
+  end
+
   static def create_comment(feature_slug, author, body)
     let existing = Comment.for_feature(feature_slug)
     let next_num = existing.length() + 1

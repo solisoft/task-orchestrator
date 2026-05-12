@@ -4,7 +4,7 @@ Soli is a dynamically-typed, high-performance web framework written in Rust. Thi
 
 ## For AI agents — read this first
 
-**Critical: NEVER use `pkill`, `kill`, `killall`, or any process-killing command.** These commands disrupt running services (e.g. the `soli serve` dev server in another worktree) in ways that are hard to trace. If a process seems stuck, report it — do not kill it.
+**Critical: NEVER kill processes you didn't start.** Don't `pkill`/`killall`/pattern-match — those reach into other worktrees and disrupt dev servers in ways that are hard to trace. You *may* `kill "$PID"` a process *you* spawned in the same Bash call (e.g. a `soli serve` you backgrounded for a smoke test) — that's yours to clean up, and failing to do so will hang the run. If something else seems stuck, report it; don't kill it.
 
 You are working in a Soli MVC app. Soli looks like Ruby/JS but has its own quirks; skim the **Footgun cheatsheet** below before generating code. Per-directory `CLAUDE.md` files in `app/controllers/`, `app/models/`, `app/views/`, `app/middleware/`, `tests/`, and `db/migrations/` give you the local rules — Claude Code loads them automatically when you work in those directories.
 
@@ -16,6 +16,22 @@ You are working in a Soli MVC app. Soli looks like Ruby/JS but has its own quirk
 4. `soli serve . --dev`, then hit the route in a browser if you changed a UI/route — confirm 200 and that the page renders.
 
 If a step fails, fix the root cause. Don't weaken assertions, lower the coverage bar, or `--no-verify` past hooks.
+
+#### Headless smoke-test recipe
+
+If you can't open a browser and want `curl` to hit the dev server from a single Bash call, use this exact shape — pick a unique `--port` (other agents may be serving on the default), capture the PID, and **always tear it down at the end**. `soli serve` runs forever; `wait`-ing on it without killing it first will hang your shell and stall the whole run.
+
+```bash
+soli serve . --port 5099 --dev > /tmp/serve.log 2>&1 &
+SERVE_PID=$!
+sleep 4
+
+curl -s -o /tmp/page.html -w "HTTP %{http_code}\n" http://localhost:5099/your-route
+grep -c "thing-you-expect" /tmp/page.html
+
+kill "$SERVE_PID"
+wait "$SERVE_PID" 2>/dev/null
+```
 
 ### Reach for generators first
 

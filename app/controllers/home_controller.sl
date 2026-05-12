@@ -18,7 +18,37 @@ fn index(req)
     "agents": Task.known_agents(),
     "usage_day":   usage["day"],
     "usage_week":  usage["week"],
-    "limits":      _home_load_limits()
+    "limits":      _home_load_limits(),
+    "features_by_project": _home_feature_counts(),
+    "current_user": req["current_user"]
+  })
+end
+
+# Returns { "<project>": <count>, ... } — one Feature.all() scan, bucketised
+# by `project` field. Empty hash if the features collection is absent.
+fn _home_feature_counts()
+  let h = {}
+  let features = Feature.all() rescue []
+  for f in features
+    let p = f.project ?? ""
+    if p != ""
+      h[p] = (h[p] ?? 0) + 1
+    end
+  end
+  h
+end
+
+# GET / — marketing-style landing page. Displays a hero with the product
+# pitch, value-prop tiles, and a CTA. Lightweight: no DB scans, just a
+# couple of headline counters for credibility.
+fn landing(req)
+  let project_count = list_projects() rescue []
+  let feature_total = (Feature.count() rescue 0)
+  render("home/landing", {
+    "title":          "Task Orchestrator — product briefs that ship",
+    "project_count":  project_count.length(),
+    "feature_total":  feature_total,
+    "current_user":   req["current_user"]
   })
 end
 

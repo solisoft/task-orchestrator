@@ -381,6 +381,41 @@ fn commit_push(req)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
+fn react(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "react is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if task.pr_url == nil or task.pr_url == ""
+    return {"status": 422,
+            "body": "react is only available for tasks with an open PR"}
+  end
+  let prompt = (req["form"]["prompt"] ?? "").trim()
+  if prompt == ""
+    return {"status": 422, "body": "Prompt is required"}
+  end
+  let nonce = str(DateTime.now().to_unix() rescue 0)
+  let prompt_path = "/tmp/react-prompt-" + nonce + ".md"
+  Trusted.write(prompt_path, prompt)
+  let line = "nohup ./bin/react-run " + project["name"] + " " +
+             task.slug + " " + prompt_path +
+             " >/dev/null 2>&1 & disown"
+  let res = System.run_sync(["bash", "-c", line])
+  if res["exit_code"] != 0
+    return {"status": 500, "body": "Failed to spawn react agent — check server log"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
+end
+
 fn save(req)
   let project = find_project(req["params"]["name"])
   if project == nil
@@ -814,10 +849,10 @@ fn archive(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" and task.status != "failed"
+  if task.status != "todo" and task.status != "done" and task.status != "failed"
     return {"status": 422,
-            "body": "archive is only available for done or failed tasks (current: " +
-                    task.status + ")"}
+            "body": "archive is only available for todo, done, or failed tasks " +
+                    "(current: " + task.status + ")"}
   end
   task.status = "archived"
   task.save()

@@ -1,20 +1,34 @@
 <div class="min-h-screen text-white">
     <div class="max-w-6xl mx-auto px-6 py-12">
 
+        <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
+            <a href="/" class="hover:text-slate-300 transition-colors">Home</a>
+            <span class="mx-2">/</span>
+            <span class="text-slate-300">Agents Dashboard</span>
+        </nav>
+
         <header class="mb-12 animate-fade-in">
             <div class="flex items-baseline justify-between flex-wrap gap-3 mb-6">
                 <div>
-                    <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Task Orchestrator</h1>
+                    <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Agents Dashboard</h1>
                     <p class="mt-2 text-slate-400 font-mono text-sm"><%= root %></p>
                 </div>
                 <div class="flex items-center gap-2">
+                    <a href="/features" class="rounded-lg bg-gradient-to-r from-indigo-500/90 to-fuchsia-500/90 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-medium px-4 py-2 transition-all btn-glow shadow-lg shadow-indigo-500/15 inline-flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        Features
+                    </a>
                     <a href="/plans" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Plans</a>
                     <a href="/settings" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Settings</a>
                     <a href="/docs" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Docs</a>
+                    <% if current_user != nil %>
+                        <a href="/logout" class="rounded-lg glass-card-light hover:bg-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors btn-glow" title="Sign out as <%= current_user.email %>">Logout</a>
+                    <% end %>
                 </div>
             </div>
             <p class="text-slate-400 text-sm max-w-2xl leading-relaxed">
-                Drop a markdown task spec, queue it, and watch a Claude Code agent dispatch it end-to-end inside a fresh git worktree.
+                Per-project task counts, agent usage, and the entry points into each repo.
+                Drop a markdown task spec, queue it, and an agent dispatches it end-to-end inside a fresh git worktree.
             </p>
         </header>
 
@@ -51,20 +65,25 @@
             </div>
         <% else %>
             <div class="rounded-xl overflow-hidden border border-white/10 animate-fade-in animate-fade-in-2">
-                <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr repeat(<%= statuses.length() %>, 5rem)">
+                <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem)">
                     <span>Project</span>
+                    <span class="text-center text-fuchsia-300/80">Features</span>
                     <% for s in statuses %>
                         <span class="text-center"><%= s %></span>
                     <% end %>
                 </div>
                 <% for p in projects %>
-                    <a href="/projects/<%= p["name"] %>" class="grid items-center px-5 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors group" style="grid-template-columns: 1fr repeat(<%= statuses.length() %>, 5rem)">
-                        <span class="text-sm font-medium group-hover:text-indigo-200 transition-colors truncate pr-2"><%= p["name"] %></span>
+                    <div class="grid items-center px-5 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors group" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem)">
+                        <a href="/projects/<%= p["name"] %>" class="text-sm font-medium group-hover:text-indigo-200 transition-colors truncate pr-2"><%= p["name"] %></a>
+                        <% let fcnt = features_by_project[p["name"]] ?? 0 %>
+                        <a href="/features?project=<%= p["name"] %>" class="text-center text-sm font-mono transition-colors <%= fcnt > 0 ? "text-fuchsia-300 hover:text-fuchsia-200" : "text-slate-600 hover:text-slate-400" %>" title="<%= fcnt %> feature briefs">
+                            <% if fcnt > 0 %><%= fcnt %><% else %>&middot;<% end %>
+                        </a>
                         <% for s in statuses %>
                             <% let cnt = p["counts"][s] ?? 0 %>
-                            <span class="text-center text-sm font-mono <%= cnt > 0 ? "text-white" : "text-slate-600" %>"><%= cnt %></span>
+                            <a href="/projects/<%= p["name"] %>" class="text-center text-sm font-mono <%= cnt > 0 ? "text-white" : "text-slate-600" %>"><%= cnt %></a>
                         <% end %>
-                    </a>
+                    </div>
                 <% end %>
             </div>
         <% end %>

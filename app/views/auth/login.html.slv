@@ -1,35 +1,114 @@
-<div class="min-h-screen text-white">
-  <div class="max-w-md mx-auto px-6 py-24">
-    <div class="rounded-xl glass-card p-8 animate-fade-in">
-      <h1 class="text-2xl font-bold gradient-text mb-6 text-center">Sign in</h1>
+<div class="min-h-screen text-white relative overflow-hidden">
+  <div class="login-orb login-orb-1"></div>
+  <div class="login-orb login-orb-2"></div>
+  <div class="login-orb login-orb-3"></div>
 
-      <% if error != nil %>
-        <div class="rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3 mb-4">
-          <%= error %>
-        </div>
-      <% end %>
+  <div class="max-w-6xl mx-auto px-6 py-16 lg:py-24 relative">
+    <div class="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
 
-      <form method="post" action="/login" class="space-y-4">
+      <div class="space-y-8 animate-fade-in">
         <div>
-          <label class="block text-sm font-medium text-slate-300 mb-1">Email</label>
-          <input type="email" name="email" required value="<%= email ?? "" %>"
-                 class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100"
-                 placeholder="you@example.com" autofocus>
+          <div class="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 border border-indigo-400/20 px-3 py-1 text-xs font-medium text-indigo-300 mb-6">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-400"></span>
+            </span>
+            <span>Multi-agent task orchestration</span>
+          </div>
+          <h1 class="text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-4">
+            <span class="hero-shimmer">Briefs become</span>
+            <br>
+            <span class="gradient-text">shipped code.</span>
+          </h1>
+          <p class="text-lg text-slate-400 leading-relaxed max-w-lg">
+            Write a product brief once. Watch agents fan it out into linked tasks,
+            spin up worktrees, open PRs &mdash; while your team comments and reviews
+            in one place.
+          </p>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-slate-300 mb-1">Password</label>
-          <input type="password" name="password" required
-                 class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100"
-                 placeholder="Your password">
-        </div>
-        <button type="submit" class="w-full rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-3 transition-colors">
-          Sign in
-        </button>
-      </form>
 
-      <p class="text-xs text-slate-500 mt-6 text-center">
-        Task Orchestrator
-      </p>
+        <ul class="space-y-4">
+          <li class="flex items-start gap-4 animate-fade-in animate-fade-in-1">
+            <div class="shrink-0 w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-400/20 flex items-center justify-center text-indigo-300">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-100">Product-level briefs</h3>
+              <p class="text-sm text-slate-400">Capture the why, the UX, and the acceptance criteria in markdown. Discuss inline.</p>
+            </div>
+          </li>
+          <li class="flex items-start gap-4 animate-fade-in animate-fade-in-2">
+            <div class="shrink-0 w-10 h-10 rounded-xl bg-fuchsia-500/15 border border-fuchsia-400/20 flex items-center justify-center text-fuchsia-300">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-100">One-click task fan-out</h3>
+              <p class="text-sm text-slate-400">Hit <em>Generate</em> and the plan agent breaks the brief into 3&ndash;7 focused tasks, linked back to the feature.</p>
+            </div>
+          </li>
+          <li class="flex items-start gap-4 animate-fade-in animate-fade-in-3">
+            <div class="shrink-0 w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center text-emerald-300">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-100">Live worktrees &amp; PRs</h3>
+              <p class="text-sm text-slate-400">Agents work in isolated git worktrees, open PRs, and the board reflects every step.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="animate-fade-in animate-fade-in-2">
+        <div class="rounded-2xl glass-card p-8 lg:p-10 card-glow relative">
+          <div class="absolute -inset-px rounded-2xl pointer-events-none gradient-border-glow"></div>
+          <h2 class="text-2xl font-bold gradient-text mb-1">Sign in</h2>
+          <p class="text-sm text-slate-500 mb-6">Welcome back &mdash; let&rsquo;s ship something.</p>
+
+          <% if error != nil %>
+            <div class="rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3 mb-4 flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span><%= error %></span>
+            </div>
+          <% end %>
+
+          <form method="post" action="/login" class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">Email</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                </span>
+                <input type="email" name="email" required value="<%= email ?? "" %>"
+                       class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20 outline-none pl-10 pr-4 py-2.5 text-sm text-slate-100 transition"
+                       placeholder="you@example.com" autofocus>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">Password</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </span>
+                <input type="password" name="password" required
+                       class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 focus:ring-2 focus:ring-indigo-400/20 outline-none pl-10 pr-4 py-2.5 text-sm text-slate-100 transition"
+                       placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+              </div>
+            </div>
+            <button type="submit" class="w-full rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-4 py-3 transition-all btn-glow shadow-lg shadow-indigo-500/20">
+              Sign in &rarr;
+            </button>
+          </form>
+
+          <div class="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-xs text-slate-500">
+            <span class="font-mono">Task Orchestrator</span>
+            <span class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 dot-pulse"></span>
+              <span>powered by Soli</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
