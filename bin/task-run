@@ -261,6 +261,24 @@ else
   fail "canonical skills missing under $canonical_skills (expected do-task and review-task)"
 fi
 
+# 3a-bis. Seat the agent-side PreToolUse hook that wraps any foreground
+# `soli serve` with `timeout 120s`. Without this, an agent that ignores
+# the CLAUDE.md headless smoke-test recipe and runs `soli serve ... |
+# head -N` will hang forever — `soli serve` never closes stdout, `head`
+# never EOFs, the bash tool call never returns, and the wrapper sits at
+# `running /do-task` with a live PID but a dead heartbeat. Lives in
+# `.claude/settings.local.json` (vs. the checked-in `.claude/settings.json`)
+# so it only applies to the agent's session, not interactive sessions
+# in the orchestrator repo itself.
+canonical_hooks="$project_root/.claude/hooks"
+if [[ -f "$canonical_hooks/timeout-soli-serve.sh" && -f "$canonical_hooks/agent-settings.json" ]]; then
+  mkdir -p "$worktree_dir/.claude/hooks"
+  cp "$canonical_hooks/timeout-soli-serve.sh" "$worktree_dir/.claude/hooks/"
+  chmod +x "$worktree_dir/.claude/hooks/timeout-soli-serve.sh"
+  cp "$canonical_hooks/agent-settings.json" "$worktree_dir/.claude/settings.local.json"
+  log "seeded worktree's .claude/hooks/timeout-soli-serve.sh + settings.local.json"
+fi
+
 # 3b. Copy the project's `.env.test` into the worktree so `soli test`
 # (which the do-task / review-task skills run for verification) can
 # find it. The file is gitignored, so the worktree's checkout of
