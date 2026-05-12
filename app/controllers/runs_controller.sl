@@ -21,7 +21,8 @@ fn show(req)
     "pr_url": run_pr_url(project["name"], slug),
     "tail": run_log_tail(project["name"], slug, 16384),
     "todos": run_latest_todos(project["name"], slug),
-    "branch_info": _branch_info_for(task, project)
+    "branch_info": _branch_info_for(task, project),
+    "theme": Setting.current_theme()
   })
 end
 

@@ -50,6 +50,13 @@ class Setting < Model
     h
   end
 
+  # The persisted UI theme name, or `"dark"` when nothing is set yet.
+  # Sugar for the call every controller has to make to feed the layout
+  # — `render("...", { ..., "theme": Setting.current_theme() })`.
+  static def current_theme()
+    return Setting.get_or("theme", "dark")
+  end
+
   # Upsert: creates the row if missing, otherwise overwrites `value`.
   # Returns the persisted instance (or nil when the underlying update
   # didn't return one — Model.update is a static that returns the raw

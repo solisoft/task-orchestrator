@@ -5,7 +5,8 @@ fn login_form(req)
   render("auth/login", {
     "title": "Sign in",
     "error": nil,
-    "email": ""
+    "email": "",
+    "theme": Setting.current_theme()
   })
 end
 
@@ -18,7 +19,8 @@ fn login(req)
     return render("auth/login", {
       "title": "Sign in",
       "error": "Email and password are required.",
-      "email": email
+      "email": email,
+      "theme": Setting.current_theme()
     })
   end
   let user = User.authenticate(email, password)
@@ -26,7 +28,8 @@ fn login(req)
     return render("auth/login", {
       "title": "Sign in",
       "error": "Invalid email or password.",
-      "email": email
+      "email": email,
+      "theme": Setting.current_theme()
     })
   end
   let resp = redirect("/")

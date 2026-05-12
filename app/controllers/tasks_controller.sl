@@ -32,7 +32,8 @@ fn new(req)
     "plan_id":         plan_id == "" ? nil : plan_id,
     "plan_state":      plan_state,
     "plan_title":      plan_title,
-    "opencode_models": list_opencode_models()
+    "opencode_models": list_opencode_models(),
+    "theme":           Setting.current_theme()
   })
 end
 
@@ -160,7 +161,8 @@ fn create(req)
     return render("tasks/new", {
       "title": "New task — " + project["name"],
       "project": project,
-      "task": task
+      "task": task,
+      "theme": Setting.current_theme()
     })
   end
   # Tasks created from a plan carry the originating plan_id in a hidden
@@ -220,7 +222,8 @@ fn show(req)
     "project": project,
     "task": task,
     "branch_info": _branch_info_for(task, project),
-    "can_commit_push": _can_commit_push(task, project)
+    "can_commit_push": _can_commit_push(task, project),
+    "theme": Setting.current_theme()
   })
 end
 
@@ -403,7 +406,8 @@ fn save(req)
     return render("tasks/show", {
       "title": task.slug,
       "project": project,
-      "task": task
+      "task": task,
+      "theme": Setting.current_theme()
     })
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)

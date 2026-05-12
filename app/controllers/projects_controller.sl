@@ -23,7 +23,8 @@ fn show(req)
     "totals": totals_for(name, columns),
     "agents": agents_for(columns),
     "statuses": Task.kanban_statuses() + ["archived"],
-    "active_tab": active
+    "active_tab": active,
+    "theme": Setting.current_theme()
   })
 end
 

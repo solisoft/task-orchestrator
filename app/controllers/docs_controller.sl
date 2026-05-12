@@ -4,6 +4,7 @@
 
 fn index(req)
   render("docs/index", {
-    "title": "Docs — Getting Started"
+    "title": "Docs — Getting Started",
+    "theme": Setting.current_theme()
   })
 end
