@@ -250,14 +250,16 @@ fn sidebar(req)
   }
 end
 
-# Hash describing the per-task git branch for the merge UI on the
-# task page, or nil when the task isn't a candidate (only "inprogress",
-# "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks
-# already show the PR link in the run log). Returns:
+# Hash describing the per-task git branch for the merge / checkout UI on
+# the task page, or nil when the task isn't a candidate ("inprogress",
+# "review" or "done"). Both local-branch and PR-mode tasks get a panel:
+# PR-mode just hides the Merge button (the PR is the merge path). The
+# `is_local_branch` flag lets the view make that call. Returns:
 #   { "name": "task/<slug>", "main": "main"|"master",
-#     "exists": Bool, "merged": Bool, "worktree_path": String|nil }
+#     "exists": Bool, "merged": Bool, "worktree_path": String|nil,
+#     "is_local_branch": Bool }
 fn _branch_info_for(task, project)
-  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done"
     return nil
   end
   let branch_name = task_branch_name(task.slug)
@@ -271,7 +273,8 @@ fn _branch_info_for(task, project)
     "main":   project_main_branch(project_path),
     "exists": exists,
     "merged": task_branch_merged(project_path, task.slug),
-    "worktree_path": exists_in_worktree ? wt_path : nil
+    "worktree_path": exists_in_worktree ? wt_path : nil,
+    "is_local_branch": task.outcome == "local-branch"
   }
 end
 
@@ -324,14 +327,19 @@ fn checkout_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done"
     return {"status": 422,
-            "body": "checkout is only available for inprogress/review/done tasks with a local branch"}
+            "body": "checkout is only available for inprogress/review/done tasks"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,
             "body": "branch " + task_branch_name(task.slug) + " not found in " +
                     project["path"]}
+  end
+  let wt_path = run_worktree_path(project["name"], task.slug)
+  if Trusted.is_dir(wt_path) and task_worktree_branch_exists(project["name"], task.slug)
+    return {"status": 422,
+            "body": "branch is checked out in worktree " + wt_path + " — cd in directly"}
   end
   let current = project_current_branch(project["path"])
   if current == task_branch_name(task.slug)

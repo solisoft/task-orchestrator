@@ -354,6 +354,23 @@ fn task_branch_exists(project_path, slug)
   _git_branch_exists(project_path, task_branch_name(slug))
 end
 
+# Does the per-task branch exist *inside the worktree* for this task?
+# Used to detect whether the task is currently checked out in a worktree
+# so callers can route users to `cd` there instead of re-checking out
+# in the main project tree.
+fn task_worktree_branch_exists(repo, slug)
+  let wt = run_worktree_path(repo, slug)
+  if not Trusted.is_dir(wt)
+    return false
+  end
+  let res = System.run_sync([
+    "git", "-C", wt,
+    "show-ref", "--verify", "--quiet",
+    "refs/heads/" + task_branch_name(slug)
+  ])
+  res["exit_code"] == 0
+end
+
 # Has the per-task branch been merged into the project's main branch?
 # Uses `merge-base --is-ancestor` so a branch that's been
 # squash/rebased into main still reads as merged when the tip's
