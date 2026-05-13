@@ -93,3 +93,60 @@ fn log(req)
     })
   }
 end
+
+# WebSocket handler for the live run viewer.
+#
+# Protocol — server -> client (all JSON):
+#   { "event": "snapshot", "log_chunk": "...", "log_offset": N,
+#     "status_html": "...", "todos_html": "...",
+#     "terminal": false }
+#   { "event": "delta",    "log_chunk": "...", "log_offset": N,
+#     "status_html": "...", "todos_html": "...",
+#     "terminal": false }
+#   On terminal status, the same delta shape with `"terminal": true`.
+#
+# Protocol — client -> server:
+#   { "type": "tick", "offset": N }
+#
+# Why polling-over-WS instead of true push: Soli's WS handler is event
+# driven (no long-running loop) and there's no in-process publisher
+# tied to `bin/task-run`'s file writes. The client tick keeps round
+# trips client-driven; the WS layer is the win — one persistent
+# connection, delta-only payload, sub-second latency.
+fn stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    # Connect / disconnect carry no identifiers — Soli's `router_websocket`
+    # routes are static, so the client tells us which run to stream by
+    # echoing `project` + `slug` on every tick. We just acknowledge the
+    # other lifecycle events with an empty hash.
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let name = (parsed["project"] ?? "").trim()
+  let slug = (parsed["slug"] ?? "").trim()
+  let project = find_project(name) rescue nil
+  if project == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown project", "terminal": true }) }
+  end
+  let task = Task.find_by_slug(project["name"], slug) rescue nil
+  if task == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "task not found", "terminal": true }) }
+  end
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = run_stream_payload(project["name"], slug, frame_kind, offset)
+  data["status_html"] = render_partial("runs/stream_status", {
+    "project": project,
+    "slug":    slug,
+    "task":    task,
+    "status":  data["status"],
+    "pr_url":  data["pr_url"]
+  })
+  data["todos_html"] = render_partial("runs/stream_todos", { "todos": data["todos"] })
+  { "send": JSON.stringify(data) }
+end

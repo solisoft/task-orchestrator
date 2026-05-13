@@ -123,17 +123,19 @@ def _web_push_send_one(sub, body, keys)
       "auth":   sub.auth   ?? ""
     }
   }
-  let res = vapid_send(
-    subscription,
-    body,
-    keys["private"],
-    keys["public"],
-    _web_push_vapid_subject
-  ) rescue nil
-  if res == nil
+  try
+    let res = vapid_send(
+      subscription,
+      body,
+      keys["private"],
+      keys["public"],
+      _web_push_vapid_subject
+    )
+    return _web_push_outcome_from_status(res["status"] ?? 0)
+  catch e
+    print("[web_push] vapid_send failed for " + sub.endpoint + ": " + str(e))
     return { "ok": false, "pruned": false }
   end
-  return _web_push_outcome_from_status(res["status"] ?? 0)
 end
 
 # Decode a push-service HTTP status into the `{ ok, pruned }` shape

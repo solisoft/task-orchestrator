@@ -521,6 +521,57 @@ fn generate_tasks_log(req)
     }
   end
   let failed = state["status"].starts_with("failed:")
+  let pq = state["pending_question"]
+  let has_question = pq != nil and pq["input"] != nil and pq["input"]["questions"] != nil
+  if has_question
+    return {
+      "status": 200,
+      "headers": {"Content-Type": "text/html; charset=utf-8"},
+      "body": _render_generate_question(feature, plan_id, pq, state["log"] ?? "", state["status"])
+    }
+  end
+  {
+    "status": 200,
+    "headers": {"Content-Type": "text/html; charset=utf-8"},
+    "body": _render_generate_progress(feature, plan_id,
+              _render_generate_log(state["log"] ?? "", state["status"], failed, feature))
+  }
+end
+
+# POST /features/:id/plan-answer/:plan_id
+# Mirrors tasks#plan_answer: writes the user's chosen option as the
+# pending_answer so the plan-run agent's pollAnswer() loop picks it up.
+# When the plan finishes between the last poll and the answer response,
+# imports tasks and redirects the feature page.
+fn plan_answer(req)
+  let feature = _find_feature(req)
+  if feature == nil
+    return {"status": 404, "body": "Feature not found"}
+  end
+  let plan_id = req["params"]["plan_id"]
+  let body_params = req["all"] ?? {}
+  let qid = (body_params["qid"] ?? "").trim()
+  let value = (body_params["value"] ?? "").trim()
+  if qid == "" or value == ""
+    return {"status": 422, "body": "qid and value required"}
+  end
+  let plan = Plan.find_by_plan_id(plan_id)
+  if plan != nil
+    plan.write_pending_answer(qid, value)
+  end
+  let state = read_plan_state(plan_id)
+  if state["status"] == "done"
+    _import_tasks_once(feature, plan_id, state["body"], req["current_user"])
+    return {
+      "status": 200,
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "HX-Redirect": "/features/" + feature._key
+      },
+      "body": ""
+    }
+  end
+  let failed = state["status"].starts_with("failed:")
   {
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
@@ -803,6 +854,51 @@ fn _first_heading_or_default(raw)
   "Generated task"
 end
 
+# WebSocket handler for the generate-tasks plan-run transcript.
+#
+# Mirrors `runs#stream` / `tasks#plan_stream`: the client opens the
+# socket, sends `tick` frames with its byte cursor, the server replies
+# with `delta` frames carrying any new bytes plus a re-rendered log
+# panel (no separate status_html / question_html — the question card
+# is a sibling div that owns its own re-render via htmx). On a done
+# status we set `reload: true` so the client navigates to the feature
+# page, where `_import_tasks_once` will have synced the proposed tasks.
+fn generate_stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let feature_key = (parsed["feature_id"] ?? "").trim()
+  let feature = Feature.find(feature_key) rescue nil
+  if feature == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown feature", "terminal": true }) }
+  end
+  let plan_id = (parsed["plan_id"] ?? "").trim()
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = plan_stream_payload(plan_id, frame_kind, offset)
+  if data["event"] == "error"
+    return { "send": JSON.stringify(data) }
+  end
+  # Both done AND failed flip `reload` here so the user is navigated to
+  # the feature page either way — on done the page renders the proposed
+  # tasks; on fail it renders the failure panel with a retry CTA.
+  data["reload"] = data["terminal"]
+  # The features panel doesn't surface its own status/question fragments
+  # over WS — the htmx question form handles the question lifecycle on
+  # the server side and reload covers the terminal transition. Strip the
+  # plan-flavoured fields so the client doesn't dereference a missing
+  # selector.
+  data["pending_question"] = nil
+  data["status"] = nil
+  { "send": JSON.stringify(data) }
+end
+
 # Outer card (initial POST response): full Plan Agent card with the
 # running badge and the polling div seeded inside. Used as the body of
 # the initial generate_tasks response so the click visibly replaces
@@ -827,9 +923,19 @@ fn _render_generate_card(feature, plan_id, inner)
 end
 
 fn _render_generate_progress(feature, plan_id, inner)
-  "<div id=\"generate-progress\" hx-get=\"" +
-  "/features/" + feature._key + "/generate_tasks_log/" + plan_id +
-  "\" hx-trigger=\"every 2s\" hx-swap=\"outerHTML\">" +
+  # Streaming runs over a WebSocket: the data-stream-* attributes wire
+  # the panel up to the global `run-stream.js` client, replacing the
+  # `every 2s` htmx poller. The same panel is re-rendered server-side
+  # after each plan-answer so a fresh socket opens on the new DOM root.
+  # The route URL is static (Soli 1.0.3's `router_websocket` doesn't
+  # extract `:id`-style path params); the client echoes the identifiers
+  # on every tick from the data-stream-* attrs.
+  "<div id=\"generate-progress\"" +
+  " data-stream-url=\"/ws/feature-generate-stream\"" +
+  " data-stream-feature-id=\"" + feature._key + "\"" +
+  " data-stream-plan-id=\"" + plan_id + "\"" +
+  " data-stream-log=\"#generate-progress-log\"" +
+  " data-stream-tick-ms=\"300\">" +
   inner + "</div>"
 end
 
@@ -848,5 +954,66 @@ fn _render_generate_log(log, status, failed, feature)
     html = html + "<div class=\"text-indigo-300 text-sm animate-pulse mt-2\">" +
            h(status) + "&hellip;</div>"
   end
+  html
+end
+
+fn _render_generate_question(feature, plan_id, pq, log, status)
+  let q = pq["input"]["questions"][0]
+  let multi = q["multiSelect"] == true
+  let html = "<div id=\"generate-progress\">"
+  html = html + "<div class=\"mb-4 rounded-xl bg-amber-400/10 border border-amber-400/30 p-4\">"
+  html = html + "<div class=\"text-xs text-amber-300/80 font-mono mb-1\">" +
+         "human-in-the-loop · " + h(pq["tool"] ?? "") + "</div>"
+  html = html + "<div class=\"text-sm text-amber-100 mb-3\">" + h(q["question"]) + "</div>"
+  if multi
+    html = html + "<form"
+    html = html + " hx-post=\"/features/" + feature._key + "/plan-answer/" + plan_id + "\""
+    html = html + " hx-target=\"#generate-progress\""
+    html = html + " hx-swap=\"outerHTML\">"
+    html = html + "<input type=\"hidden\" name=\"qid\" value=\"" + h(pq["id"]) + "\">"
+    for opt in q["options"]
+      html = html + "<label class=\"block w-full text-left mb-1 px-3 py-2 rounded " +
+             "bg-amber-400/5 hover:bg-amber-400/15 text-sm text-amber-100 " +
+             "transition-colors cursor-pointer\">"
+      html = html + "<input type=\"checkbox\" name=\"value\" value=\"" +
+             h(opt["label"]) + "\" class=\"mr-2\">"
+      html = html + "<span class=\"font-medium\">" + h(opt["label"]) + "</span>"
+      if opt["description"] != nil and opt["description"] != ""
+        html = html + "<span class=\"text-amber-300/60 text-xs ml-2\">— " +
+               h(opt["description"]) + "</span>"
+      end
+      html = html + "</label>"
+    end
+    html = html + "<button type=\"submit\" " +
+           "class=\"block w-full mt-2 rounded bg-amber-500/20 hover:bg-amber-400/20 " +
+           "text-sm text-amber-100 px-3 py-2 transition-colors font-medium\">"
+    html = html + "Submit selection</button>"
+    html = html + "</form>"
+  else
+    for opt in q["options"]
+      let vals = JSON.stringify({"qid": pq["id"], "value": opt["label"]})
+      html = html + "<button type=\"button\""
+      html = html + " hx-post=\"/features/" + feature._key + "/plan-answer/" + plan_id + "\""
+      html = html + " hx-vals=\"" + h(vals) + "\""
+      html = html + " hx-target=\"#generate-progress\""
+      html = html + " hx-swap=\"outerHTML\""
+      html = html + " class=\"block w-full text-left mb-1 px-3 py-2 rounded " +
+             "bg-amber-400/5 hover:bg-amber-400/15 text-sm text-amber-100 " +
+             "transition-colors\">"
+      html = html + "<span class=\"font-medium\">" + h(opt["label"]) + "</span>"
+      if opt["description"] != nil and opt["description"] != ""
+        html = html + "<span class=\"text-amber-300/60 text-xs ml-2\">— " +
+               h(opt["description"]) + "</span>"
+      end
+      html = html + "</button>"
+    end
+  end
+  html = html + "</div>"
+  html = html + "<div id=\"generate-progress-log\" " +
+         "class=\"text-sm font-mono text-slate-300 whitespace-pre-wrap " +
+         "max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border " +
+         "border-white/5 p-3\">" + h(log) + "</div>"
+  html = html + "<div class=\"text-indigo-300 text-sm animate-pulse mt-2\">" + h(status) + "&hellip;</div>"
+  html = html + "</div>"
   html
 end

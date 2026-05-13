@@ -65,11 +65,15 @@
               </form>
             </div>
             <p class="text-xs text-slate-500 mb-3">Streaming live &mdash; proposed tasks will appear below as the planner finishes.</p>
+            <% let _ap_log = active_plan.log ?? "" %>
             <div id="generate-progress"
-                 hx-get="/features/<%= feature._key %>/generate_tasks_log/<%= active_plan.plan_id %>"
-                 hx-trigger="load, every 2s"
-                 hx-swap="outerHTML">
-              <div id="generate-progress-log" class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= active_plan.log ?? "" %></div>
+                 data-stream-url="/ws/feature-generate-stream"
+                 data-stream-feature-id="<%= feature._key %>"
+                 data-stream-plan-id="<%= active_plan.plan_id %>"
+                 data-stream-log="#generate-progress-log"
+                 data-stream-offset="<%= _ap_log.length %>"
+                 data-stream-tick-ms="300">
+              <div id="generate-progress-log" class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= _ap_log %></div>
               <div class="text-indigo-300 text-sm animate-pulse mt-2"><%= active_plan.status ?? "starting" %>&hellip;</div>
             </div>
           </div>

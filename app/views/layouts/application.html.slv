@@ -41,6 +41,8 @@
     <script src="<%= public_path("theme.js") %>" defer></script>
     <!-- Custom styled confirm dialog (replaces window.confirm for data-confirm forms) -->
     <script src="<%= public_path("confirm.js") %>" defer></script>
+    <!-- Live WebSocket stream client for run / plan / generate-tasks panels -->
+    <script src="<%= public_path("run-stream.js") %>" defer></script>
     <style>
       /* HTMX v2 ships no CSS; replicate the canonical indicator pattern. */
       .htmx-indicator { display: none; }
