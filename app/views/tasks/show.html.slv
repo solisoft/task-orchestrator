@@ -17,6 +17,13 @@
           <span>
             Status:
             <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
+            <% if task.tags != nil %>
+              <% for tag in task.tags %>
+                <% if tag == "follow_up" %>
+                  <span class="inline-block rounded-md bg-amber-500/20 text-amber-300 px-2 py-0.5 text-xs font-medium ml-1">Follow-up</span>
+                <% end %>
+              <% end %>
+            <% end %>
           </span>
           <% let _author = (task.author ?? "").trim() %>
           <% if _author != "" %>

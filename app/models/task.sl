@@ -15,6 +15,9 @@ class Task < Model
   # `Setting.get("agent_type")`. The format check only fires when the
   # field is a string, so null rows still validate.
   validates("agent_type", { "format": "^(claude|opencode|opencode-sdk)$" })
+  # tags is an optional string array; when present every element must be a
+  # known tag (see `known_tags`). Solidb is schemaless so the field itself
+  # requires no migration — validation and the sparse index are enough.
 
   before_save("touch_timestamps")
 
@@ -42,6 +45,12 @@ class Task < Model
   # edit the spec, re-queue) without having to remember the slug.
   static def kanban_statuses()
     ["todo", "queued", "inprogress", "review", "done", "failed"]
+  end
+
+  # Known tag values that may appear in the `tags` array. Add new values
+  # here as the system grows additional tag categories.
+  static def known_tags()
+    ["follow_up"]
   end
 
   static def key_for(project, slug)
@@ -429,6 +438,7 @@ class Task < Model
     if self.status == null
       self.status = "todo"
     end
+    self._validate_tags()
     self._notify_if_status_changed()
   end
 
@@ -477,6 +487,26 @@ class Task < Model
       "status": new_status,
       "url":    url
     }) rescue null
+  end
+
+  # Validate the `tags` array: each element must be a known tag value.
+  # Runs inside touch_timestamps (the sole before_save) so spec reloads
+  # don't multiply fire.
+  def _validate_tags()
+    if self.tags != nil
+      for tag in self.tags
+        let ok = false
+        for known in Task.known_tags()
+          if tag == known
+            ok = true
+          end
+        end
+        if not ok
+          this._errors = this._errors ?? {}
+          this._errors["tags"] = true
+        end
+      end
+    end
   end
 end
 

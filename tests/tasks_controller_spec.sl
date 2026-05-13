@@ -1191,3 +1191,70 @@ describe("TasksController#commit_push", fn()
     assert_contains(res_body(response), "commit-push failed")
   end)
 end)
+
+describe("TasksController#show tags badge", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("renders the Follow-up badge when tags contain follow_up", fn()
+    Task.create({
+      "_key":    "proj--tagged-task",
+      "project": "proj",
+      "slug":    "tagged-task",
+      "title":   "Tagged task",
+      "status":  "todo",
+      "tags":    ["follow_up"]
+    })
+    let response = get("/projects/proj/tasks/tagged-task")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), "Follow-up")
+  end)
+
+  test("omits the Follow-up badge when tags is absent", fn()
+    Task.create({
+      "_key":    "proj--untagged-task",
+      "project": "proj",
+      "slug":    "untagged-task",
+      "title":   "Untagged task",
+      "status":  "todo"
+    })
+    let response = get("/projects/proj/tasks/untagged-task")
+    assert_eq(res_status(response), 200)
+    assert_not(res_body(response).contains("Follow-up"))
+  end)
+
+  test("omits the Follow-up badge when tags is empty", fn()
+    Task.create({
+      "_key":    "proj--empty-tags-task",
+      "project": "proj",
+      "slug":    "empty-tags-task",
+      "title":   "Empty tags task",
+      "status":  "todo",
+      "tags":    []
+    })
+    let response = get("/projects/proj/tasks/empty-tags-task")
+    assert_eq(res_status(response), 200)
+    assert_not(res_body(response).contains("Follow-up"))
+  end)
+
+  test("persists tags through create and read-back", fn()
+    let task = Task.create({
+      "_key":    "proj--readback-task",
+      "project": "proj",
+      "slug":    "readback-task",
+      "title":   "Readback task",
+      "status":  "todo",
+      "tags":    ["follow_up"]
+    })
+    assert(task._errors == nil)
+    let reloaded = Task.find_by_slug("proj", "readback-task")
+    assert(reloaded.tags != nil)
+    assert_eq(reloaded.tags.length(), 1)
+    assert_eq(reloaded.tags[0], "follow_up")
+  end)
+end)
