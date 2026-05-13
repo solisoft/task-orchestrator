@@ -60,8 +60,8 @@
     if (!sub) return false;
     const json = sub.toJSON();
     await sub.unsubscribe();
-    await fetch(SUBSCRIBE_URL, {
-      method: 'DELETE',
+    await fetch(SUBSCRIBE_URL + '/delete', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json)
     });
