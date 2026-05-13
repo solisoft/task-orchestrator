@@ -551,6 +551,43 @@ fn react(req)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
 end
 
+# POST /projects/:name/tasks/:slug/code-review — spawn the /review-task
+# skill against the task's existing worktree using the chosen model.
+# The agent appends to the run log so the user can watch the transcript
+# on the run page. The worktree must already exist (the task was run);
+# we never recreate it here — the review must execute against the same
+# tree /do-task and /review-task already left in place.
+fn code_review(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "code-review is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if not run_worktree_exists(project["name"], task.slug)
+    return {"status": 422,
+            "body": "worktree not found — task may not have been run yet"}
+  end
+  # `_stitched_plan_model` validates the picker output against the
+  # allowlist, so the value is safe to splice into the shell command.
+  let model = _stitched_plan_model(req["all"] ?? {})
+  let line = "nohup ./bin/review-run " + project["name"] + " " +
+             task.slug + " " + model +
+             " >/dev/null 2>&1 & disown"
+  let res = System.run_sync(["bash", "-c", line])
+  if res["exit_code"] != 0
+    return {"status": 500, "body": "Failed to spawn review agent — check server log"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
+end
+
 fn save(req)
   let project = find_project(req["params"]["name"])
   if project == nil
