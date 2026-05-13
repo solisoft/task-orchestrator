@@ -80,11 +80,16 @@ fn log(req)
     return {"status": 404, "body": "Unknown project"}
   end
   let slug = req["params"]["slug"]
+  let task = Task.find_by_slug(project["name"], slug)
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
   {
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": render_partial("runs/log", {
       "project": project,
+      "task": task,
       "slug": slug,
       "status": run_current_status(project["name"], slug),
       "pr_url": run_pr_url(project["name"], slug),

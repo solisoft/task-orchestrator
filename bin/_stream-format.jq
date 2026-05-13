@@ -105,4 +105,4 @@ def lines:
     ["FAIL: " + ((.error.data.message // .error.name // "unknown") | tostring)]
   else empty end;
 
-lines | .[]
+lines | .[] | gsub("\r"; "")

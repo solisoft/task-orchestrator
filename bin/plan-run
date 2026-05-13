@@ -119,6 +119,7 @@ case "$runner" in
       "/plan-task $prompt_args" 2>&1 \
       | tee "$jsonl_file" \
       | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" 2>/dev/null \
+      | tr -d '\r' \
       | while read -r line; do
           write_log "$line"
         done
@@ -136,6 +137,7 @@ case "$runner" in
     bun "$script_dir/plan-run-agent.ts" "${agent_args[@]}" 2>&1 \
       | tee "$jsonl_file" \
       | stdbuf -oL jq -r --unbuffered -f "$script_dir/_stream-format.jq" 2>/dev/null \
+      | tr -d '\r' \
       | while read -r line; do
           write_log "$line"
         done
