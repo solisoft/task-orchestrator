@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+#
+# review-run <project> <slug> <model>
+#
+# Runs the /review-task skill in the task's EXISTING worktree to perform
+# a code review of the PR under a user-chosen agent. Unlike bin/task-run
+# and bin/react-run, this never recreates the worktree — the review must
+# execute against the same tree /do-task and /review-task already left
+# in place, with all its in-flight edits.
+#
+# Appends to the existing run log / status journal so the run viewer
+# stays current.
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+project_root=$(dirname "$script_dir")
+
+if [[ -f "$project_root/.env" ]]; then
+  set -a; source "$project_root/.env"; set +a
+fi
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 <project> <slug> <model>" >&2
+  exit 64
+fi
+
+repo_name=$1
+slug=$2
+task_model=$3
+
+ROOT=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
+project_path="$ROOT/$repo_name"
+if [[ ! -d "$project_path" ]]; then
+  echo "review-run: project path not found: $project_path" >&2
+  exit 65
+fi
+
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+state_dir="$state_root/$repo_name"
+log_file="$state_dir/$slug.log"
+status_file="$state_dir/$slug.status"
+mkdir -p "$state_dir"
+
+worktree_root=${TASK_ORCH_WORKTREES:-$HOME/.cache/task-orchestrator/worktrees}
+worktree_dir="$worktree_root/$repo_name/$slug"
+
+log() {
+  printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$log_file"
+}
+
+write_status() {
+  printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"
+}
+
+fail() {
+  log "FAIL: $*"
+  write_status "failed:$*"
+  exit 1
+}
+
+write_status "starting code review"
+
+# The worktree MUST already exist — the review runs against the same
+# tree /do-task and /review-task already left in place. We never
+# recreate it here.
+if [[ ! -d "$worktree_dir" ]]; then
+  fail "worktree not found: $worktree_dir"
+fi
+
+log "review: worktree=$worktree_dir model=${task_model:-<default claude>}"
+
+# Resolve agent kind / variant from the model string. Same shape as
+# bin/task-run and bin/react-run: "provider/model[:variant]" routes
+# through opencode; bare "claude-*" or empty stays on the claude CLI.
+task_variant=""
+if [[ "$task_model" == */*:* ]]; then
+  task_variant="${task_model##*:}"
+  task_model="${task_model%:*}"
+  log "model variant=$task_variant"
+fi
+
+if [[ "$task_model" == */* ]]; then
+  agent_kind="opencode"
+  if ! command -v opencode >/dev/null 2>&1; then
+    fail "model $task_model needs 'opencode' on PATH"
+  fi
+else
+  agent_kind="claude"
+  if ! command -v claude >/dev/null 2>&1; then
+    fail "model ${task_model:-claude default} needs 'claude' on PATH"
+  fi
+fi
+log "agent_kind=$agent_kind"
+
+claude_jq="$script_dir/_stream-format.jq"
+
+write_status "running /review-task"
+log "review: running $agent_kind /review-task $slug"
+
+set +e
+case "$agent_kind" in
+  opencode)
+    opencode_cmd=(opencode run --format json --dangerously-skip-permissions -m "$task_model")
+    if [[ -n "$task_variant" ]]; then
+      opencode_cmd+=(--variant "$task_variant")
+    fi
+    (
+      cd "$worktree_dir"
+      "${opencode_cmd[@]}" < /dev/null "/review-task $slug" 2> >(tr -d '\r' >> "$log_file")
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+    rc=${PIPESTATUS[0]}
+    ;;
+  *)
+    claude_args=(--dangerously-skip-permissions -p --output-format stream-json --verbose)
+    if [[ -n "$task_model" ]]; then
+      claude_args+=(--model "$task_model")
+    fi
+    (
+      cd "$worktree_dir"
+      claude "${claude_args[@]}" < /dev/null "/review-task $slug" 2> >(tr -d '\r' >> "$log_file")
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+    rc=${PIPESTATUS[0]}
+    ;;
+esac
+set -e
+
+if [[ $rc -ne 0 ]]; then
+  fail "agent exited non-zero (rc=$rc)"
+fi
+
+write_status "code review done"
+log "review: agent finished"
+
+exit 0
