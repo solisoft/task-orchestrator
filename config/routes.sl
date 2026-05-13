@@ -80,6 +80,7 @@ middleware("authenticate", -> {
   post("/features/:id/refine_tasks", "features#refine_tasks")
   post("/features/:id/cancel_plan", "features#cancel_plan")
   get("/features/:id/generate_tasks_log/:plan_id", "features#generate_tasks_log")
+  post("/features/:id/plan-answer/:plan_id", "features#plan_answer")
   post("/features/:id/publish", "features#publish")
   post("/features/:id/tasks/:slug/remove", "features#remove_task")
 
