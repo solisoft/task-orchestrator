@@ -39,6 +39,8 @@
     <script src="<%= public_path("push.js") %>" defer></script>
     <!-- Theme toggle wiring (reads the saved preference, syncs the toggle button) -->
     <script src="<%= public_path("theme.js") %>" defer></script>
+    <!-- Custom styled confirm dialog (replaces window.confirm for data-confirm forms) -->
+    <script src="<%= public_path("confirm.js") %>" defer></script>
     <style>
       /* HTMX v2 ships no CSS; replicate the canonical indicator pattern. */
       .htmx-indicator { display: none; }

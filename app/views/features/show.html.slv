@@ -24,7 +24,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Edit
           </a>
-          <form method="post" action="/features/<%= feature._key %>?_method=delete" onsubmit="return confirm('Delete this feature?')">
+          <form method="post" action="/features/<%= feature._key %>?_method=delete" data-confirm="Delete this feature?">
             <button type="submit" class="rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               Delete
@@ -53,7 +53,7 @@
                 <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent &mdash; running</h2>
                 <span class="text-xs text-slate-500 font-mono truncate"><%= active_plan.plan_id %></span>
               </div>
-              <form method="post" action="/features/<%= feature._key %>/cancel_plan" onsubmit="return confirm('Cancel this running plan?')" class="shrink-0">
+              <form method="post" action="/features/<%= feature._key %>/cancel_plan" data-confirm="Cancel this running plan?" class="shrink-0">
                 <button type="submit" class="rounded-md bg-red-500/15 hover:bg-red-500/25 border border-red-500/25 text-red-300 hover:text-red-200 text-xs font-medium px-3 py-1.5 transition-colors inline-flex items-center gap-1">
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
                   Cancel
@@ -100,7 +100,7 @@
               <pre class="text-xs font-mono text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto border-t border-white/5 p-3"><%= latest_plan.log ?? "" %></pre>
             </details>
 
-            <form method="post" action="/features/<%= feature._key %>/refine_tasks" class="mb-3" onsubmit="return confirm('This will wipe the current proposed tasks and run a refined plan. Continue?')">
+            <form method="post" action="/features/<%= feature._key %>/refine_tasks" class="mb-3" data-confirm="This will wipe the current proposed tasks and run a refined plan. Continue?">
               <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">Refine &mdash; add extra context</label>
               <textarea name="refinement" rows="3" required
                         class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-xs text-slate-100 resize-y mb-2"
@@ -124,7 +124,7 @@
               </div>
             </form>
 
-            <form method="post" action="/features/<%= feature._key %>/regenerate_tasks" class="flex items-end justify-between gap-3 pt-3 border-t border-white/5 flex-wrap" onsubmit="return confirm('Wipe proposed tasks and regenerate from the original brief?')">
+            <form method="post" action="/features/<%= feature._key %>/regenerate_tasks" class="flex items-end justify-between gap-3 pt-3 border-t border-white/5 flex-wrap" data-confirm="Wipe proposed tasks and regenerate from the original brief?">
               <div class="min-w-0 flex-1">
                 <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
                 <%- partial("features/plan_model_select", {
@@ -250,7 +250,7 @@
                     <p class="text-xs text-slate-500 mt-1 line-clamp-2"><%= _preview %></p>
                   <% end %>
                 </div>
-                <form method="post" action="/features/<%= feature._key %>/tasks/<%= task.slug %>/remove" onsubmit="return confirm('Remove this proposed task?')" class="shrink-0">
+                <form method="post" action="/features/<%= feature._key %>/tasks/<%= task.slug %>/remove" data-confirm="Remove this proposed task?" class="shrink-0">
                   <button type="submit" title="Remove this proposed task" class="rounded-md text-slate-500 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 transition-colors text-xs font-medium inline-flex items-center gap-1">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     Remove
@@ -261,7 +261,7 @@
           </div>
           <div class="flex items-center justify-between flex-wrap gap-3 pt-4 border-t border-white/5">
             <p class="text-xs text-slate-500">Publishing bundles <span class="text-indigo-300 font-medium"><%= proposed_tasks.length() %></span> proposed <%= proposed_tasks.length() == 1 ? "task" : "tasks" %> into a single <span class="font-mono text-indigo-300">todo</span> task &mdash; one branch, one PR for the whole feature.</p>
-            <form method="post" action="/features/<%= feature._key %>/publish" onsubmit="return confirm('Bundle <%= proposed_tasks.length() %> proposed task(s) into one todo and run them on a single branch?')">
+            <form method="post" action="/features/<%= feature._key %>/publish" data-confirm="Bundle <%= proposed_tasks.length() %> proposed task(s) into one todo and run them on a single branch?">
               <button type="submit" class="cta-shimmer rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-sm font-semibold px-5 py-2.5 transition-all btn-glow shadow-lg shadow-emerald-500/20 inline-flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Bundle &amp; publish &rarr; todo

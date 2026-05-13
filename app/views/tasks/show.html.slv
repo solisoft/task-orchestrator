@@ -32,17 +32,17 @@
           <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue">
             <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Queue &rarr; agent</button>
           </form>
-          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/archive" onsubmit="return confirm('Archive this todo task?')">
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/archive" data-confirm="Archive this todo task?">
             <button type="submit" class="rounded-lg bg-slate-600/90 hover:bg-slate-500 text-white text-sm font-medium px-4 py-2 transition-colors">Archive</button>
           </form>
         <% end %>
         <% if task.status == "review" %>
           <% if can_commit_push %>
-            <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/commit-push" onsubmit="return confirm('Commit and push all local changes in the worktree to the PR branch?')">
+            <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/commit-push" data-confirm="Commit and push all local changes in the worktree to the PR branch?">
               <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Commit &amp; push fixes &rarr; PR</button>
             </form>
           <% end %>
-          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/mark-done" onsubmit="return confirm('Mark this task as done?')">
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/mark-done" data-confirm="Mark this task as done?">
             <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Mark as done</button>
           </form>
           <% if task.pr_url != nil and task.pr_url != "" %>
@@ -109,7 +109,7 @@
             <% if branch_info["is_local_branch"] and task.status == "review" %>
               <form method="post"
                     action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
-                    onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
+                    data-confirm="Merge '<%= branch_info["name"] %>' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.">
                 <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
                   Merge into <%= branch_info["main"] %>
                 </button>
