@@ -14,7 +14,7 @@
           <div class="flex items-center gap-2">
             <span class="text-xs text-slate-600 font-mono"><%= comment.created_at %></span>
             <% if is_mine %>
-              <form method="post" action="/comments/<%= comment._key %>/delete" onsubmit="return confirm('Delete this comment?')" class="inline">
+              <form method="post" action="/comments/<%= comment._key %>/delete" data-confirm="Delete this comment?" class="inline">
                 <button type="submit" title="Delete this comment" class="text-slate-600 hover:text-red-300 hover:bg-red-500/10 rounded px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>

@@ -1,11 +1,11 @@
 # WebPush helper — covers the mocked path (filesystem sentinel +
-# log file), the cached-key short-circuit, and the graceful-degrade
-# behaviour when neither cached keys nor the `web-push` CLI are
-# available.
+# log file), the cached-key short-circuit, the test-override path,
+# and the in-process key-generation path.
 #
-# Real shell-out paths (`web-push generate-vapid-keys` /
-# `web-push send-notification`) aren't reachable from CI, so they're
-# excluded from these specs by design.
+# Real HTTP delivery via `vapid_send` is exercised through the
+# `web_push_test_send_outcome` Setting seam rather than against a
+# live push service, so the per-row sent/pruned counters can be
+# asserted without a network dependency.
 
 const _wp_log      = "/tmp/_task_orch_web_push.log"
 const _wp_sentinel = "/tmp/_task_orch_web_push.active"
@@ -89,11 +89,15 @@ describe("WebPush helper", fn()
       assert_eq(Setting.get("vapid_private_key"), "override-priv")
     end)
 
-    test("returns empty string when no keys + no CLI is available", fn()
+    test("generates and caches a fresh keypair when nothing is stored", fn()
       # No Setting rows for either canonical or test-override keys.
-      # Real `web-push generate-vapid-keys` is not installed in CI, so
-      # the helper must degrade to "" rather than raise.
-      assert_eq(web_push_public_key(), "")
+      # The in-process `vapid_generate_keys` builtin always returns a
+      # valid pair, so the helper should produce a non-empty key and
+      # persist both halves into the canonical Setting rows.
+      let pub = web_push_public_key()
+      assert(pub.length() > 0)
+      assert_eq(Setting.get("vapid_public_key"),  pub)
+      assert(Setting.get("vapid_private_key").length() > 0)
     end)
   end)
 
@@ -112,7 +116,7 @@ describe("WebPush helper", fn()
       assert_eq(res["mocked"], false)
     end)
 
-    test("with subscriptions but no real CLI, send-attempts return ok=false / pruned=false", fn()
+    test("with subscriptions but invalid keys, send-attempts return ok=false / pruned=false", fn()
       Setting.set("vapid_public_key",  "fake-pub")
       Setting.set("vapid_private_key", "fake-priv")
       PushSubscription.create({
@@ -125,21 +129,15 @@ describe("WebPush helper", fn()
         "p256dh":   "k2",
         "auth":     "a2"
       })
-      # The `web-push` CLI may or may not be installed in CI; either
-      # way the call to a bogus endpoint won't return 404/410, so the
+      # The fake VAPID keys fail `vapid_send`'s base64url/length
+      # validation before any network call is attempted; the helper
+      # rescues to nil and reports ok=false / pruned=false, so the
       # loop completes with sent=0 / pruned=0 and the rows survive.
       let res = web_push_send_to_all({ "title": "t", "status": "done", "url": "/u" })
       assert_eq(res["mocked"], false)
-      assert_eq(PushSubscription.all().length(), 2)
-    end)
-
-    test("returns sent=0/pruned=0/mocked=false when keypair generation fails", fn()
-      # No Setting keys, no test-override keys, no CLI ⇒
-      # web_push_ensure_keys() returns nil ⇒ short-circuit.
-      let res = web_push_send_to_all({ "title": "t", "status": "review", "url": "/u" })
       assert_eq(res["sent"], 0)
       assert_eq(res["pruned"], 0)
-      assert_eq(res["mocked"], false)
+      assert_eq(PushSubscription.all().length(), 2)
     end)
 
     test("counts 'ok' send results into sent= per subscription", fn()
@@ -164,6 +162,38 @@ describe("WebPush helper", fn()
       assert_eq(res["pruned"], 2)
       # Pruning should remove both dead rows from the table.
       assert_eq(PushSubscription.all().length(), 0)
+    end)
+  end)
+
+  describe("_web_push_outcome_from_status", fn()
+    test("treats 404 as pruned", fn()
+      let o = _web_push_outcome_from_status(404)
+      assert_eq(o["ok"], false)
+      assert_eq(o["pruned"], true)
+    end)
+
+    test("treats 410 as pruned", fn()
+      let o = _web_push_outcome_from_status(410)
+      assert_eq(o["ok"], false)
+      assert_eq(o["pruned"], true)
+    end)
+
+    test("treats 2xx as ok (200, 201, 299)", fn()
+      assert_eq(_web_push_outcome_from_status(200)["ok"], true)
+      assert_eq(_web_push_outcome_from_status(201)["ok"], true)
+      assert_eq(_web_push_outcome_from_status(299)["ok"], true)
+    end)
+
+    test("treats 500 / 0 / 301 as neither ok nor pruned", fn()
+      let o500 = _web_push_outcome_from_status(500)
+      assert_eq(o500["ok"], false)
+      assert_eq(o500["pruned"], false)
+      let o0 = _web_push_outcome_from_status(0)
+      assert_eq(o0["ok"], false)
+      assert_eq(o0["pruned"], false)
+      let o301 = _web_push_outcome_from_status(301)
+      assert_eq(o301["ok"], false)
+      assert_eq(o301["pruned"], false)
     end)
   end)
 end)

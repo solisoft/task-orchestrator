@@ -3023,6 +3023,155 @@ body.task-sidebar-open {
   overflow: hidden;
 }
 
+/* ── Confirm overlay ──
+   Replaces native window.confirm(). public/confirm.js intercepts the
+   submit event of any <form data-confirm="…"> and pops this overlay;
+   only the Confirm button submits the form. Cancel/backdrop/Escape
+   dismiss without submitting. Mirrors `.task-sidebar-overlay`'s
+   pattern: hidden by default, `.is-open` flips visibility. */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.confirm-overlay.is-open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.confirm-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.confirm-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  border-radius: 1rem;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+        0 24px 60px -20px rgba(2, 6, 23, 0.7),
+        0 0 40px rgba(99, 102, 241, 0.15);
+  padding: 1.5rem 1.5rem 1.25rem;
+  transform: translateY(8px) scale(0.97);
+  opacity: 0;
+  transition:
+        transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.2s ease;
+}
+
+.confirm-overlay.is-open .confirm-dialog {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.confirm-dialog::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(192, 132, 252, 0.35));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.confirm-dialog-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(192, 132, 252, 0.2));
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(165, 180, 252);
+  margin-bottom: 0.85rem;
+}
+
+.confirm-dialog-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+  line-height: 1.4;
+}
+
+.confirm-dialog-message {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-bottom: 1.25rem;
+  word-wrap: break-word;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.confirm-dialog-btn {
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  border: 1px solid transparent;
+  font-family: inherit;
+}
+
+.confirm-dialog-btn:focus-visible {
+  outline: 2px solid rgba(129, 140, 248, 0.7);
+  outline-offset: 2px;
+}
+
+.confirm-dialog-btn-cancel {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.confirm-dialog-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.confirm-dialog-btn-confirm {
+  background: linear-gradient(135deg, rgb(99, 102, 241), rgb(147, 51, 234));
+  color: white;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+.confirm-dialog-btn-confirm:hover {
+  box-shadow: 0 6px 22px rgba(99, 102, 241, 0.55);
+  transform: translateY(-1px);
+}
+
+body.confirm-open {
+  overflow: hidden;
+}
+
 .marker\:hidden *::marker {
   display: none;
 }
