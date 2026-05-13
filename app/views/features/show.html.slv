@@ -75,10 +75,11 @@
                  data-stream-feature-id="<%= feature._key %>"
                  data-stream-plan-id="<%= active_plan.plan_id %>"
                  data-stream-log="#generate-progress-log"
+                 data-stream-status="#generate-progress-status"
                  data-stream-offset="<%= _ap_log.length %>"
                  data-stream-tick-ms="300">
               <div id="generate-progress-log" class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= _ap_log %></div>
-              <div class="text-indigo-300 text-sm animate-pulse mt-2"><%= active_plan.status ?? "starting" %>&hellip;</div>
+              <div id="generate-progress-status" class="text-indigo-300 text-sm animate-pulse mt-2"><%= active_plan.status ?? "starting" %>&hellip;</div>
             </div>
           </div>
         </div>

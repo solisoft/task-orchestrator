@@ -439,6 +439,7 @@ html.dark {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border: 1px solid;
+    white-space: nowrap;
 }
 .status-pill::before {
     content: '';

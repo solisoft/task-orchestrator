@@ -264,10 +264,8 @@
   // the feature generate-tasks panel arrives via an htmx POST), so
   // boot any new ones after every swap.
   document.addEventListener("htmx:afterSwap", function (ev) {
-    initAll(ev.target);
-    // Also clean up any controllers whose root was removed by the swap.
-    // WeakMap entries die with their key, but we want to close the
-    // socket promptly rather than waiting for GC.
+    var target = (ev.detail && ev.detail.target) || ev.target;
+    initAll(target || document);
   });
 
   // Tear down before the page unloads — keeps the server from holding

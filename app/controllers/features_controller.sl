@@ -13,61 +13,66 @@ fn index(req)
   if offset < 0 then offset = 0 end
   if per_page < 1 then per_page = 10 end
 
-  let is_htmx = (req["headers"]["HX-Request"] ?? "") != ""
-
-  # HTMX load-more: return feature cards + OOB load-more for one project
-  if is_htmx and project_param != ""
-    let result = Feature.search(project_param, q, offset, per_page)
-    let fetched = result["results"].length()
-    let new_offset = offset + fetched
-    let has_more = new_offset < result["total"]
-    return {
-      "status": 200,
-      "headers": { "Content-Type": "text/html; charset=utf-8" },
-      "body": render_partial("features/feature_cards", {
-        "features": result["results"],
-        "project": project_param,
-        "new_offset": new_offset,
-        "has_more": has_more,
-        "total": result["total"],
-        "q": q
-      })
-    }
-  end
-
-  # Full page load (or HTMX search) — build groups, first page per project
-  let projs = list_projects() rescue []
-  let groups = []
-  for proj in projs
-    let pname = proj["name"]
-    let result = Feature.search(pname, q, 0, per_page)
-    if result["total"] > 0
-      groups.push({
-        "project": pname,
-        "features": result["results"],
-        "total": result["total"],
-        "has_more": result["total"] > per_page
-      })
-    end
-  end
-
-  if is_htmx
-    return {
-      "status": 200,
-      "headers": { "Content-Type": "text/html; charset=utf-8" },
-      "body": render_partial("features/groups", {
+  respond_to(req, fn(format) {
+    format.html(fn()
+      let projs = list_projects() rescue []
+      let groups = []
+      for proj in projs
+        let pname = proj["name"]
+        let result = Feature.search(pname, q, 0, per_page)
+        if result["total"] > 0
+          groups.push({
+            "project": pname,
+            "features": result["results"],
+            "total": result["total"],
+            "has_more": result["total"] > per_page
+          })
+        end
+      end
+      render("features/index", {
+        "title": "Features",
         "groups": groups,
-        "q": q
+        "q": q,
+        "projects": projs,
+        "theme": Setting.current_theme()
       })
-    }
-  end
+    end)
 
-  render("features/index", {
-    "title": "Features",
-    "groups": groups,
-    "q": q,
-    "projects": projs,
-    "theme": Setting.current_theme()
+    format.htmx(fn()
+      if project_param != ""
+        let result = Feature.search(project_param, q, offset, per_page)
+        let fetched = result["results"].length()
+        let new_offset = offset + fetched
+        let has_more = new_offset < result["total"]
+        render("features/_feature_cards", {
+          "features": result["results"],
+          "project": project_param,
+          "new_offset": new_offset,
+          "has_more": has_more,
+          "total": result["total"],
+          "q": q
+        }, { "layout": false })
+      else
+        let projs = list_projects() rescue []
+        let groups = []
+        for proj in projs
+          let pname = proj["name"]
+          let result = Feature.search(pname, q, 0, per_page)
+          if result["total"] > 0
+            groups.push({
+              "project": pname,
+              "features": result["results"],
+              "total": result["total"],
+              "has_more": result["total"] > per_page
+            })
+          end
+        end
+        render("features/_groups", {
+          "groups": groups,
+          "q": q
+        }, { "layout": false })
+      end
+    end)
   })
 end
 
@@ -564,7 +569,8 @@ fn generate_tasks_log(req)
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": _render_generate_progress(feature, plan_id,
-              _render_generate_log(state["log"] ?? "", state["status"], failed, feature))
+              _render_generate_log(state["log"] ?? "", state["status"], failed, feature),
+              state["log"] ?? "")
   }
 end
 
@@ -606,7 +612,8 @@ fn plan_answer(req)
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": _render_generate_progress(feature, plan_id,
-              _render_generate_log(state["log"] ?? "", state["status"], failed, feature))
+              _render_generate_log(state["log"] ?? "", state["status"], failed, feature),
+              state["log"] ?? "")
   }
 end
 
@@ -888,9 +895,9 @@ end
 #
 # Mirrors `runs#stream` / `tasks#plan_stream`: the client opens the
 # socket, sends `tick` frames with its byte cursor, the server replies
-# with `delta` frames carrying any new bytes plus a re-rendered log
-# panel (no separate status_html / question_html — the question card
-# is a sibling div that owns its own re-render via htmx). On a done
+# with `delta` frames carrying any new bytes plus a re-rendered status
+# pill. Questions are handled by the htmx poll path
+# (`generate_tasks_log`) so `question_html` is omitted. On a done
 # status we set `reload: true` so the client navigates to the feature
 # page, where `_import_tasks_once` will have synced the proposed tasks.
 fn generate_stream(event)
@@ -915,17 +922,15 @@ fn generate_stream(event)
   if data["event"] == "error"
     return { "send": JSON.stringify(data) }
   end
-  # Both done AND failed flip `reload` here so the user is navigated to
-  # the feature page either way — on done the page renders the proposed
-  # tasks; on fail it renders the failure panel with a retry CTA.
   data["reload"] = data["terminal"]
-  # The features panel doesn't surface its own status/question fragments
-  # over WS — the htmx question form handles the question lifecycle on
-  # the server side and reload covers the terminal transition. Strip the
-  # plan-flavoured fields so the client doesn't dereference a missing
-  # selector.
+  data["status_html"] = render_partial("tasks/plan_status", {
+    "plan_id":          plan_id,
+    "status":           data["status"],
+    "pending_question": data["pending_question"]
+  })
+  # Questions are handled by the htmx poll endpoint; omit from the WS
+  # delta so the client never enters `suppressed` mode.
   data["pending_question"] = nil
-  data["status"] = nil
   { "send": JSON.stringify(data) }
 end
 
@@ -948,11 +953,11 @@ fn _render_generate_card(feature, plan_id, inner)
   "</div>" +
   "<p class=\"text-xs text-slate-500 mb-3\">Streaming live &mdash; tasks will appear " +
   "here as the planner produces them.</p>" +
-  _render_generate_progress(feature, plan_id, inner) +
+  _render_generate_progress(feature, plan_id, inner, "") +
   "</div></div>"
 end
 
-fn _render_generate_progress(feature, plan_id, inner)
+fn _render_generate_progress(feature, plan_id, inner, initial_log)
   # Streaming runs over a WebSocket: the data-stream-* attributes wire
   # the panel up to the global `run-stream.js` client, replacing the
   # `every 2s` htmx poller. The same panel is re-rendered server-side
@@ -960,11 +965,14 @@ fn _render_generate_progress(feature, plan_id, inner)
   # The route URL is static (Soli 1.0.3's `router_websocket` doesn't
   # extract `:id`-style path params); the client echoes the identifiers
   # on every tick from the data-stream-* attrs.
+  let log_len = (initial_log ?? "").length()
   "<div id=\"generate-progress\"" +
   " data-stream-url=\"/ws/feature-generate-stream\"" +
   " data-stream-feature-id=\"" + feature._key + "\"" +
   " data-stream-plan-id=\"" + plan_id + "\"" +
   " data-stream-log=\"#generate-progress-log\"" +
+  " data-stream-status=\"#generate-progress-status\"" +
+  " data-stream-offset=\"" + str(log_len) + "\"" +
   " data-stream-tick-ms=\"300\">" +
   inner + "</div>"
 end
@@ -976,12 +984,12 @@ fn _render_generate_log(log, status, failed, feature)
              "border-white/5 p-3\">" +
              h(log) + "</div>"
   if failed
-    html = html + "<div class=\"text-red-400 text-sm mt-2\">" +
+    html = html + "<div id=\"generate-progress-status\" class=\"text-red-400 text-sm mt-2\">" +
            "Plan failed: " + h(status) + ". " +
            "<a href=\"/features/" + feature._key + "\" " +
            "class=\"text-indigo-400 underline\">Back to feature</a></div>"
   else
-    html = html + "<div class=\"text-indigo-300 text-sm animate-pulse mt-2\">" +
+    html = html + "<div id=\"generate-progress-status\" class=\"text-indigo-300 text-sm animate-pulse mt-2\">" +
            h(status) + "&hellip;</div>"
   end
   html
