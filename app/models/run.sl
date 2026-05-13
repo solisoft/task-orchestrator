@@ -208,19 +208,20 @@ fn run_latest_todos(repo, slug)
   end
   let lines = body.split("\n")
   let latest = []
-  let i = 0
-  while i < lines.length
+  let i = lines.length - 1
+  while i >= 0
     let line = lines[i]
-    if line != ""
+    if line != "" and line.contains("\"todo")
       let obj = JSON.parse(line) rescue nil
       if obj != nil
         let todos = _extract_todos_from_event(obj)
         if todos != nil
           latest = todos
+          i = -1
         end
       end
     end
-    i = i + 1
+    i = i - 1
   end
   latest
 end
