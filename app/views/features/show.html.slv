@@ -20,6 +20,10 @@
             <% if _created != "" %>
               <span class="text-xs text-slate-500">Created <%= _created %></span>
             <% end %>
+            <% let _author = (feature.author ?? "").trim() %>
+            <% if _author != "" %>
+              <span class="text-xs text-slate-500">by <%= _author %></span>
+            <% end %>
           </div>
           <h1 class="text-3xl font-bold gradient-text leading-tight"><%= feature.title %></h1>
         </div>

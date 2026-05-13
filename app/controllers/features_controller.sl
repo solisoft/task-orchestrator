@@ -194,6 +194,14 @@ fn create(req)
   if project == "" or title == ""
     return {"status": 422, "body": "Project and title are required"}
   end
+  # Feature routes are auth-gated (see config/routes.sl), so
+  # `current_user` is always populated. The `?? ""` guard is defensive
+  # only — keeps the row creatable if the session ever expires between
+  # the middleware check and this action.
+  let author = ""
+  if req["current_user"] != nil
+    author = req["current_user"].email ?? ""
+  end
   let feature = Feature.create({
     "_key":        Feature.key_for(project, slug),
     "project":     project,
@@ -201,7 +209,8 @@ fn create(req)
     "title":       title,
     "description": description,
     "status":      status,
-    "plan_model":  plan_model
+    "plan_model":  plan_model,
+    "author":      author
   })
   if feature._errors
     let _pkr = _picker_locals(feature)

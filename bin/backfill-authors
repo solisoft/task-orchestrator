@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# backfill-authors
+#
+# One-shot: walk the `tasks` and `features` collections and stamp
+# `author` = the first user's email on every row where `author` is
+# nil or empty. Lets us roll out the "tasks belong to a user" feature
+# against an existing DB without forcing users to re-enter every row.
+#
+# Idempotent: rows that already carry a non-empty author are skipped.
+
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "$0")" && pwd)
+project_root=$(dirname "$script_dir")
+if [[ -f "$project_root/.env" ]]; then
+    set -a; source "$project_root/.env"; set +a
+fi
+
+HOST="${SOLIDB_HOST:-http://localhost:6745}"
+DB="${SOLIDB_DATABASE:-tasks}"
+USER_NAME="${SOLIDB_USERNAME:-admin}"
+PASS="${SOLIDB_PASSWORD:-admin}"
+
+# Look up the first user's email — the row we'll stamp every existing
+# author-less task/feature with. Sorted by `created_at` so the oldest
+# user wins (stable across reruns even if `Task.all()` returns rows in
+# a different order between calls).
+first_user_payload=$(jq -n \
+    '{
+        query: "FOR u IN users SORT u.created_at ASC LIMIT 1 RETURN u.email",
+        bindVars: {}
+     }')
+first_user_resp=$(curl -fsS -u "$USER_NAME:$PASS" \
+    -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' \
+    -d "$first_user_payload")
+first_user_email=$(printf '%s' "$first_user_resp" | jq -r '.result[0] // ""')
+
+if [[ -z "$first_user_email" || "$first_user_email" == "null" ]]; then
+    echo "backfill-authors: no users in the DB — register one first" >&2
+    exit 1
+fi
+
+echo "backfill-authors: stamping missing authors with '$first_user_email'"
+
+# A single UPDATE statement covers every nullable shape (missing key,
+# null value, empty string). FILTER returns rows that need stamping;
+# the UPDATE writes only the rows that pass.
+stamp_collection() {
+    local collection=$1
+    local payload
+    payload=$(jq -n --arg email "$first_user_email" \
+        --arg collection "$collection" \
+        '{
+            query: "FOR doc IN @@collection FILTER doc.author == null OR doc.author == \"\" UPDATE doc WITH { author: @email } IN @@collection RETURN NEW._key",
+            bindVars: { "email": $email, "@collection": $collection }
+         }')
+    local resp
+    resp=$(curl -fsS -u "$USER_NAME:$PASS" \
+        -X POST "$HOST/_api/database/$DB/cursor" \
+        -H 'content-type: application/json' \
+        -d "$payload")
+    local n
+    n=$(printf '%s' "$resp" | jq -r '.result | length // 0')
+    printf '  %s: stamped %s row(s)\n' "$collection" "$n"
+}
+
+stamp_collection tasks
+stamp_collection features
+
+echo "backfill-authors: done."
