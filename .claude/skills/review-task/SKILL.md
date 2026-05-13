@@ -47,7 +47,32 @@ Report findings as a short markdown bullet list:
 - **Rejected** — Do **not** commit. Report what's missing and stop. The orchestrator will mark the row failed.
 - **Approved-with-notes** — Notes are non-blocking. Continue to Step 5.
 - **Approved-no-fix-needed** — Review concluded the spec is invalid, describes intended behavior, or is won't-fix. Continue to Step 5; if there is no diff, stop without committing — the orchestrator detects "no commit produced" and treats it as a successful no-code-change close.
-- **Approved-with-followups** — Work is deferred. Before Step 5, drop one `tasks/todo/<NEW-slug>.md` per follow-up. Mirror the original's structure (Severity, Location, Issue, proposed Fix). Continue to Step 5.
+- **Approved-with-followups** — Work is deferred. Before Step 5, POST each follow-up as a Task document directly to the solidb `tasks` collection with `"tags": ["follow_up"]`. Do **not** write `.md` files on disk. The orchestrator seeds `.env` into the worktree; read solidb credentials from it:
+
+    ```bash
+    script_dir=$(dirname "$0")  # or equivalent
+    project_root=$(dirname "$(dirname "$script_dir")")
+    if [[ -f "$project_root/.env" ]]; then
+        set -a; source "$project_root/.env"; set +a
+    fi
+    HOST="${SOLIDB_HOST:-http://localhost:6745}"
+    DB="${SOLIDB_DATABASE:-tasks}"
+    USER="${SOLIDB_USERNAME:-admin}"
+    PASS="${SOLIDB_PASSWORD:-admin}"
+    ```
+
+    Construct one JSON payload per follow-up with the same shape as `bin/ingest-todos` (project, slug, title, body_md, status: "todo", timestamps) plus `"tags": ["follow_up"]`. Use `jq` or `printf` to build the payload, then `curl`:
+
+    ```bash
+    resp=$(curl -s -u "$USER:$PASS" \
+        -X POST "$HOST/_api/database/$DB/document/tasks" \
+        -H 'content-type: application/json' \
+        -w '\n%{http_code}' \
+        -d "$payload")
+    code="${resp##*$'\n'}"
+    ```
+
+    The slug must be unique within the project — derive it from the follow-up title (lowercased + dashed, same as `unique_slug_for` in the controller). Continue to Step 5.
 
     **Reality check before creating any follow-up.** For every symbol you name in a follow-up's title or Issue (function, method, file path, doc id), `grep` the worktree to confirm it exists OR explicitly frame the follow-up as a feature task ("Add `<X>`...", with rationale). Don't materialize a follow-up referencing a name you can't find. If unsure, drop the follow-up and note the uncertainty in the verdict.
 - **Approved** — Continue to Step 5.
@@ -58,7 +83,6 @@ Match the project's commit style — read the recent `git log` output and any gu
 
 Stage everything that belongs to this task:
 - the implementation diff
-- any new `tasks/todo/<NEW-slug>.md` follow-up files
 
 `git add -A` will sweep up the orchestrator-seeded spec md too, which we do **not** want in the commit. Always run, immediately after staging:
 
@@ -71,7 +95,7 @@ git restore --staged tasks/todo/<slug>.md
 Use a HEREDOC so the message formats correctly. Pick a subject that matches the verdict:
 - **Approved** / **Approved-with-notes** — `fix(...)` / `feat(...)` describing the change.
 - **Approved-no-fix-needed** — `chore(<scope>): close <slug> (won't fix)` or `(invalid)`; the body must explain the decision.
-- **Approved-with-followups** — `chore(<scope>): close <slug> (deferred)`; the body must list the new `tasks/todo/...` files.
+- **Approved-with-followups** — `chore(<scope>): close <slug> (deferred)`; the body must list the slugs of the follow-up tasks that were created.
 
 ```bash
 git commit -m "$(cat <<'EOF'

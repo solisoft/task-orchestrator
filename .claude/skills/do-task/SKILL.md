@@ -30,7 +30,7 @@ Read every file referenced in the spec's Location section before editing.
 
 1. Apply the proposed Fix, or an equivalent that addresses the root cause. The Fix in the spec is a *suggestion* — deviate when there's a better approach, but never paper over the issue (e.g. swallowing an error instead of fixing it).
 2. **Cover every call site listed in the spec.** Patch all of them. Do **not** search for similar patterns elsewhere — only fix what the spec explicitly describes.
-3. **Stay in scope.** No drive-by refactors, renames, or fixes to neighboring issues. If you spot a separate problem, drop a `tasks/todo/<NEW-slug>.md` for it (the orchestrator will pick it up next ingest) and continue with the original task.
+3. **Stay in scope.** No drive-by refactors, renames, or fixes to neighboring issues. If you spot a separate problem, drop a `tasks/todo/<NEW-slug>.md` for it (the orchestrator will pick it up next ingest) and continue with the original task. **Note:** `review-task` now creates follow-up tasks directly in the DB via solidb API POST with `"tags": ["follow_up"]` — it no longer writes `.md` files on disk. The `tasks/todo/` file path is still used for the current task's spec but not for follow-ups.
 4. **Docs.** If the change is user-facing (new API, config flag, behavior change) and `CLAUDE.md` describes a documentation policy, follow it — update every surface the policy names in the same change.
 
 ## Step 4 — Verify
