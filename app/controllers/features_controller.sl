@@ -300,6 +300,7 @@ fn publish(req)
     "body_md":      combined_body,
     "status":       "todo",
     "feature_slug": feature._key,
+    "model":        feature.plan_model ?? "",
     "author":       author
   })
   if parent._errors
