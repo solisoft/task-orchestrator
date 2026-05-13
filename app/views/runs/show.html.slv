@@ -36,7 +36,7 @@
             <% if task.status == "review" %>
               <form method="post"
                     action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
-                    onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
+                    data-confirm="Merge '<%= branch_info["name"] %>' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.">
                 <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
                   Merge into <%= branch_info["main"] %>
                 </button>
