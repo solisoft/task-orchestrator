@@ -27,6 +27,43 @@ class Feature < Model
     Feature.where({ "project": project }).order("updated_at", "desc").all()
   end
 
+  # Search features by title/description, scoped to a project.
+  # When `project` is empty, searches across all projects.
+  # Returns { "results": [Feature, ...], "total": N }.
+  # Uses in-memory filtering (consistent with PlansController pattern)
+  # over the @sdbql fulltext index sits beneath for future optimization.
+  static def search(project, query, offset, limit)
+    let q = (query ?? "").trim()
+    let p = (project ?? "").trim()
+    let off = offset ?? 0
+    let lim = limit ?? 10
+    if off < 0 then off = 0 end
+    if lim < 1 then lim = 10 end
+
+    let all_raw = p == ""
+      ? Feature.all()
+      : Feature.where({ "project": p }).all()
+    let all = all_raw.sort_by(fn(f) f.updated_at ?? "").reverse()
+
+    let filtered = q == ""
+      ? all
+      : all.filter(fn(f)
+          let title = f.title ?? ""
+          let desc  = f.description ?? ""
+          title.index_of(q) != -1 or desc.index_of(q) != -1
+        end)
+
+    let total = filtered.length()
+    let end_at = off + lim
+    let results = []
+    let i = off
+    while i < total and i < end_at
+      results.push(filtered[i])
+      i = i + 1
+    end
+    { "results": results, "total": total }
+  end
+
   # Look up the Feature pointed to by `task.feature_slug` and recompute
   # its status from the new task state. Returns nil when the task has
   # no `feature_slug` or the slug is stale (feature deleted). Wraps the

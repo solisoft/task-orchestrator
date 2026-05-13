@@ -3,51 +3,72 @@
 # Task rows via the plan-run agent.
 
 # GET /features
+# Supports ?q= (search), ?project= + ?offset= (HTMX load-more), ?per_page=
 fn index(req)
-  let project_filter = ((req["query"] ?? {})["project"] ?? "").trim()
-  let features = []
-  if project_filter != ""
-    features = Feature.for_project(project_filter)
-  else
-    let projs = list_projects() rescue []
-    for proj in projs
-      for f in Feature.for_project(proj["name"])
-        features.push(f)
-      end
+  let merged = req["params"] ?? req["query"] ?? {}
+  let q = (merged["q"] ?? "").trim()
+  let project_param = (merged["project"] ?? "").trim()
+  let offset = (merged["offset"] ?? "0").to_i() rescue 0
+  let per_page = (merged["per_page"] ?? "10").to_i() rescue 10
+  if offset < 0 then offset = 0 end
+  if per_page < 1 then per_page = 10 end
+
+  let is_htmx = (req["headers"]["HX-Request"] ?? "") != ""
+
+  # HTMX load-more: return feature cards + OOB load-more for one project
+  if is_htmx and project_param != ""
+    let result = Feature.search(project_param, q, offset, per_page)
+    let fetched = result["results"].length()
+    let new_offset = offset + fetched
+    let has_more = new_offset < result["total"]
+    return {
+      "status": 200,
+      "headers": { "Content-Type": "text/html; charset=utf-8" },
+      "body": render_partial("features/feature_cards", {
+        "features": result["results"],
+        "project": project_param,
+        "new_offset": new_offset,
+        "has_more": has_more,
+        "total": result["total"],
+        "q": q
+      })
+    }
+  end
+
+  # Full page load (or HTMX search) — build groups, first page per project
+  let projs = list_projects() rescue []
+  let groups = []
+  for proj in projs
+    let pname = proj["name"]
+    let result = Feature.search(pname, q, 0, per_page)
+    if result["total"] > 0
+      groups.push({
+        "project": pname,
+        "features": result["results"],
+        "total": result["total"],
+        "has_more": result["total"] > per_page
+      })
     end
   end
-  let groups = _group_features_by_project(features)
+
+  if is_htmx
+    return {
+      "status": 200,
+      "headers": { "Content-Type": "text/html; charset=utf-8" },
+      "body": render_partial("features/groups", {
+        "groups": groups,
+        "q": q
+      })
+    }
+  end
+
   render("features/index", {
     "title": "Features",
-    "features": features,
     "groups": groups,
-    "projects": list_projects() rescue [],
-    "project_filter": project_filter == "" ? nil : project_filter,
+    "q": q,
+    "projects": projs,
     "theme": Setting.current_theme()
   })
-end
-
-# Group features by project name into [{ project, features: [...] }, ...].
-# Keeps project order stable (insertion order = sort order from upstream).
-fn _group_features_by_project(features)
-  let order = []
-  let bucket = {}
-  for f in features
-    let pname = (f.project ?? "").trim()
-    if pname == ""
-      pname = "(no project)"
-    end
-    if bucket[pname] == nil
-      bucket[pname] = []
-      order.push(pname)
-    end
-    bucket[pname].push(f)
-  end
-  let out = []
-  for pname in order
-    out.push({ "project": pname, "features": bucket[pname] })
-  end
-  out
 end
 
 # Build the locals the plan-model picker partial needs for a given

@@ -1,0 +1,69 @@
+<% if groups.length() == 0 %>
+  <% if q != "" %>
+    <div class="relative animate-fade-in animate-fade-in-1">
+      <div class="rounded-2xl border border-slate-500/20 bg-slate-900/30 p-8 text-center animate-fade-in">
+        <p class="text-slate-400">No features match your search.</p>
+      </div>
+    </div>
+  <% else %>
+    <div class="relative animate-fade-in animate-fade-in-1">
+      <div class="absolute inset-0 -z-10 overflow-hidden rounded-3xl">
+        <div class="absolute -top-20 -left-20 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl"></div>
+        <div class="absolute -bottom-20 -right-10 w-96 h-96 rounded-full bg-fuchsia-500/15 blur-3xl"></div>
+      </div>
+
+      <div class="rounded-3xl glass-card p-10 lg:p-14 text-center relative overflow-hidden">
+        <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-fuchsia-500/30 border border-white/10 mb-6 animate-float">
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-200"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h2 class="text-2xl lg:text-3xl font-bold mb-2"><span class="gradient-text">Start with a brief.</span></h2>
+        <p class="text-slate-400 text-sm max-w-xl mx-auto mb-10">
+          Capture the product story in markdown &mdash; the why, the UX, the acceptance criteria.
+          Then let the planner fan it into linked tasks.
+        </p>
+
+        <div class="grid md:grid-cols-3 gap-4 max-w-3xl mx-auto mb-10 text-left">
+          <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold flex items-center justify-center">1</span>
+              <h3 class="text-sm font-semibold text-slate-100">Write a brief</h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed">Markdown description of what you want and why. Discussed inline with comments.</p>
+          </div>
+          <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/30 text-fuchsia-300 text-xs font-bold flex items-center justify-center">2</span>
+              <h3 class="text-sm font-semibold text-slate-100">Generate tasks <span class="ai-sparkle">&#x2728;</span></h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed">One click. The planner breaks the brief into 3&ndash;7 focused, actionable tasks.</p>
+          </div>
+          <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold flex items-center justify-center">3</span>
+              <h3 class="text-sm font-semibold text-slate-100">Ship</h3>
+            </div>
+            <p class="text-xs text-slate-500 leading-relaxed">Agents pick up tasks in worktrees, open PRs, and the brief tracks the rollup.</p>
+          </div>
+        </div>
+
+        <a href="/features/new" class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-6 py-3 transition-all btn-glow shadow-lg shadow-indigo-500/25 cta-shimmer">
+          Create your first brief
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+    </div>
+  <% end %>
+<% else %>
+  <div class="space-y-8">
+    <% let g_idx = 0 %>
+    <% for group in groups %>
+      <section class="animate-fade-in animate-fade-in-<%= (g_idx % 5) + 1 %>">
+        <%- render_partial("features/group", {
+          "group": group,
+          "q": q
+        }) %>
+      </section>
+      <% g_idx = g_idx + 1 %>
+    <% end %>
+  </div>
+<% end %>
