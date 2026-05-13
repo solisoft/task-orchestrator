@@ -94,6 +94,10 @@
                   <% else %>
                     <p class="text-sm text-slate-600 italic">No description yet</p>
                   <% end %>
+                  <% let _created = format_date(feature.created_at) %>
+                  <% if _created != "" %>
+                    <p class="text-xs text-slate-500 mt-2">Created <%= _created %></p>
+                  <% end %>
                 </a>
               <% end %>
             </div>
