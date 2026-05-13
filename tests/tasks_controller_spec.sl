@@ -772,6 +772,147 @@ def _tq_setup_worktree_repo_no_origin(slug)
   return worktree
 end
 
+describe("TasksController#save model persistence", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("persists plan_model on task.model when the form carries one", fn()
+    Task.create({
+      "_key":    "proj--save-model",
+      "project": "proj",
+      "slug":    "save-model",
+      "title":   "Save model",
+      "body_md": "# original",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-model/save", {
+      "title":        "Save model",
+      "body_md":      "# updated",
+      "plan_model":   "claude-opus-4-7",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-model")
+    assert_eq(t.model, "claude-opus-4-7")
+    assert_eq(t.body_md, "# updated")
+  end)
+
+  test("stitches plan_variant onto an opencode plan_model", fn()
+    Task.create({
+      "_key":    "proj--save-stitched",
+      "project": "proj",
+      "slug":    "save-stitched",
+      "title":   "Stitched",
+      "body_md": "# x",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-stitched/save", {
+      "body_md":      "# x",
+      "plan_model":   "deepseek/deepseek-chat",
+      "plan_variant": "high"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-stitched")
+    assert_eq(t.model, "deepseek/deepseek-chat:high")
+  end)
+
+  test("leaves task.model untouched when no plan_model is submitted", fn()
+    Task.create({
+      "_key":    "proj--save-keep",
+      "project": "proj",
+      "slug":    "save-keep",
+      "title":   "Keep",
+      "body_md": "# x",
+      "model":   "claude-opus-4-7",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-keep/save", {
+      "body_md": "# updated"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-keep")
+    assert_eq(t.model, "claude-opus-4-7")
+    assert_eq(t.body_md, "# updated")
+  end)
+end)
+
+describe("TasksController#queue model override", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("persists plan_model and transitions to queued in one request", fn()
+    Task.create({
+      "_key":    "proj--queue-with-model",
+      "project": "proj",
+      "slug":    "queue-with-model",
+      "title":   "Queue with model",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/queue-with-model/queue", {
+      "plan_model":   "claude-opus-4-7",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "queue-with-model")
+    assert_eq(t.status, "queued")
+    assert_eq(t.model, "claude-opus-4-7")
+  end)
+
+  test("queues normally and preserves task.model when no override is sent", fn()
+    Task.create({
+      "_key":    "proj--queue-no-model",
+      "project": "proj",
+      "slug":    "queue-no-model",
+      "title":   "Queue without override",
+      "model":   "claude-haiku-4-5-20251001",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/queue-no-model/queue", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "queue-no-model")
+    assert_eq(t.status, "queued")
+    assert_eq(t.model, "claude-haiku-4-5-20251001")
+  end)
+end)
+
+describe("TasksController#show model picker", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("renders model picker pre-selected to task.model on todo tasks", fn()
+    Task.create({
+      "_key":    "proj--show-picker",
+      "project": "proj",
+      "slug":    "show-picker",
+      "title":   "Show picker",
+      "model":   "claude-opus-4-7",
+      "status":  "todo"
+    })
+    let response = get("/projects/proj/tasks/show-picker")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # The picker is in the Queue form; preselection is rendered as the
+    # selected attribute on the matching option.
+    assert_contains(body, "name=\"plan_model\"")
+    assert_contains(body, "value=\"claude-opus-4-7\" selected")
+  end)
+end)
+
 describe("TasksController#sidebar", fn()
   before_each(fn()
     assert_test_db()
