@@ -1,8 +1,8 @@
 # WebPush — VAPID-signed Web Push delivery.
 #
-# Soli has no native ECDSA primitive, so we shell out to the Node
-# `web-push` CLI for both VAPID key generation and per-subscription
-# delivery. The CLI is a single dependency (`npm i -g web-push`).
+# Soli ships in-process VAPID primitives (`vapid_generate_keys`,
+# `vapid_send`), so this helper does all crypto/HTTP work inside the
+# runtime — no external CLI required.
 #
 # Keys are stored in the `Setting` key/value table under the keys
 # `vapid_public_key` / `vapid_private_key` and generated lazily on
@@ -11,11 +11,11 @@
 # Test mock: when the sentinel file `/tmp/_task_orch_web_push.active`
 # exists, every `send_to_all` invocation appends a JSON line
 # `{ "payload": ... }` to `/tmp/_task_orch_web_push.log` and returns
-# immediately — no real network or shell call. The status-change spec
-# uses this to assert call count. The mock gates on a filesystem
-# sentinel rather than a `Setting` row because other specs run
-# `Setting.delete_all()` in parallel against the shared test DB; the
-# sentinel file isolates this hook from that contention.
+# immediately — no real network call. The status-change spec uses this
+# to assert call count. The mock gates on a filesystem sentinel rather
+# than a `Setting` row because other specs run `Setting.delete_all()`
+# in parallel against the shared test DB; the sentinel file isolates
+# this hook from that contention.
 
 const _web_push_vapid_subject = "mailto:noreply@task-orchestrator.local"
 
@@ -53,8 +53,8 @@ def web_push_send_to_all(payload)
 end
 
 # Return the stored VAPID public key, generating the keypair if it
-# doesn't yet exist. Returns "" if generation fails (e.g. `web-push`
-# CLI not installed) — the caller surfaces an empty body to the SW.
+# doesn't yet exist. Returns "" only if the builtin fails to produce
+# a keypair (effectively unreachable in normal operation).
 def web_push_public_key()
   let keys = web_push_ensure_keys()
   if keys == nil
@@ -65,17 +65,20 @@ end
 
 # Lazily generate + cache the VAPID keypair. Returns
 #   { "public": "...", "private": "..." }
-# or nil when the CLI isn't available. Once stored in `Setting`, the
-# pair is reused across restarts so subscriptions remain valid.
+# or nil only when `vapid_generate_keys` itself raises (so we still
+# have a defensive path; callers degrade to an empty key). Once stored
+# in `Setting`, the pair is reused across restarts so subscriptions
+# remain valid.
 def web_push_ensure_keys()
   let pub  = Setting.get("vapid_public_key")  ?? ""
   let priv = Setting.get("vapid_private_key") ?? ""
   if pub != "" and priv != ""
     return { "public": pub, "private": priv }
   end
-  # Test override — skip the shell call entirely. Specs seed these
-  # `Setting` rows so the helper short-circuits before shelling out
-  # to the Node CLI (which the spec environment doesn't have).
+  # Test override — specs seed these `Setting` rows so the helper
+  # short-circuits with deterministic fake keys before reaching the
+  # in-process builtin. Some specs feed bogus values intentionally to
+  # exercise the per-row send/prune branches.
   let mock_pub  = Setting.get("vapid_test_public")  ?? ""
   let mock_priv = Setting.get("vapid_test_private") ?? ""
   if mock_pub != "" and mock_priv != ""
@@ -83,17 +86,12 @@ def web_push_ensure_keys()
     Setting.set("vapid_private_key", mock_priv)
     return { "public": mock_pub, "private": mock_priv }
   end
-  let res = System.run_sync(["bash", "-c",
-    "web-push generate-vapid-keys --json 2>/dev/null"]) rescue nil
-  if res == nil or res["exit_code"] != 0
+  let generated = vapid_generate_keys() rescue nil
+  if generated == nil
     return nil
   end
-  let parsed = JSON.parse(res["stdout"] ?? "") rescue nil
-  if parsed == nil
-    return nil
-  end
-  let new_pub  = parsed["publicKey"]  ?? ""
-  let new_priv = parsed["privateKey"] ?? ""
+  let new_pub  = generated["public_key"]  ?? ""
+  let new_priv = generated["private_key"] ?? ""
   if new_pub == "" or new_priv == ""
     return nil
   end
@@ -102,14 +100,14 @@ def web_push_ensure_keys()
   return { "public": new_pub, "private": new_priv }
 end
 
-# Shell out to `web-push send-notification` for a single subscription.
+# Deliver a single subscription via the runtime's `vapid_send` builtin.
 # Returns { "ok": Bool, "pruned": Bool }; `pruned` is true when the
-# push service rejected with 404/410 so the caller drops the row.
+# push service responded 404/410 so the caller drops the row.
 #
 # Test override: when the `Setting` row `web_push_test_send_outcome`
 # is set to `"ok"` or `"pruned"`, return that outcome directly. Specs
 # use this to exercise the per-row sent / pruned counter loop without
-# needing the Node CLI installed.
+# making real HTTP calls.
 def _web_push_send_one(sub, body, keys)
   let test_outcome = Setting.get("web_push_test_send_outcome") ?? ""
   if test_outcome == "ok"
@@ -118,24 +116,36 @@ def _web_push_send_one(sub, body, keys)
   if test_outcome == "pruned"
     return { "ok": false, "pruned": true }
   end
-  let cmd = ["web-push", "send-notification",
-             "--endpoint=" + sub.endpoint,
-             "--key=" + (sub.p256dh ?? ""),
-             "--auth=" + (sub.auth ?? ""),
-             "--vapid-subject=" + _web_push_vapid_subject,
-             "--vapid-pubkey=" + keys["public"],
-             "--vapid-pvtkey=" + keys["private"],
-             "--payload=" + body]
-  let res = System.run_sync(cmd) rescue nil
+  let subscription = {
+    "endpoint": sub.endpoint,
+    "keys": {
+      "p256dh": sub.p256dh ?? "",
+      "auth":   sub.auth   ?? ""
+    }
+  }
+  let res = vapid_send(
+    subscription,
+    body,
+    keys["private"],
+    keys["public"],
+    _web_push_vapid_subject
+  ) rescue nil
   if res == nil
     return { "ok": false, "pruned": false }
   end
-  if res["exit_code"] == 0
-    return { "ok": true, "pruned": false }
-  end
-  let combined = (res["stdout"] ?? "") + (res["stderr"] ?? "")
-  if combined.contains("404") or combined.contains("410")
+  return _web_push_outcome_from_status(res["status"] ?? 0)
+end
+
+# Decode a push-service HTTP status into the `{ ok, pruned }` shape
+# the loop counter expects. 404/410 mean the subscription is dead and
+# the row should be dropped; 2xx is a successful delivery; anything
+# else is a transient or unexpected failure that we count as neither.
+def _web_push_outcome_from_status(status)
+  if status == 404 or status == 410
     return { "ok": false, "pruned": true }
+  end
+  if status >= 200 and status < 300
+    return { "ok": true, "pruned": false }
   end
   return { "ok": false, "pruned": false }
 end
