@@ -854,6 +854,51 @@ fn _first_heading_or_default(raw)
   "Generated task"
 end
 
+# WebSocket handler for the generate-tasks plan-run transcript.
+#
+# Mirrors `runs#stream` / `tasks#plan_stream`: the client opens the
+# socket, sends `tick` frames with its byte cursor, the server replies
+# with `delta` frames carrying any new bytes plus a re-rendered log
+# panel (no separate status_html / question_html — the question card
+# is a sibling div that owns its own re-render via htmx). On a done
+# status we set `reload: true` so the client navigates to the feature
+# page, where `_import_tasks_once` will have synced the proposed tasks.
+fn generate_stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let feature_key = (parsed["feature_id"] ?? "").trim()
+  let feature = Feature.find(feature_key) rescue nil
+  if feature == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown feature", "terminal": true }) }
+  end
+  let plan_id = (parsed["plan_id"] ?? "").trim()
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = plan_stream_payload(plan_id, frame_kind, offset)
+  if data["event"] == "error"
+    return { "send": JSON.stringify(data) }
+  end
+  # Both done AND failed flip `reload` here so the user is navigated to
+  # the feature page either way — on done the page renders the proposed
+  # tasks; on fail it renders the failure panel with a retry CTA.
+  data["reload"] = data["terminal"]
+  # The features panel doesn't surface its own status/question fragments
+  # over WS — the htmx question form handles the question lifecycle on
+  # the server side and reload covers the terminal transition. Strip the
+  # plan-flavoured fields so the client doesn't dereference a missing
+  # selector.
+  data["pending_question"] = nil
+  data["status"] = nil
+  { "send": JSON.stringify(data) }
+end
+
 # Outer card (initial POST response): full Plan Agent card with the
 # running badge and the polling div seeded inside. Used as the body of
 # the initial generate_tasks response so the click visibly replaces
@@ -878,9 +923,19 @@ fn _render_generate_card(feature, plan_id, inner)
 end
 
 fn _render_generate_progress(feature, plan_id, inner)
-  "<div id=\"generate-progress\" hx-get=\"" +
-  "/features/" + feature._key + "/generate_tasks_log/" + plan_id +
-  "\" hx-trigger=\"every 2s\" hx-swap=\"outerHTML\">" +
+  # Streaming runs over a WebSocket: the data-stream-* attributes wire
+  # the panel up to the global `run-stream.js` client, replacing the
+  # `every 2s` htmx poller. The same panel is re-rendered server-side
+  # after each plan-answer so a fresh socket opens on the new DOM root.
+  # The route URL is static (Soli 1.0.3's `router_websocket` doesn't
+  # extract `:id`-style path params); the client echoes the identifiers
+  # on every tick from the data-stream-* attrs.
+  "<div id=\"generate-progress\"" +
+  " data-stream-url=\"/ws/feature-generate-stream\"" +
+  " data-stream-feature-id=\"" + feature._key + "\"" +
+  " data-stream-plan-id=\"" + plan_id + "\"" +
+  " data-stream-log=\"#generate-progress-log\"" +
+  " data-stream-tick-ms=\"300\">" +
   inner + "</div>"
 end
 

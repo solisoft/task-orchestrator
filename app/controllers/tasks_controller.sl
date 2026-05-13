@@ -666,6 +666,55 @@ fn plan(req)
   }
 end
 
+# WebSocket handler for the live plan-task agent transcript.
+#
+# Mirrors `runs#stream`: client opens the socket, sends `tick` frames
+# with its byte cursor, server replies with `delta` frames carrying the
+# new bytes since that cursor plus a re-rendered status + question
+# fragment. On a terminal status (done / failed) we set `reload: true`
+# so the client re-fetches `/tasks/new?plan_id=...`, letting the
+# controller render the planned-body view in place of #form-stage.
+#
+# Suppression around the awaiting_question state is enforced on the
+# client side (it stops sending ticks while the question card is up,
+# so the agent's pollAnswer loop never races the user's click) — but
+# we also defensively don't push log bytes when `has_question` is true.
+fn plan_stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let plan_id = (parsed["plan_id"] ?? "").trim()
+  let project_name = (parsed["project"] ?? "").trim()
+  let project = find_project(project_name) rescue nil
+  if project == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown project", "terminal": true }) }
+  end
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = plan_stream_payload(plan_id, frame_kind, offset)
+  if data["event"] == "error"
+    return { "send": JSON.stringify(data) }
+  end
+  let pq = data["pending_question"]
+  data["status_html"] = render_partial("tasks/plan_status", {
+    "plan_id":          plan_id,
+    "status":           data["status"],
+    "pending_question": pq
+  })
+  data["question_html"] = render_partial("tasks/plan_question", {
+    "project":          project,
+    "plan_id":          plan_id,
+    "pending_question": pq
+  })
+  { "send": JSON.stringify(data) }
+end
+
 # HTMX poll endpoint for the in-flight plan agent. Returns ONLY the
 # right-panel `_plan_stream` partial (root id `plan-stream`), so the
 # 2-second poll never re-renders the static prompt aside on the left.
@@ -974,27 +1023,10 @@ fn _stitched_plan_model(form)
   return _allow_plan_model(base)
 end
 
-# Read the DB-backed state for a plan_id. Returns { status, log, body,
-# pending_question, model, prompt }. body is read only when status=="done".
-fn read_plan_state(plan_id)
-  let plan = Plan.find_by_plan_id(plan_id)
-  if plan == nil
-    return {
-      "status":           "unknown",
-      "log":              "",
-      "body":             "",
-      "pending_question": nil,
-      "model":            "claude-sonnet-4-6",
-      "prompt":           "" }
-  end
-  {
-    "status":           plan.effective_status,
-    "log":              plan.log ?? "",
-    "body":             plan.body ?? "",
-    "pending_question": plan.pending_question,
-    "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
-    "prompt":           plan.prompt ?? "" }
-end
+# `read_plan_state(plan_id)` lives in `app/models/plan.sl` so the WS
+# stream handlers and the spec suite can both call it without going
+# through HTTP. This module reaches for it as a free-standing function
+# (auto-loaded with the model file at server boot).
 
 fn archive(req)
   let project = find_project(req["params"]["name"])
