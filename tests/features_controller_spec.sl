@@ -52,6 +52,32 @@ describe("Feature model", fn()
     assert_eq(f._key, "myapp--dark-mode")
   end)
 
+  test("sets created_at when a feature is created", fn()
+    let f = Feature.create({
+      "_key":    "myapp--feat1",
+      "project": "myapp",
+      "slug":    "feat1",
+      "title":   "Test Feature",
+      "status":  "draft"
+    })
+    assert(f._errors == nil)
+    assert_not_null(f.created_at)
+    assert(f.created_at != "")
+  end)
+
+  test("format_date renders an ISO timestamp as a human-readable date", fn()
+    assert_eq(format_date("2026-05-13T10:30:00Z"), "13 May 2026")
+  end)
+
+  test("format_date returns empty string for nil or empty input", fn()
+    assert_eq(format_date(nil), "")
+    assert_eq(format_date(""), "")
+  end)
+
+  test("format_date returns empty string for unparseable input", fn()
+    assert_eq(format_date("not-a-date"), "")
+  end)
+
   test("find_by_slug returns feature or nil", fn()
     Feature.create({
       "_key":    "myapp--feat1",

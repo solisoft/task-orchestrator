@@ -110,3 +110,28 @@ end
 def round_dollar(amount)
     return Math.floor(amount * 100.0 + 0.5) / 100.0
 end
+
+# Render an ISO 8601 timestamp as a short, human-readable date like
+# "13 May 2026". Returns "" for nil/empty/unparseable inputs so views
+# can call this unconditionally on optional fields.
+def format_date(iso)
+    if iso == nil
+        return ""
+    end
+    if iso == ""
+        return ""
+    end
+    let dt = DateTime.parse(iso) rescue nil
+    if dt == nil
+        return ""
+    end
+    let months = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ]
+    let m = dt.month()
+    if m < 1 or m > 12
+        return ""
+    end
+    return str(dt.day()) + " " + months[m - 1] + " " + str(dt.year())
+end
