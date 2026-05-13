@@ -1032,6 +1032,10 @@ img, video {
   width: 1rem;
 }
 
+.w-44 {
+  width: 11rem;
+}
+
 .w-48 {
   width: 12rem;
 }
@@ -1506,6 +1510,10 @@ img, video {
 
 .bg-amber-500\/15 {
   background-color: rgb(245 158 11 / 0.15);
+}
+
+.bg-amber-500\/20 {
+  background-color: rgb(245 158 11 / 0.2);
 }
 
 .bg-amber-500\/5 {
@@ -2060,6 +2068,10 @@ img, video {
 .text-amber-400 {
   --tw-text-opacity: 1;
   color: rgb(251 191 36 / var(--tw-text-opacity, 1));
+}
+
+.text-amber-400\/80 {
+  color: rgb(251 191 36 / 0.8);
 }
 
 .text-emerald-300 {

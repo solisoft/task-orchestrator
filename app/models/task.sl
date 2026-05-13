@@ -489,6 +489,25 @@ class Task < Model
     }) rescue null
   end
 
+  # Count of tasks tagged `follow_up` per project. Used by the dashboard
+  # column so operators can see which projects have pending follow-up work.
+  static def follow_up_counts()
+    let h = {}
+    for t in Task.all()
+      if t.tags != nil
+        for tag in t.tags
+          if tag == "follow_up"
+            let p = t.project ?? ""
+            if p != ""
+              h[p] = (h[p] ?? 0) + 1
+            end
+          end
+        end
+      end
+    end
+    h
+  end
+
   # Validate the `tags` array: each element must be a known tag value.
   # Runs inside touch_timestamps (the sole before_save) so spec reloads
   # don't multiply fire.

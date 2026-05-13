@@ -51,15 +51,16 @@
             </div>
         <% else %>
             <div class="rounded-xl overflow-hidden border border-white/10 animate-fade-in animate-fade-in-2">
-                <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem)">
+                <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem) 5rem">
                     <span>Project</span>
                     <span class="text-center text-fuchsia-300/80">Features</span>
                     <% for s in statuses %>
                         <span class="text-center"><%= s %></span>
                     <% end %>
+                    <span class="text-center text-amber-400/80">Follow-up</span>
                 </div>
                 <% for p in projects %>
-                    <div class="grid items-center px-5 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors group" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem)">
+                    <div class="grid items-center px-5 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors group" style="grid-template-columns: 1fr 5rem repeat(<%= statuses.length() %>, 5rem) 5rem">
                         <a href="/projects/<%= p["name"] %>" class="text-sm font-medium group-hover:text-indigo-200 transition-colors truncate pr-2"><%= p["name"] %></a>
                         <% let fcnt = features_by_project[p["name"]] ?? 0 %>
                         <a href="/features?project=<%= p["name"] %>" class="text-center text-sm font-mono transition-colors <%= fcnt > 0 ? "text-fuchsia-300 hover:text-fuchsia-200" : "text-slate-600 hover:text-slate-400" %>" title="<%= fcnt %> feature briefs">
@@ -69,6 +70,8 @@
                             <% let cnt = p["counts"][s] ?? 0 %>
                             <a href="/projects/<%= p["name"] %>" class="text-center text-sm font-mono <%= cnt > 0 ? "text-white" : "text-slate-600" %>"><%= cnt %></a>
                         <% end %>
+                        <% let fup = follow_up_by_project[p["name"]] ?? 0 %>
+                        <a href="/projects/<%= p["name"] %>" class="text-center text-sm font-mono <%= fup > 0 ? "text-amber-300" : "text-slate-600" %>"><% if fup > 0 %><%= fup %><% else %>&middot;<% end %></a>
                     </div>
                 <% end %>
             </div>

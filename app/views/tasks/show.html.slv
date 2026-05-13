@@ -41,14 +41,16 @@
         <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/run" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors">View run log</a>
         <% if task.status == "todo" %>
           <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue" class="flex items-center gap-2">
-            <%- partial("features/plan_model_select", {
-              "name":             "plan_model",
-              "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
-              "claude_options":   claude_options,
-              "opencode_options": opencode_options,
-              "include_blank":    false,
-              "blank_label":      ""
-            }) %>
+            <span class="w-44 shrink-0">
+              <%- partial("features/plan_model_select", {
+                "name":             "plan_model",
+                "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
+                "claude_options":   claude_options,
+                "opencode_options": opencode_options,
+                "include_blank":    false,
+                "blank_label":      ""
+              }) %>
+            </span>
             <select name="plan_variant"
                     title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
                     class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">

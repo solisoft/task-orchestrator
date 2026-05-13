@@ -20,6 +20,7 @@ fn index(req)
     "usage_week":  usage["week"],
     "limits":      _home_load_limits(),
     "features_by_project": _home_feature_counts(),
+    "follow_up_by_project": Task.follow_up_counts(),
     "current_user": req["current_user"],
     "theme":       Setting.current_theme()
   })
