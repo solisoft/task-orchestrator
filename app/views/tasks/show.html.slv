@@ -29,7 +29,23 @@
       <div class="flex gap-2">
         <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/run" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors">View run log</a>
         <% if task.status == "todo" %>
-          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue">
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue" class="flex items-center gap-2">
+            <%- partial("features/plan_model_select", {
+              "name":             "plan_model",
+              "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
+              "claude_options":   claude_options,
+              "opencode_options": opencode_options,
+              "include_blank":    false,
+              "blank_label":      ""
+            }) %>
+            <select name="plan_variant"
+                    title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
+                    class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+              <option value="default" selected>Default</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
             <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Queue &rarr; agent</button>
           </form>
           <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/archive" data-confirm="Archive this todo task?">
@@ -166,6 +182,29 @@
           <input name="title" value="<%= task.title %>" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100 mb-4">
           <label class="block text-sm font-medium text-slate-300 mb-1">Body (Markdown)</label>
           <textarea name="body_md" class="w-full h-[55vh] rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y"><%= task.body_md %></textarea>
+          <div class="mt-4 grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-xs text-slate-400">
+            <label for="plan_model" class="text-right">Run with</label>
+            <%- partial("features/plan_model_select", {
+              "name":             "plan_model",
+              "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
+              "claude_options":   claude_options,
+              "opencode_options": opencode_options,
+              "include_blank":    false,
+              "blank_label":      ""
+            }) %>
+            <label for="task-edit-plan-variant" class="text-right">Effort</label>
+            <div class="flex items-center gap-2">
+              <select id="task-edit-plan-variant" name="plan_variant"
+                      title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
+                      class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+                <option value="default" selected>Default</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="text-[11px] text-slate-500 italic">opencode only</span>
+            </div>
+          </div>
           <div class="mt-3 flex justify-end gap-2">
             <button type="button"
                     onclick="document.getElementById('task-body-edit').classList.add('hidden'); document.getElementById('task-body-view').classList.remove('hidden');"

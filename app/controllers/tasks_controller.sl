@@ -300,12 +300,21 @@ fn show(req)
   if task == nil
     return {"status": 404, "body": "Task not found: " + req["params"]["slug"]}
   end
+  # Pre-compute the model-picker locals for todo tasks so the Queue and
+  # Save forms can let the user pick a model before enqueuing. View
+  # scope can't resolve Plan.X, so the partitioning has to happen here.
+  let default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+  let picker_current = (task.model ?? "") == "" ? default_model : task.model
+  let picker = plan_model_picker_data(picker_current)
   render("tasks/show", {
     "title": task.slug,
     "project": project,
     "task": task,
     "branch_info": _branch_info_for(task, project),
     "can_commit_push": _can_commit_push(task, project),
+    "default_plan_model": default_model,
+    "claude_options":     picker["claude_options"],
+    "opencode_options":   picker["opencode_options"],
     "theme": Setting.current_theme()
   })
 end
@@ -547,10 +556,21 @@ fn save(req)
   if task.status != "todo"
     return {"status": 422, "body": "Can only edit tasks in todo (current: " + task.status + ")"}
   end
-  task.body_md = req["form"]["body_md"] ?? ""
-  let title = (req["form"]["title"] ?? "").trim()
+  # Read via `req["all"]` (route + query + form + JSON merged) so the
+  # same code path works for production htmx form posts and the test
+  # client (which sends JSON).
+  let form = req["all"] ?? {}
+  task.body_md = form["body_md"] ?? ""
+  let title = (form["title"] ?? "").trim()
   if title != ""
     task.title = title
+  end
+  # Persist the model picker choice when the form carries one — lets the
+  # user pre-save a model before clicking Queue. Skipped when absent so
+  # callers that POST a partial form don't clobber an existing choice.
+  let raw_model = (form["plan_model"] ?? "").trim()
+  if raw_model != ""
+    task.model = _stitched_plan_model(form)
   end
   task.save()
   if task._errors
@@ -572,6 +592,18 @@ fn queue(req)
   let task = Task.find_by_slug(project["name"], req["params"]["slug"])
   if task == nil
     return {"status": 404, "body": "Task not found"}
+  end
+  # Pick-model-and-queue in one step: when the Queue form posts a
+  # `plan_model` field, persist it before the limit check so the
+  # effective-agent budget is computed against the chosen model.
+  let form = req["all"] ?? {}
+  let queue_model = (form["plan_model"] ?? "").trim()
+  if queue_model != ""
+    task.model = _stitched_plan_model(form)
+    task.save()
+    if task._errors
+      return {"status": 422, "body": "Save failed"}
+    end
   end
   let denied = _queue_limit_denial(task)
   if denied != nil
