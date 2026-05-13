@@ -193,6 +193,106 @@ describe("SettingsController", fn()
     end)
   end)
 
+  describe("allowed_models", fn()
+    test("renders an Available models fieldset", fn()
+      let response = get("/settings")
+      assert_contains(res_body(response), "Available models")
+    end)
+
+    test("renders a checkbox for each known Claude SDK model", fn()
+      let response = get("/settings")
+      let body = res_body(response)
+      for id in Plan.claude_model_ids()
+        assert_contains(body, "name=\"allowed_" + id + "\"")
+      end
+    end)
+
+    test("persists checked allowlist entries on POST", fn()
+      post("/settings", {
+        "allowed_models_present":            "1",
+        "allowed_claude-opus-4-7":           "1",
+        "allowed_claude-haiku-4-5-20251001": "1"
+      })
+      let saved = Setting.get("allowed_models")
+      assert_not_null(saved)
+      assert_eq(saved.length(), 2)
+      assert(saved.contains("claude-opus-4-7"))
+      assert(saved.contains("claude-haiku-4-5-20251001"))
+    end)
+
+    test("clears the allowlist when the form submits no checked rows", fn()
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      post("/settings", { "allowed_models_present": "1" })
+      assert_eq(Setting.get("allowed_models").length(), 0)
+    end)
+
+    test("does not touch the allowlist when allowed_models_present is absent", fn()
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      post("/settings", { "agent_type": "claude" })
+      assert_eq(Setting.get("allowed_models").length(), 1)
+    end)
+
+    test("drops malformed allowlist entries on POST", fn()
+      post("/settings", {
+        "allowed_models_present":            "1",
+        "allowed_claude-opus-4-7":           "1",
+        "allowed_evil; rm -rf /":            "1"
+      })
+      let saved = Setting.get("allowed_models")
+      assert_eq(saved.length(), 1)
+      assert_eq(saved[0], "claude-opus-4-7")
+    end)
+
+    test("GET renders saved entries as checked", fn()
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      let response = get("/settings")
+      let body = res_body(response)
+      # The `checked` attribute lands on its own line in the template
+      # output, so check the attrs independently rather than insisting
+      # they sit on one line.
+      assert_contains(body, "id=\"allowed_claude-opus-4-7\"")
+      assert_contains(body, "checked")
+    end)
+
+    test("plan_model dropdown surfaces only allowlisted Claude entries", fn()
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      let response = get("/settings")
+      let body = res_body(response)
+      assert_contains(body, "value=\"claude-opus-4-7\"")
+      assert_not(body.contains("value=\"claude-haiku-4-5-20251001\""))
+    end)
+
+    test("plan_model dropdown still surfaces the currently-saved value even if outside the allowlist", fn()
+      Setting.set("plan_model", "claude-sonnet-4-6")
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      let response = get("/settings")
+      let body = res_body(response)
+      assert_contains(body, "value=\"claude-sonnet-4-6\" selected")
+    end)
+
+    test("POST rejects a plan_model that isn't on the allowlist", fn()
+      Setting.set("plan_model", "claude-opus-4-7")
+      Setting.set("allowed_models", ["claude-opus-4-7"])
+      post("/settings", { "plan_model": "claude-haiku-4-5-20251001" })
+      assert_eq(Setting.get("plan_model"), "claude-opus-4-7")
+    end)
+
+    test("POST accepts a plan_model that IS on the allowlist", fn()
+      Setting.set("allowed_models", ["claude-opus-4-7", "claude-haiku-4-5-20251001"])
+      post("/settings", { "plan_model": "claude-haiku-4-5-20251001" })
+      assert_eq(Setting.get("plan_model"), "claude-haiku-4-5-20251001")
+    end)
+
+    test("an empty allowlist means no filter — every Claude model still shows", fn()
+      Setting.set("allowed_models", [])
+      let response = get("/settings")
+      let body = res_body(response)
+      for id in Plan.claude_model_ids()
+        assert_contains(body, "value=\"" + id + "\"")
+      end
+    end)
+  end)
+
   describe("theme", fn()
     test("defaults to dark when nothing is persisted", fn()
       let response = get("/settings")

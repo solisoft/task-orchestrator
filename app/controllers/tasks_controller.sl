@@ -37,6 +37,35 @@ fn new(req)
   })
 end
 
+# Pre-compute the locals the `features/plan_model_select` partial needs.
+# View templates can't resolve model classes (`Plan` reads as `null`
+# from template scope), so the Claude + opencode lists are filtered
+# through the user's `allowed_models` allowlist here and threaded into
+# render() as `claude_options` / `opencode_options`. `current` is always
+# kept in the output so a persisted choice never silently disappears.
+# Returns:
+#   {
+#     "claude_options":   [{ "id": ..., "label": ... }, ...],
+#     "opencode_options": [...],
+#     "opencode_all":     [...]   # full unfiltered list; the settings
+#                                 # allowlist panel renders one checkbox
+#                                 # per entry here, ignoring the filter.
+#   }
+fn plan_model_picker_data(current)
+  let opencode_all = list_opencode_models()
+  let labels       = Plan.claude_model_labels()
+  let claude_ids   = Plan.filter_allowed(Plan.claude_model_ids(), current)
+  let claude_opts  = []
+  for id in claude_ids
+    claude_opts.push({ "id": id, "label": labels[id] ?? id })
+  end
+  {
+    "claude_options":   claude_opts,
+    "opencode_options": Plan.filter_allowed(opencode_all, current),
+    "opencode_all":     opencode_all
+  }
+end
+
 # Shell out to `opencode models`, return the (possibly empty) list of
 # `provider/model` strings. We do this on every page load so the
 # dropdown reflects whatever opencode currently has configured —

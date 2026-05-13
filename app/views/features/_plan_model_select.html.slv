@@ -1,28 +1,33 @@
-<%# Shared model picker for plan-agent flows. Locals:
-   - name            : <select> name attribute (e.g. "plan_model")
-   - current         : currently selected value ("" = use default)
-   - opencode_models : list of "provider/model" strings (may be empty)
-   - include_blank   : when true, render a leading blank option
-   - blank_label     : label for the blank option when include_blank is true
+<%
+  # Shared model picker for plan-agent flows. Locals:
+  #   - name             : <select> name attribute (e.g. "plan_model")
+  #   - current          : currently selected value ("" = use default)
+  #   - claude_options   : [{ "id": ..., "label": ... }, ...] — already
+  #                        filtered by the user's `allowed_models`
+  #                        allowlist, with `current` always preserved.
+  #   - opencode_options : list of "provider/model" strings — same
+  #                        filter applied.
+  #   - include_blank    : when true, render a leading blank option
+  #   - blank_label      : label for the blank option when include_blank is true
+  #
+  # The filtering happens controller-side in `plan_model_picker_data`
+  # because view scope can't resolve `Plan.X`.
 %>
-<% let _claude_models = [
-  { "id": "claude-opus-4-7",           "label": "Opus 4.7" },
-  { "id": "claude-sonnet-4-6",         "label": "Sonnet 4.6" },
-  { "id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5" }
-] %>
-<select name="<%= name %>"
+<select id="<%= name %>" name="<%= name %>"
         class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm text-slate-100">
   <% if include_blank %>
     <option value="" <%= current == "" ? "selected" : "" %>><%= blank_label %></option>
   <% end %>
-  <optgroup label="Claude SDK (questions supported)">
-    <% for m in _claude_models %>
-      <option value="<%= m["id"] %>" <%= current == m["id"] ? "selected" : "" %>><%= m["label"] %></option>
-    <% end %>
-  </optgroup>
-  <% if opencode_models != nil and opencode_models.length() > 0 %>
+  <% if claude_options.length() > 0 %>
+    <optgroup label="Claude SDK (questions supported)">
+      <% for m in claude_options %>
+        <option value="<%= m["id"] %>" <%= current == m["id"] ? "selected" : "" %>><%= m["label"] %></option>
+      <% end %>
+    </optgroup>
+  <% end %>
+  <% if opencode_options.length() > 0 %>
     <optgroup label="opencode CLI (no questions)">
-      <% for m in opencode_models %>
+      <% for m in opencode_options %>
         <option value="<%= m %>" <%= current == m ? "selected" : "" %>><%= m %></option>
       <% end %>
     </optgroup>

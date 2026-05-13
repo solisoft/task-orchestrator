@@ -40,11 +40,12 @@
     <p class="text-xs text-slate-500 mb-2">Model used when this feature&rsquo;s brief is turned into tasks. Leave blank to use the global default (<span class="font-mono"><%= default_plan_model %></span>).</p>
     <% let _cur_pm = (feature == nil ? "" : (feature.plan_model ?? "")) %>
     <%- partial("features/plan_model_select", {
-      "name":            "plan_model",
-      "current":         _cur_pm,
-      "opencode_models": opencode_models,
-      "include_blank":   true,
-      "blank_label":     "Use global default (" + default_plan_model + ")"
+      "name":             "plan_model",
+      "current":          _cur_pm,
+      "claude_options":   claude_options,
+      "opencode_options": opencode_options,
+      "include_blank":    true,
+      "blank_label":      "Use global default (" + default_plan_model + ")"
     }) %>
   </div>
 

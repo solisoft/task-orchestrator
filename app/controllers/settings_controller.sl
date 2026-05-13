@@ -2,14 +2,24 @@
 # Backed by the `Setting` key/value model.
 
 fn show(req)
+  let current_plan_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+  let pmd                = plan_model_picker_data(current_plan_model)
+  let opencode_all       = pmd["opencode_all"]
+  let allowed            = Plan.allowed_model_ids()
   render("settings/show", {
     "title": "Settings",
     "agent_type": Setting.get_or("agent_type", Task.known_agents()[0]),
     "agents": Task.known_agents(),
     "agents_config": _settings_load_agents_config(),
     "limits": _settings_load_limits(),
-    "plan_model": Setting.get_or("plan_model", "claude-sonnet-4-6"),
-    "opencode_models": list_opencode_models(),
+    "plan_model": current_plan_model,
+    "claude_options":   pmd["claude_options"],
+    "opencode_options": pmd["opencode_options"],
+    "opencode_models":  opencode_all,
+    "claude_model_ids":     Plan.claude_model_ids(),
+    "claude_model_labels":  Plan.claude_model_labels(),
+    "allowed_set":          _settings_allowed_set(allowed),
+    "allowed_orphans":      _settings_allowed_orphans(allowed, opencode_all),
     "theme": Setting.current_theme()
   })
 end
@@ -29,6 +39,13 @@ fn update(req)
   if theme != "" and _settings_known_theme(theme)
     Setting.set("theme", theme)
   end
+  # The allowlist write has to land BEFORE the plan_model write, because
+  # `Plan.is_allowed_model` reads it back when validating the candidate.
+  # Otherwise a single POST that both narrows the allowlist and switches
+  # plan_model would validate against the previous allowlist state.
+  if form["allowed_models_present"] != nil
+    Setting.set("allowed_models", _settings_collect_allowed(form))
+  end
   let raw_plan_model = (form["plan_model"] ?? "").trim()
   if raw_plan_model != ""
     let variant = (form["plan_variant"] ?? "").trim()
@@ -37,12 +54,13 @@ fn update(req)
     if is_opencode and variant != "" and variant != "default" and _matches_charset(variant, "variant")
       candidate = raw_plan_model + ":" + variant
     end
-    let resolved = _allow_plan_model(candidate)
-    # `_allow_plan_model` returns the canonical default for any value
-    # that didn't match the allowlist. Persist only when the user's
-    # input actually round-trips — otherwise we'd silently rewrite
-    # their saved choice to "claude-sonnet-4-6" on every junk POST.
-    if resolved == candidate
+    let resolved = Plan.allow_plan_model(candidate)
+    # Two gates before we persist: the value must shape-validate
+    # (`allow_plan_model` rewrites anything else to the canonical
+    # default — don't persist that, it'd silently overwrite the saved
+    # choice on every junk POST), AND it must be on the user's
+    # `allowed_models` allowlist (no-op when the allowlist is empty).
+    if resolved == candidate and Plan.is_allowed_model(resolved)
       Setting.set("plan_model", resolved)
     end
   end
@@ -149,4 +167,72 @@ end
 # silently persisting a value that produces a broken page.
 fn _settings_known_theme(name)
   return name == "dark" or name == "light"
+end
+
+# Walk the form looking for `allowed_<id>=1` checkboxes, keep only the
+# ids that round-trip through `Plan.allow_plan_model` (= shape-valid
+# Claude SDK or opencode "provider/model[:variant]"), and return them as
+# a deduplicated list. Anything malformed is silently dropped — the
+# allowlist must never carry a value that wouldn't survive the
+# shell-safety gate downstream.
+fn _settings_collect_allowed(form)
+  let out  = []
+  let seen = {}
+  for key in form.keys()
+    if not key.starts_with("allowed_")
+      next
+    end
+    if key == "allowed_models_present"
+      next
+    end
+    let val = form[key]
+    if val != "1" and val != "true" and val != true
+      next
+    end
+    let id = key.substring("allowed_".length(), key.length)
+    if id == ""
+      next
+    end
+    if Plan.allow_plan_model(id) != id
+      next
+    end
+    if seen[id] == true
+      next
+    end
+    seen[id] = true
+    out.push(id)
+  end
+  out
+end
+
+# Pre-compute `{ id: true, ... }` from the persisted allowlist so the
+# view's per-row `checked` check is an O(1) hash lookup instead of an
+# inner loop over the array on every checkbox.
+fn _settings_allowed_set(allowed)
+  let h = {}
+  for id in (allowed ?? [])
+    h[id] = true
+  end
+  h
+end
+
+# Ids in the saved allowlist that aren't in the current Claude + opencode
+# detection. Surfaced in their own panel so the user can see (and untick)
+# stale entries — e.g. an opencode provider that's been uninstalled —
+# rather than having them silently vanish from the page.
+fn _settings_allowed_orphans(allowed, opencode_models)
+  let known = {}
+  for c in Plan.claude_model_ids()
+    known[c] = true
+  end
+  for m in (opencode_models ?? [])
+    known[m] = true
+  end
+  let out = []
+  for id in (allowed ?? [])
+    if known[id] != true
+      out.push(id)
+    end
+  end
+  out
 end

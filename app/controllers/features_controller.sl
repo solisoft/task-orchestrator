@@ -50,6 +50,21 @@ fn _group_features_by_project(features)
   out
 end
 
+# Build the locals the plan-model picker partial needs for a given
+# feature (or `nil` for the new-feature form, which has no saved value
+# yet). Single call site for the picker data so every render() that
+# embeds the partial stays consistent.
+fn _picker_locals(feature)
+  let current = (feature == nil ? "" : (feature.plan_model ?? ""))
+  let pmd = plan_model_picker_data(current)
+  {
+    "claude_options":     pmd["claude_options"],
+    "opencode_options":   pmd["opencode_options"],
+    "opencode_models":    pmd["opencode_all"],
+    "default_plan_model": _default_plan_model()
+  }
+end
+
 # GET /features/:id
 fn show(req)
   let feature = _find_feature(req)
@@ -76,6 +91,7 @@ fn show(req)
     end
   end
   let comment_list = feature.comments()
+  let _pkr = _picker_locals(feature)
   render("features/show", {
     "title":    feature.title,
     "feature":  feature,
@@ -86,8 +102,10 @@ fn show(req)
     "active_plan": _active_plan_for(feature),
     "latest_plan": _latest_plan_for(feature),
     "current_user": req["current_user"],
-    "opencode_models": list_opencode_models(),
-    "default_plan_model": _default_plan_model(),
+    "claude_options":     _pkr["claude_options"],
+    "opencode_options":   _pkr["opencode_options"],
+    "opencode_models":    _pkr["opencode_models"],
+    "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
 end
@@ -153,13 +171,16 @@ fn new(req)
   if project_name != ""
     project = find_project(project_name) rescue nil
   end
+  let _pkr = _picker_locals(nil)
   render("features/new", {
     "title": "New Feature",
     "feature": nil,
     "projects": list_projects() rescue [],
     "project": project,
-    "opencode_models": list_opencode_models(),
-    "default_plan_model": _default_plan_model(),
+    "claude_options":     _pkr["claude_options"],
+    "opencode_options":   _pkr["opencode_options"],
+    "opencode_models":    _pkr["opencode_models"],
+    "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
 end
@@ -186,12 +207,15 @@ fn create(req)
     "plan_model":  plan_model
   })
   if feature._errors
+    let _pkr = _picker_locals(feature)
     return render("features/new", {
       "title": "New Feature",
       "feature": feature,
       "projects": list_projects() rescue [],
-      "opencode_models": list_opencode_models(),
-      "default_plan_model": _default_plan_model(),
+      "claude_options":     _pkr["claude_options"],
+      "opencode_options":   _pkr["opencode_options"],
+      "opencode_models":    _pkr["opencode_models"],
+      "default_plan_model": _pkr["default_plan_model"],
       "theme": Setting.current_theme()
     })
   end
@@ -204,12 +228,15 @@ fn edit(req)
   if feature == nil
     return {"status": 404, "body": "Feature not found"}
   end
+  let _pkr = _picker_locals(feature)
   render("features/edit", {
     "title": "Edit — " + feature.title,
     "feature": feature,
     "projects": list_projects() rescue [],
-    "opencode_models": list_opencode_models(),
-    "default_plan_model": _default_plan_model(),
+    "claude_options":     _pkr["claude_options"],
+    "opencode_options":   _pkr["opencode_options"],
+    "opencode_models":    _pkr["opencode_models"],
+    "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
 end
@@ -233,12 +260,15 @@ fn update(req)
   feature.plan_model = _persisted_plan_model(form)
   feature.save()
   if feature._errors
+    let _pkr = _picker_locals(feature)
     return render("features/edit", {
       "title": "Edit — " + title,
       "feature": feature,
       "projects": list_projects() rescue [],
-      "opencode_models": list_opencode_models(),
-      "default_plan_model": _default_plan_model(),
+      "claude_options":     _pkr["claude_options"],
+      "opencode_options":   _pkr["opencode_options"],
+      "opencode_models":    _pkr["opencode_models"],
+      "default_plan_model": _pkr["default_plan_model"],
       "theme": Setting.current_theme()
     })
   end
@@ -809,7 +839,8 @@ fn _render_generate_progress(feature, plan_id, inner)
 end
 
 fn _render_generate_log(log, status, failed, feature)
-  let html = "<div class=\"text-sm font-mono text-slate-300 whitespace-pre-wrap " +
+  let html = "<div id=\"generate-progress-log\" " +
+             "class=\"text-sm font-mono text-slate-300 whitespace-pre-wrap " +
              "max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border " +
              "border-white/5 p-3\">" +
              h(log) + "</div>"

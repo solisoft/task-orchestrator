@@ -65,7 +65,7 @@
                  hx-get="/features/<%= feature._key %>/generate_tasks_log/<%= active_plan.plan_id %>"
                  hx-trigger="load, every 2s"
                  hx-swap="outerHTML">
-              <div class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= active_plan.log ?? "" %></div>
+              <div id="generate-progress-log" class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= active_plan.log ?? "" %></div>
               <div class="text-indigo-300 text-sm animate-pulse mt-2"><%= active_plan.status ?? "starting" %>&hellip;</div>
             </div>
           </div>
@@ -108,11 +108,12 @@
               <div class="mb-2">
                 <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
                 <%- partial("features/plan_model_select", {
-                  "name":            "plan_model",
-                  "current":         (feature.plan_model ?? ""),
-                  "opencode_models": opencode_models,
-                  "include_blank":   true,
-                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                  "name":             "plan_model",
+                  "current":          (feature.plan_model ?? ""),
+                  "claude_options":   claude_options,
+                  "opencode_options": opencode_options,
+                  "include_blank":    true,
+                  "blank_label":      "Use global default (" + default_plan_model + ")"
                 }) %>
               </div>
               <div class="flex items-center justify-between gap-2">
@@ -128,11 +129,12 @@
               <div class="min-w-0 flex-1">
                 <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
                 <%- partial("features/plan_model_select", {
-                  "name":            "plan_model",
-                  "current":         (feature.plan_model ?? ""),
-                  "opencode_models": opencode_models,
-                  "include_blank":   true,
-                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                  "name":             "plan_model",
+                  "current":          (feature.plan_model ?? ""),
+                  "claude_options":   claude_options,
+                  "opencode_options": opencode_options,
+                  "include_blank":    true,
+                  "blank_label":      "Use global default (" + default_plan_model + ")"
                 }) %>
                 <p class="text-xs text-slate-500 mt-1">Or start over from the original brief with this model.</p>
               </div>
@@ -175,11 +177,12 @@
             <div id="generate-tasks-form" class="pt-3 border-t border-white/5">
               <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Plan model</label>
               <%- partial("features/plan_model_select", {
-                "name":            "plan_model",
-                "current":         (feature.plan_model ?? ""),
-                "opencode_models": opencode_models,
-                "include_blank":   true,
-                "blank_label":     "Use global default (" + default_plan_model + ")"
+                "name":             "plan_model",
+                "current":          (feature.plan_model ?? ""),
+                "claude_options":   claude_options,
+                "opencode_options": opencode_options,
+                "include_blank":    true,
+                "blank_label":      "Use global default (" + default_plan_model + ")"
               }) %>
               <p class="text-xs text-slate-500 mt-1">Per-run override. Empty falls back to this feature&rsquo;s saved model, then the global default.</p>
             </div>
@@ -358,4 +361,26 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeTaskSidebar();
   });
+
+  // Keep the plan-agent log pinned to the bottom across HTMX swaps so the
+  // user can follow progress. If they scroll up to read earlier output,
+  // we stop auto-following until they scroll back near the tail.
+  (function() {
+    var follow = true;
+    function pin() {
+      var el = document.getElementById('generate-progress-log');
+      if (!el) return;
+      if (!el.dataset.followWired) {
+        el.dataset.followWired = '1';
+        el.addEventListener('scroll', function() {
+          follow = (el.scrollHeight - el.scrollTop - el.clientHeight) < 40;
+        }, { passive: true });
+      }
+      if (follow) el.scrollTop = el.scrollHeight;
+    }
+    document.addEventListener('DOMContentLoaded', pin);
+    document.body.addEventListener('htmx:afterSwap', pin);
+    // In case DOMContentLoaded already fired by the time this runs.
+    pin();
+  })();
 </script>

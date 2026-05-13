@@ -59,6 +59,80 @@ class Plan < Model
   # `tasks_controller`'s task planner) reach into them so the same
   # allowlist and precedence rules apply everywhere.
 
+  # Canonical Claude SDK model ids the planner knows how to spawn.
+  # Single source of truth — the settings view, the plan-model partial,
+  # and `allow_plan_model` all read from this list.
+  static def claude_model_ids()
+    ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+  end
+
+  # Friendly labels for `claude_model_ids`, in the same order. Used by
+  # the settings checkbox panel and the plan-model `<select>`.
+  static def claude_model_labels()
+    {
+      "claude-opus-4-7":            "Opus 4.7",
+      "claude-sonnet-4-6":          "Sonnet 4.6",
+      "claude-haiku-4-5-20251001":  "Haiku 4.5"
+    }
+  end
+
+  # User-curated allowlist of model ids the pickers should surface.
+  # An empty list means "no filter applied — show every detected model".
+  # Persisted under the `allowed_models` Setting key by the settings page.
+  static def allowed_model_ids()
+    let raw = Setting.get_or("allowed_models", [])
+    if raw == nil
+      return []
+    end
+    raw
+  end
+
+  # Filter a list of model ids through the user's allowlist. When the
+  # allowlist is empty (= unset), the input passes through unchanged so
+  # the app stays usable on a fresh DB. `current` is always kept in the
+  # output, even if removed from the allowlist, so the persisted choice
+  # remains visible in the dropdown.
+  static def filter_allowed(ids, current)
+    let allow = Plan.allowed_model_ids()
+    if allow.length() == 0
+      return ids
+    end
+    let cur = (current ?? "").trim()
+    let out = []
+    for id in ids
+      let keep = false
+      for a in allow
+        if a == id
+          keep = true
+        end
+      end
+      if not keep and id == cur and cur != ""
+        keep = true
+      end
+      if keep
+        out.push(id)
+      end
+    end
+    out
+  end
+
+  # True when `id` is on the user's allowlist, OR the allowlist is empty
+  # (in which case anything shape-valid is allowed). Used by the settings
+  # controller to reject `plan_model` writes that fall outside the
+  # configured allowlist.
+  static def is_allowed_model(id)
+    let allow = Plan.allowed_model_ids()
+    if allow.length() == 0
+      return true
+    end
+    for a in allow
+      if a == id
+        return true
+      end
+    end
+    false
+  end
+
   # Global default model used when nothing more specific is set.
   # Persisted under the `plan_model` Setting key by the settings page.
   static def default_plan_model()
@@ -99,8 +173,7 @@ class Plan < Model
   # never echoes the bad value back.
   static def allow_plan_model(value)
     let v = (value ?? "").trim()
-    let claude_allowed = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
-    for a in claude_allowed
+    for a in Plan.claude_model_ids()
       if v == a
         return v
       end
