@@ -27,6 +27,27 @@ class Feature < Model
     Feature.where({ "project": project }).order("updated_at", "desc").all()
   end
 
+  # Look up the Feature pointed to by `task.feature_slug` and recompute
+  # its status from the new task state. Returns nil when the task has
+  # no `feature_slug` or the slug is stale (feature deleted). Wraps the
+  # find so callers don't have to nil-guard before calling
+  # `recompute_status!()`.
+  static def refresh_for_task(task)
+    if task == nil
+      return nil
+    end
+    let fslug = task.feature_slug ?? ""
+    if fslug == ""
+      return nil
+    end
+    let feature = Feature.find_by("_key", fslug)
+    if feature == nil
+      return nil
+    end
+    feature.recompute_status!()
+    feature
+  end
+
   def touch_timestamps()
     let now = DateTime.now().to_iso()
     if self.created_at == nil
@@ -43,5 +64,40 @@ class Feature < Model
   # Comments associated with this feature.
   def comments()
     Comment.where({ "feature_slug": self._key }).order("created_at", "asc").all()
+  end
+
+  # Auto-flip the feature to `done` once every linked task is finished.
+  # Archived tasks are ignored (treated as no longer in flight); every
+  # other non-`done` status (proposed/todo/queued/inprogress/review/failed)
+  # blocks the transition. Requires at least one `done` task — a feature
+  # with no tasks (or only archived tasks) is not considered complete.
+  #
+  # Idempotent: returns false without touching the row when already
+  # `done` or when the linked tasks don't justify the flip.
+  def recompute_status!()
+    if self.status == "done"
+      return false
+    end
+    let any_done = false
+    for t in self.tasks()
+      let s = t.status ?? ""
+      if s == "archived"
+        next
+      end
+      if s == "done"
+        any_done = true
+      else
+        return false
+      end
+    end
+    if not any_done
+      return false
+    end
+    self.status = "done"
+    self.save()
+    if self._errors
+      return false
+    end
+    return true
   end
 end

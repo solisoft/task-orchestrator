@@ -33,13 +33,15 @@
             <% end %>
           </div>
           <% if branch_info["exists"] and not branch_info["merged"] %>
-            <form method="post"
-                  action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
-                  onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
-              <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
-                Merge into <%= branch_info["main"] %>
-              </button>
-            </form>
+            <% if task.status == "review" %>
+              <form method="post"
+                    action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
+                    onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
+                <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+                  Merge into <%= branch_info["main"] %>
+                </button>
+              </form>
+            <% end %>
             <% if branch_info["worktree_path"] != nil %>
               <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/checkout">
                 <button type="submit" class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-medium px-4 py-2 transition-colors">

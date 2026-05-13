@@ -20,8 +20,8 @@
 # scope_only: true
 
 def authenticate(req: Any) -> Any
-  let cookie = req["cookies"]["soli_session"] ?? ""
-  if cookie == ""
+  let email = session_get("user_email") ?? ""
+  if email == ""
     return {
       "continue": false,
       "response": {
@@ -32,17 +32,14 @@ def authenticate(req: Any) -> Any
     }
   end
 
-  let email = cookie.trim().downcase()
   let user = User.find_by_email(email)
   if user == nil
+    session_delete("user_email")
     return {
       "continue": false,
       "response": {
         "status": 302,
-        "headers": {
-          "Location": "/login",
-          "Set-Cookie": "soli_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
-        },
+        "headers": { "Location": "/login" },
         "body": ""
       }
     }

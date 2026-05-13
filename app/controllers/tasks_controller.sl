@@ -233,14 +233,39 @@ fn show(req)
   })
 end
 
-# Hash describing the per-task git branch for the merge UI on the
-# task page, or nil when the task isn't a candidate (only "inprogress",
-# "review" or "done" rows with `outcome=local-branch` are — PR-mode tasks
-# already show the PR link in the run log). Returns:
+# GET /projects/:name/tasks/:slug/sidebar — returns the task as an HTML
+# fragment for the feature page's right-side sidebar overlay. No layout,
+# no chrome — just the contents of `tasks/_sidebar` so HTMX can swap it
+# into `#task-sidebar-body` without a full navigation.
+fn sidebar(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found: " + req["params"]["slug"]}
+  end
+  {
+    "status": 200,
+    "headers": {"Content-Type": "text/html; charset=utf-8"},
+    "body": render_partial("tasks/sidebar", {
+      "project": project,
+      "task":    task
+    })
+  }
+end
+
+# Hash describing the per-task git branch for the merge / checkout UI on
+# the task page, or nil when the task isn't a candidate ("inprogress",
+# "review" or "done"). Both local-branch and PR-mode tasks get a panel:
+# PR-mode just hides the Merge button (the PR is the merge path). The
+# `is_local_branch` flag lets the view make that call. Returns:
 #   { "name": "task/<slug>", "main": "main"|"master",
-#     "exists": Bool, "merged": Bool, "worktree_path": String|nil }
+#     "exists": Bool, "merged": Bool, "worktree_path": String|nil,
+#     "is_local_branch": Bool }
 fn _branch_info_for(task, project)
-  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done"
     return nil
   end
   let branch_name = task_branch_name(task.slug)
@@ -255,7 +280,8 @@ fn _branch_info_for(task, project)
     "main":   project_main_branch(project_path),
     "exists": exists,
     "merged": task_branch_merged(project_path, task.slug),
-    "worktree_path": exists_in_worktree ? wt_path : nil
+    "worktree_path": exists_in_worktree ? wt_path : nil,
+    "is_local_branch": task.outcome == "local-branch"
   }
 end
 
@@ -308,14 +334,19 @@ fn checkout_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
+  if task.status != "inprogress" and task.status != "review" and task.status != "done"
     return {"status": 422,
-            "body": "checkout is only available for inprogress/review/done tasks with a local branch"}
+            "body": "checkout is only available for inprogress/review/done tasks"}
   end
   if not task_branch_exists(project["path"], task.slug)
     return {"status": 422,
             "body": "branch " + task_branch_name(task.slug) + " not found in " +
                     project["path"]}
+  end
+  let wt_path = run_worktree_path(project["name"], task.slug)
+  if Trusted.is_dir(wt_path) and task_worktree_branch_exists(project["name"], task.slug)
+    return {"status": 422,
+            "body": "branch is checked out in worktree " + wt_path + " — cd in directly"}
   end
   let current = project_current_branch(project["path"])
   if current == task_branch_name(task.slug)
@@ -358,6 +389,7 @@ fn mark_done(req)
   if task._errors
     return {"status": 422, "body": "Save failed"}
   end
+  Feature.refresh_for_task(task)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
@@ -389,6 +421,41 @@ fn commit_push(req)
     return {"status": 422, "body": "commit-push failed: " + result["error"]}
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
+fn react(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "react is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if task.pr_url == nil or task.pr_url == ""
+    return {"status": 422,
+            "body": "react is only available for tasks with an open PR"}
+  end
+  let prompt = (req["form"]["prompt"] ?? "").trim()
+  if prompt == ""
+    return {"status": 422, "body": "Prompt is required"}
+  end
+  let nonce = str(DateTime.now().to_unix() rescue 0)
+  let prompt_path = "/tmp/react-prompt-" + nonce + ".md"
+  Trusted.write(prompt_path, prompt)
+  let line = "nohup ./bin/react-run " + project["name"] + " " +
+             task.slug + " " + prompt_path +
+             " >/dev/null 2>&1 & disown"
+  let res = System.run_sync(["bash", "-c", line])
+  if res["exit_code"] != 0
+    return {"status": 500, "body": "Failed to spawn react agent — check server log"}
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
 end
 
 fn save(req)
@@ -825,10 +892,10 @@ fn archive(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "done" and task.status != "failed"
+  if task.status != "todo" and task.status != "done" and task.status != "failed"
     return {"status": 422,
-            "body": "archive is only available for done or failed tasks (current: " +
-                    task.status + ")"}
+            "body": "archive is only available for todo, done, or failed tasks " +
+                    "(current: " + task.status + ")"}
   end
   task.status = "archived"
   task.save()

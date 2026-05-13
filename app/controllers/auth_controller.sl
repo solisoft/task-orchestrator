@@ -35,17 +35,12 @@ fn login(req)
       "hide_header": true
     })
   end
-  let resp = redirect("/")
-  resp["headers"] = resp["headers"] ?? {}
-  resp["headers"]["Set-Cookie"] = "soli_session=" + user.email +
-    "; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400"
-  resp
+  session_set("user_email", user.email)
+  redirect("/")
 end
 
 # GET /logout
 fn logout(req)
-  let resp = redirect("/login")
-  resp["headers"] = resp["headers"] ?? {}
-  resp["headers"]["Set-Cookie"] = "soli_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
-  resp
+  session_delete("user_email")
+  redirect("/login")
 end

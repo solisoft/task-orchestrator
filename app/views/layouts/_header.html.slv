@@ -6,13 +6,38 @@
       Task Orchestrator
     </a>
     <div class="flex items-center gap-1 text-sm">
-      <a href="/" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Dashboard</a>
+      <a href="/agents-dashboard" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Dashboard</a>
       <a href="/features" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Features</a>
       <a href="/plans" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Plans</a>
       <a href="/docs" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Docs</a>
       <a href="/settings" class="rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-3 py-1.5 transition-colors">Settings</a>
+      <button type="button" data-theme-toggle
+              aria-label="Switch to light theme"
+              aria-pressed="false"
+              class="ml-1 rounded-md text-slate-300 hover:text-white hover:bg-white/5 px-2 py-1.5 transition-colors inline-flex items-center"
+              title="Toggle light/dark theme">
+        <svg class="icon-sun w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+        </svg>
+        <svg class="icon-moon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+      </button>
       <% if _user != nil %>
-        <span class="text-xs text-slate-500 ml-2 hidden sm:inline"><%= _user.email ?? "" %></span>
+        <% let _name = (_user.display_name ?? _user.email ?? "").trim() %>
+        <% if _name == "" %><% _name = "User" %><% end %>
+        <% let _initials = "" %>
+        <% for _part in _name.split(" ") %>
+          <% if _part.length() > 0 and _initials.length() < 2 %>
+            <% _initials = _initials + _part.substring(0, 1).upcase() %>
+          <% end %>
+        <% end %>
+        <% if _initials == "" %><% _initials = "?" %><% end %>
+        <div class="flex items-center gap-2 ml-2" title="<%= h(_user.email ?? "") %>">
+          <span class="avatar-bubble" style="background: linear-gradient(135deg, rgb(99,102,241), rgb(192,132,252)); color: #fff;"><%= h(_initials) %></span>
+          <span class="text-sm text-slate-300 hidden sm:inline"><%= h(_name) %></span>
+        </div>
         <a href="/logout" class="ml-2 rounded-md bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-medium px-3 py-1.5 transition-colors">Logout</a>
       <% else %>
         <a href="/login" class="ml-2 rounded-md bg-indigo-500/80 hover:bg-indigo-400 text-white text-xs font-medium px-3 py-1.5 transition-colors">Sign in</a>

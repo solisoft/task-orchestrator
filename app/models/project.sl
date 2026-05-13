@@ -34,7 +34,7 @@ fn list_dir(dir)
   entries
 end
 
-fn list_projects(counts_by_project)
+fn list_projects(counts_by_project = nil)
   # `counts_by_project` comes from `Task.dashboard_scan` in the home
   # controller — one `Task.all()` scan shared with the usage tiles,
   # instead of one `Task.where({project: name}).all()` per project.
@@ -50,7 +50,10 @@ fn list_projects(counts_by_project)
     let name = segs[len(segs) - 1]
     # Skip hidden dirs (.git, .vscode, etc.) and non-directories.
     if Trusted.is_dir(path) and not name.starts_with(".")
-      let counts = counts_by_project[name] ?? Task.empty_status_counts()
+      let counts = nil
+      if counts_by_project != nil
+        counts = counts_by_project[name]
+      end
       projects.push(project_summary(path, counts))
     end
   end

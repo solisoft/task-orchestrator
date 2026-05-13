@@ -354,13 +354,37 @@ fn task_branch_exists(project_path, slug)
   _git_branch_exists(project_path, task_branch_name(slug))
 end
 
+# Does the per-task branch exist *inside the worktree* for this task?
+# Used to detect whether the task is currently checked out in a worktree
+# so callers can route users to `cd` there instead of re-checking out
+# in the main project tree.
+fn task_worktree_branch_exists(repo, slug)
+  let wt = run_worktree_path(repo, slug)
+  if not Trusted.is_dir(wt)
+    return false
+  end
+  let res = System.run_sync([
+    "git", "-C", wt,
+    "show-ref", "--verify", "--quiet",
+    "refs/heads/" + task_branch_name(slug)
+  ])
+  res["exit_code"] == 0
+end
+
 # Has the per-task branch been merged into the project's main branch?
 # Uses `merge-base --is-ancestor` so a branch that's been
 # squash/rebased into main still reads as merged when the tip's
-# commits are reachable. Returns false if either ref is missing.
+# commits are reachable. Returns false if either ref is missing,
+# or if the branch tip equals the main tip (just-created branch
+# with no work yet — trivially an ancestor, but nothing was merged).
 fn task_branch_merged(project_path, slug)
   let main = project_main_branch(project_path)
   if not task_branch_exists(project_path, slug)
+    return false
+  end
+  let branch_sha = _git_rev_parse(project_path, task_branch_name(slug))
+  let main_sha   = _git_rev_parse(project_path, main)
+  if branch_sha == "" or main_sha == "" or branch_sha == main_sha
     return false
   end
   let res = System.run_sync([
@@ -369,6 +393,17 @@ fn task_branch_merged(project_path, slug)
     task_branch_name(slug), main
   ])
   res["exit_code"] == 0
+end
+
+fn _git_rev_parse(project_path, ref)
+  let res = System.run_sync([
+    "git", "-C", project_path,
+    "rev-parse", "--verify", "--quiet", ref
+  ])
+  if res["exit_code"] != 0
+    return ""
+  end
+  (res["stdout"] ?? "").trim()
 end
 
 fn project_current_branch(project_path)

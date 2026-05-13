@@ -5,57 +5,294 @@
       <span class="mx-2">/</span>
       <a href="/features" class="hover:text-slate-300">Features</a>
       <span class="mx-2">/</span>
-      <span class="text-slate-300"><%= feature.title %></span>
+      <a href="/features?project=<%= feature.project %>" class="hover:text-slate-300 font-mono"><%= feature.project %></a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-300 truncate"><%= feature.title %></span>
     </nav>
 
-    <header class="mb-6 flex items-baseline justify-between flex-wrap gap-3 animate-fade-in">
-      <div>
-        <h1 class="text-2xl font-bold gradient-text"><%= feature.title %></h1>
-        <p class="text-xs text-slate-500 mt-1 font-mono"><%= feature.project %></p>
-        <p class="text-xs text-slate-500 mt-1">
-          Status:
-          <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= feature.status %></span>
-        </p>
-      </div>
-      <div class="flex gap-2">
-        <a href="/features/<%= feature._key %>/edit" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors">Edit</a>
-        <% if feature.status == "draft" or feature.status == "ready" %>
-          <button type="button"
-                  hx-post="/features/<%= feature._key %>/generate_tasks"
-                  hx-target="#generate-tasks-area"
-                  hx-swap="innerHTML"
-                  hx-indicator="#generate-spinner"
-                  class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
-            Generate Tasks
-            <span id="generate-spinner" class="htmx-indicator ml-1">...</span>
-          </button>
-        <% end %>
-        <form method="post" action="/features/<%= feature._key %>?_method=delete" onsubmit="return confirm('Delete this feature?')">
-          <button type="submit" class="rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 text-sm font-medium px-4 py-2 transition-colors">Delete</button>
-        </form>
+    <header class="mb-8 animate-fade-in">
+      <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="status-pill status-pill-<%= feature.status %>"><%= feature.status %></span>
+            <span class="text-xs text-slate-500 font-mono"><%= feature.project %></span>
+          </div>
+          <h1 class="text-3xl font-bold gradient-text leading-tight"><%= feature.title %></h1>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <a href="/features/<%= feature._key %>/edit" class="rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </a>
+          <form method="post" action="/features/<%= feature._key %>?_method=delete" onsubmit="return confirm('Delete this feature?')">
+            <button type="submit" class="rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Delete
+            </button>
+          </form>
+        </div>
       </div>
     </header>
 
+    <% if feature.status != "done" %>
+    <div id="generate-tasks-area">
+      <% let _plan_status = (latest_plan != nil ? (latest_plan.status ?? "") : "") %>
+      <% let _plan_running = (active_plan != nil) %>
+      <% let _plan_failed  = _plan_status.starts_with("failed:") %>
+      <% let _plan_done    = (latest_plan != nil and _plan_status == "done") %>
+      <% if _plan_running %>
+        <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1 card-glow">
+          <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none"></div>
+          <div class="relative">
+            <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="relative flex h-2.5 w-2.5 shrink-0">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-fuchsia-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-fuchsia-400"></span>
+                </span>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent &mdash; running</h2>
+                <span class="text-xs text-slate-500 font-mono truncate"><%= active_plan.plan_id %></span>
+              </div>
+              <form method="post" action="/features/<%= feature._key %>/cancel_plan" onsubmit="return confirm('Cancel this running plan?')" class="shrink-0">
+                <button type="submit" class="rounded-md bg-red-500/15 hover:bg-red-500/25 border border-red-500/25 text-red-300 hover:text-red-200 text-xs font-medium px-3 py-1.5 transition-colors inline-flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                  Cancel
+                </button>
+              </form>
+            </div>
+            <p class="text-xs text-slate-500 mb-3">Streaming live &mdash; proposed tasks will appear below as the planner finishes.</p>
+            <div id="generate-progress"
+                 hx-get="/features/<%= feature._key %>/generate_tasks_log/<%= active_plan.plan_id %>"
+                 hx-trigger="load, every 2s"
+                 hx-swap="outerHTML">
+              <div class="text-sm font-mono text-slate-300 whitespace-pre-wrap max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border border-white/5 p-3"><%= active_plan.log ?? "" %></div>
+              <div class="text-indigo-300 text-sm animate-pulse mt-2"><%= active_plan.status ?? "starting" %>&hellip;</div>
+            </div>
+          </div>
+        </div>
+      <% elsif latest_plan != nil %>
+        <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1 card-glow">
+          <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none"></div>
+          <div class="relative">
+            <div class="flex items-center justify-between flex-wrap gap-3 mb-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <% if _plan_failed %>
+                  <span class="status-pill status-pill-in-progress">cancelled</span>
+                <% else %>
+                  <span class="status-pill status-pill-done">done</span>
+                <% end %>
+                <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+                <span class="text-xs text-slate-500 font-mono truncate"><%= latest_plan.plan_id %></span>
+              </div>
+              <a href="/plans" target="_blank" class="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2">view in plans</a>
+            </div>
+            <% if _plan_failed %>
+              <p class="text-xs text-amber-300 mb-3">This run was cancelled or failed: <span class="font-mono"><%= _plan_status %></span></p>
+            <% elsif _plan_done %>
+              <p class="text-xs text-slate-500 mb-3">Last run produced <%= proposed_tasks.length() %> proposed task<%= proposed_tasks.length() == 1 ? "" : "s" %>. Refine or regenerate below.</p>
+            <% end %>
+
+            <details class="rounded-lg bg-slate-900/40 border border-white/5 mb-4">
+              <summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200 px-3 py-2 select-none flex items-center justify-between">
+                <span>Show last run log</span>
+                <span class="text-slate-600 font-mono"><%= (latest_plan.log ?? "").length() %> bytes</span>
+              </summary>
+              <pre class="text-xs font-mono text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto border-t border-white/5 p-3"><%= latest_plan.log ?? "" %></pre>
+            </details>
+
+            <form method="post" action="/features/<%= feature._key %>/refine_tasks" class="mb-3" onsubmit="return confirm('This will wipe the current proposed tasks and run a refined plan. Continue?')">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">Refine &mdash; add extra context</label>
+              <textarea name="refinement" rows="3" required
+                        class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-xs text-slate-100 resize-y mb-2"
+                        placeholder="e.g. focus on the auth layer; split into smaller, parallelizable units; reuse existing helpers in app/services/"></textarea>
+              <div class="mb-2">
+                <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
+                <%- partial("features/plan_model_select", {
+                  "name":            "plan_model",
+                  "current":         (feature.plan_model ?? ""),
+                  "opencode_models": opencode_models,
+                  "include_blank":   true,
+                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                }) %>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs text-slate-500">Replaces the current proposed tasks with a new run.</p>
+                <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
+                  Refine &amp; re-run
+                </button>
+              </div>
+            </form>
+
+            <form method="post" action="/features/<%= feature._key %>/regenerate_tasks" class="flex items-end justify-between gap-3 pt-3 border-t border-white/5 flex-wrap" onsubmit="return confirm('Wipe proposed tasks and regenerate from the original brief?')">
+              <div class="min-w-0 flex-1">
+                <label class="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Plan model (override)</label>
+                <%- partial("features/plan_model_select", {
+                  "name":            "plan_model",
+                  "current":         (feature.plan_model ?? ""),
+                  "opencode_models": opencode_models,
+                  "include_blank":   true,
+                  "blank_label":     "Use global default (" + default_plan_model + ")"
+                }) %>
+                <p class="text-xs text-slate-500 mt-1">Or start over from the original brief with this model.</p>
+              </div>
+              <button type="submit" class="shrink-0 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-sm font-medium px-4 py-2 transition-colors inline-flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Discard &amp; regenerate
+              </button>
+            </form>
+          </div>
+        </div>
+      <% elsif feature.status == "draft" or feature.status == "ready" %>
+        <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1 card-glow">
+          <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none"></div>
+          <div class="relative">
+            <div class="flex items-start justify-between gap-6 flex-wrap mb-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="ai-sparkle text-lg">&#x2728;</span>
+                  <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-100 mb-1">Turn this brief into tasks</h3>
+                <p class="text-sm text-slate-400 leading-relaxed max-w-lg">
+                  The planner reads your description and produces 3&ndash;7 focused, linked tasks &mdash;
+                  each picked up by an agent in its own worktree.
+                </p>
+              </div>
+              <button type="button"
+                      hx-post="/features/<%= feature._key %>/generate_tasks"
+                      hx-include="#generate-tasks-form select[name=plan_model], #generate-tasks-form select[name=plan_variant]"
+                      hx-target="#generate-tasks-area"
+                      hx-swap="innerHTML"
+                      hx-indicator="#generate-spinner"
+                      class="shrink-0 cta-shimmer rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-5 py-2.5 transition-all btn-glow shadow-lg shadow-fuchsia-500/25 inline-flex items-center gap-2">
+                <span>Generate Tasks</span>
+                <span id="generate-spinner" class="htmx-indicator">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                </span>
+              </button>
+            </div>
+            <div id="generate-tasks-form" class="pt-3 border-t border-white/5">
+              <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-1">Plan model</label>
+              <%- partial("features/plan_model_select", {
+                "name":            "plan_model",
+                "current":         (feature.plan_model ?? ""),
+                "opencode_models": opencode_models,
+                "include_blank":   true,
+                "blank_label":     "Use global default (" + default_plan_model + ")"
+              }) %>
+              <p class="text-xs text-slate-500 mt-1">Per-run override. Empty falls back to this feature&rsquo;s saved model, then the global default.</p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    <% else %>
+      <% if latest_plan != nil %>
+        <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="status-pill status-pill-done">done</span>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
+            <span class="text-xs text-slate-500 font-mono truncate"><%= latest_plan.plan_id %></span>
+          </div>
+          <details class="rounded-lg bg-slate-900/40 border border-white/5">
+            <summary class="cursor-pointer text-xs text-slate-400 hover:text-slate-200 px-3 py-2 select-none flex items-center justify-between">
+              <span>Show last run log</span>
+              <span class="text-slate-600 font-mono"><%= (latest_plan.log ?? "").length() %> bytes</span>
+            </summary>
+            <pre class="text-xs font-mono text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto border-t border-white/5 p-3"><%= latest_plan.log ?? "" %></pre>
+          </details>
+        </div>
+      <% end %>
+    <% end %>
+
     <% if feature.description != nil and feature.description != "" %>
-      <div class="rounded-xl glass-card p-6 mb-6">
-        <h2 class="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Brief</h2>
+      <div class="rounded-xl glass-card p-6 mb-6 animate-fade-in animate-fade-in-2">
+        <h2 class="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Brief
+        </h2>
         <article class="task-md text-sm">
           <%- Markdown.to_safe_html(feature.description) %>
         </article>
       </div>
     <% end %>
 
-    <div id="generate-tasks-area"></div>
+    <% if proposed_tasks.length() > 0 %>
+      <div class="rounded-2xl glass-card p-6 mb-6 animate-fade-in animate-fade-in-2 relative overflow-hidden">
+        <div class="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-amber-500/15 blur-3xl pointer-events-none"></div>
+        <div class="relative">
+          <div class="flex items-baseline justify-between flex-wrap gap-3 mb-1">
+            <h2 class="text-xs font-semibold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Proposed Tasks &mdash; Review
+            </h2>
+            <span class="text-xs text-slate-500"><%= proposed_tasks.length() %> proposed</span>
+          </div>
+          <p class="text-sm text-slate-400 mb-4">Review the agent&rsquo;s proposed tasks. Remove any you don&rsquo;t want, then publish to send them to your <span class="text-indigo-300 font-medium">todo</span> board.</p>
+          <div class="space-y-2 mb-5">
+            <% for task in proposed_tasks %>
+              <div class="rounded-lg bg-white/[0.04] border border-amber-400/20 px-4 py-3 flex items-start gap-3">
+                <span class="status-pill status-pill-draft shrink-0 mt-0.5">proposed</span>
+                <div class="flex-1 min-w-0">
+                  <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>"
+                     hx-get="/projects/<%= task.project %>/tasks/<%= task.slug %>/sidebar"
+                     hx-target="#task-sidebar-body"
+                     hx-swap="innerHTML"
+                     onclick="openTaskSidebar()"
+                     class="text-sm font-semibold text-slate-100 hover:text-indigo-200 transition-colors block truncate"><%= task.title %></a>
+                  <% let _bm = task.body_md ?? "" %>
+                  <% if _bm != "" %>
+                    <% let _preview = _bm %>
+                    <% if _preview.length() > 160 %>
+                      <% _preview = _preview.substring(0, 160) + "…" %>
+                    <% end %>
+                    <p class="text-xs text-slate-500 mt-1 line-clamp-2"><%= _preview %></p>
+                  <% end %>
+                </div>
+                <form method="post" action="/features/<%= feature._key %>/tasks/<%= task.slug %>/remove" onsubmit="return confirm('Remove this proposed task?')" class="shrink-0">
+                  <button type="submit" title="Remove this proposed task" class="rounded-md text-slate-500 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 transition-colors text-xs font-medium inline-flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Remove
+                  </button>
+                </form>
+              </div>
+            <% end %>
+          </div>
+          <div class="flex items-center justify-between flex-wrap gap-3 pt-4 border-t border-white/5">
+            <p class="text-xs text-slate-500">Publishing bundles <span class="text-indigo-300 font-medium"><%= proposed_tasks.length() %></span> proposed <%= proposed_tasks.length() == 1 ? "task" : "tasks" %> into a single <span class="font-mono text-indigo-300">todo</span> task &mdash; one branch, one PR for the whole feature.</p>
+            <form method="post" action="/features/<%= feature._key %>/publish" onsubmit="return confirm('Bundle <%= proposed_tasks.length() %> proposed task(s) into one todo and run them on a single branch?')">
+              <button type="submit" class="cta-shimmer rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-sm font-semibold px-5 py-2.5 transition-all btn-glow shadow-lg shadow-emerald-500/20 inline-flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Bundle &amp; publish &rarr; todo
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    <% end %>
 
     <% if tasks.length() > 0 %>
-      <div class="rounded-xl glass-card p-6 mb-6">
-        <h2 class="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Linked Tasks</h2>
-        <div class="space-y-2">
+      <div class="rounded-xl glass-card p-6 mb-6 animate-fade-in animate-fade-in-3">
+        <div class="flex items-baseline justify-between mb-4">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Linked Tasks
+          </h2>
+          <span class="text-xs text-slate-500"><%= tasks.length() %> task<%= tasks.length() == 1 ? "" : "s" %></span>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-2">
           <% for task in tasks %>
-            <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>" class="block rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2.5 transition-colors group">
+            <a href="/projects/<%= task.project %>/tasks/<%= task.slug %>"
+               hx-get="/projects/<%= task.project %>/tasks/<%= task.slug %>/sidebar"
+               hx-target="#task-sidebar-body"
+               hx-swap="innerHTML"
+               onclick="openTaskSidebar()"
+               class="block rounded-lg bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 hover:border-indigo-400/30 px-4 py-2.5 transition-all group cursor-pointer">
+
               <div class="flex items-baseline justify-between gap-2">
-                <span class="text-sm text-slate-200 group-hover:text-indigo-200 transition-colors font-medium"><%= task.title %></span>
-                <span class="text-xs rounded-md bg-slate-700/70 text-slate-400 px-2 py-0.5 font-mono"><%= task.status %></span>
+                <span class="text-sm text-slate-200 group-hover:text-indigo-200 transition-colors font-medium truncate"><%= task.title %></span>
+                <span class="status-pill status-pill-<%= task.status == "todo" ? "draft" : (task.status == "done" ? "done" : (task.status == "inprogress" or task.status == "review" ? "in-progress" : "ready")) %> shrink-0"><%= task.status %></span>
               </div>
             </a>
           <% end %>
@@ -63,18 +300,62 @@
       </div>
     <% end %>
 
-    <% if comments.length() > 0 %>
-      <div class="rounded-xl glass-card p-6 mb-6" id="comments-list-area">
-        <h2 class="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Comments</h2>
-        <%- partial("comments/list", { "comments": comments }) %>
+    <div class="rounded-xl glass-card p-6 animate-fade-in animate-fade-in-4" id="comments-area">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Discussion
+        </h2>
+        <span class="text-xs text-slate-500"><%= comments.length() %> comment<%= comments.length() == 1 ? "" : "s" %></span>
       </div>
-    <% end %>
 
-    <% if current_user != nil %>
-      <div class="rounded-xl glass-card p-6" id="comment-form-area">
-        <h2 class="text-sm font-semibold text-slate-300 mb-3 uppercase tracking-wider">Add Comment</h2>
-        <%- partial("comments/form", { "feature": feature, "current_user": current_user }) %>
+      <div id="comments-content">
+        <% if comments.length() > 0 %>
+          <%- partial("comments/list", { "comments": comments, "attachments_meta": attachments_meta, "current_user_email": (current_user != nil ? (current_user.email ?? "") : "") }) %>
+        <% else %>
+          <p class="text-sm text-slate-500 italic mb-4">No comments yet &mdash; kick off the conversation.</p>
+        <% end %>
+
+        <% if current_user != nil %>
+          <div class="mt-5 pt-5 border-t border-white/5">
+            <%- partial("comments/form", { "feature": feature, "current_user": current_user }) %>
+          </div>
+        <% end %>
       </div>
-    <% end %>
+    </div>
   </div>
 </div>
+
+<!-- Sliding right-side panel for a linked task. The anchors above swap
+     the task fragment into `#task-sidebar-body` via HTMX while
+     `openTaskSidebar()` toggles the overlay visible; the backdrop and
+     Escape key both call `closeTaskSidebar()`. -->
+<div id="task-sidebar-overlay" class="task-sidebar-overlay" aria-hidden="true">
+  <div class="task-sidebar-backdrop" onclick="closeTaskSidebar()"></div>
+  <aside class="task-sidebar" role="dialog" aria-modal="true" aria-label="Task details">
+    <button type="button" class="task-sidebar-close" onclick="closeTaskSidebar()" aria-label="Close task panel">&times;</button>
+    <div id="task-sidebar-body" class="task-sidebar-body">
+      <p class="text-sm text-slate-500 italic">Loading…</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+  function openTaskSidebar() {
+    var el = document.getElementById('task-sidebar-overlay');
+    if (!el) return;
+    el.classList.add('is-open');
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('task-sidebar-open');
+  }
+  function closeTaskSidebar() {
+    var el = document.getElementById('task-sidebar-overlay');
+    if (!el) return;
+    el.classList.remove('is-open');
+    el.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('task-sidebar-open');
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeTaskSidebar();
+  });
+</script>

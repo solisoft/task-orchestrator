@@ -1,14 +1,21 @@
 # task-orchestrator
 
-A queue + dispatcher that runs Claude Code (or opencode) headlessly across
-every repo under `~/workspace/soli/`. Drop a spec into a project's task
-list, mark it `queued`, and a single global daemon picks it up, spins a
-fresh git worktree, runs `/do-task` then `/review-task`, and either opens
-a PR or leaves a local branch for you to merge.
+> A kanban for AI coding agents. Draft a spec, click **Queue → agent**, walk away.
 
-Tasks are stored as rows in **solidb** — there is no per-repo file-based
-queue. The web UI under `app/` is the recommended driver; the CLI helpers
-exist for keybindings and scripts.
+A queue + dispatcher that runs Claude Code (or opencode) headlessly
+across every repo under `~/workspace/soli/`. Drop a spec into a
+project's task list, mark it `queued`, and a single global daemon picks
+it up, spins a fresh git worktree, runs `/do-task` then `/review-task`,
+and either opens a PR or leaves a local branch for you to merge.
+
+Two complementary surfaces, one queue:
+
+- **Tasks** — kanban board per project (`todo → queued → inprogress → review → done`). One task = one branch = one PR.
+- **Features** — a higher-level brief that the planner expands into 3–7 linked tasks, then bundles into a single `todo` for execution. Discussion threads live on the feature.
+
+Everything is persisted as rows in **solidb** — no per-repo file-based
+queue. The web UI under `app/` is the recommended driver; the CLI
+helpers exist for keybindings and scripts.
 
 ## Layout
 
@@ -25,7 +32,7 @@ task-orchestrator/
 │   └── _stream-format.jq     # pretty-prints claude/opencode JSON streams into the run log
 ├── systemd/user/
 │   └── task-dispatch.service # one global unit (no per-repo instances)
-├── app/                      # Soli MVC web UI — kanban, editor, run viewer
+├── app/                      # Soli MVC web UI — kanban, feature briefs, editor, run viewer
 ├── config/
 │   ├── application.sl
 │   └── routes.sl
@@ -35,9 +42,9 @@ task-orchestrator/
 ```
 
 `.claude/skills/{do-task,review-task,plan-task}` ship in this repo and
-get copied into each worktree at dispatch time. They are the source of
-truth for what `/do-task` and `/review-task` do — there is no per-project
-copy to keep in sync.
+are copied into each worktree at dispatch time. They are the source of
+truth for what `/do-task`, `/review-task`, and `/plan-task` do — there
+is no per-project copy to keep in sync.
 
 > Browsing the app live? Run `soli serve . --dev` and open
 > [`/docs`](http://localhost:5011/docs) for the rendered Getting Started
@@ -73,10 +80,9 @@ copy to keep in sync.
                   pr_url stored            close)                  for inspection)
 ```
 
-The dispatcher is one process for the whole workspace — there is no
-per-repo watcher anymore. The DB row is the single source of truth for
-status; the on-disk `.log`/`.status` files are journals for the run
-viewer.
+One dispatcher process for the whole workspace — no per-repo watcher.
+The DB row is the single source of truth for status; the on-disk
+`.log` / `.status` files are journals for the run viewer.
 
 ## Dependencies
 
@@ -128,11 +134,19 @@ tail -f ~/.local/state/task-orchestrator/dispatcher.log
 
 ## Daily use
 
-The web UI is the intended path: open a project, draft / refine a spec
-in the kanban editor (the "Plan it" button kicks `/plan-task` to
-structure rough notes into a spec), pick the agent + effort, and click
-**Queue → agent**. The row flips to `queued`, the dispatcher sees it
-within a frame, and the run viewer streams the log live.
+The web UI is the intended path.
+
+**Single task** — open a project, draft / refine a spec in the kanban
+editor (the **Plan it** button kicks `/plan-task` to structure rough
+notes into a spec), pick the agent + effort, and click **Queue →
+agent**. The row flips to `queued`, the dispatcher sees it within a
+frame, and the run viewer streams the log live.
+
+**Feature → tasks** — `/features/new` captures a higher-level brief.
+**Generate Tasks** runs the planner and streams its log; you review the
+3–7 proposed tasks, drop any you don't want, and **Bundle & publish →
+todo** rolls them into one `todo` row for execution. The feature auto-
+flips to `done` once every linked task lands.
 
 CLI fallback:
 

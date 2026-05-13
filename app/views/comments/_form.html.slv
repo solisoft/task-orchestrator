@@ -1,15 +1,116 @@
-<form hx-post="/features/<%= feature._key %>/comments"
-      hx-target="#comments-thread"
-      hx-swap="outerHTML"
-      hx-indicator="#comment-spinner">
-  <textarea name="body" rows="3" required
+<form id="comment-form"
+      method="post"
+      action="/features/<%= feature._key %>/comments"
+      enctype="multipart/form-data"
+      data-feature="<%= feature._key %>">
+  <textarea name="body" rows="3"
             class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-sm text-slate-100 resize-y mb-2"
-            placeholder="Write a comment... (Markdown supported)"></textarea>
+            placeholder="Write a comment… (Markdown supported, drop files below)"></textarea>
+
+  <label class="block rounded-lg border border-dashed border-white/10 hover:border-indigo-400/40 bg-slate-900/40 cursor-pointer transition-colors p-3 mb-2" id="comment-dropzone">
+    <div class="flex items-center gap-3 text-xs text-slate-400">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-300 shrink-0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span id="comment-dropzone-label">Attach files &mdash; images, PDFs, docs (up to 10 MB each)</span>
+    </div>
+    <input id="comment-files" type="file" name="attachment" multiple class="sr-only" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.json,.zip">
+  </label>
+
   <div class="flex justify-between items-center">
     <span class="text-xs text-slate-500">Posting as <%= current_user.email ?? current_user.display_name ?? "" %></span>
-    <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+    <button type="submit" id="comment-submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
       Post Comment
-      <span id="comment-spinner" class="htmx-indicator ml-1">...</span>
     </button>
   </div>
 </form>
+
+<script>
+(function () {
+  var form  = document.getElementById("comment-form");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  var input    = document.getElementById("comment-files");
+  var label    = document.getElementById("comment-dropzone-label");
+  var zone     = document.getElementById("comment-dropzone");
+  var submit   = document.getElementById("comment-submit");
+  var feature  = form.getAttribute("data-feature");
+
+  function describeFiles(files) {
+    if (!files || files.length === 0) {
+      return "Attach files — images, PDFs, docs (up to 10 MB each)";
+    }
+    if (files.length === 1) return files[0].name;
+    return files.length + " files selected";
+  }
+
+  input.addEventListener("change", function () {
+    label.textContent = describeFiles(input.files);
+  });
+
+  ["dragenter", "dragover"].forEach(function (e) {
+    zone.addEventListener(e, function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      zone.classList.add("ring-1", "ring-indigo-400/40");
+    });
+  });
+  ["dragleave", "dragend", "drop"].forEach(function (e) {
+    zone.addEventListener(e, function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      zone.classList.remove("ring-1", "ring-indigo-400/40");
+    });
+  });
+  zone.addEventListener("drop", function (e) {
+    if (!e.dataTransfer || !e.dataTransfer.files) return;
+    input.files = e.dataTransfer.files;
+    label.textContent = describeFiles(input.files);
+  });
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var body  = form.querySelector("textarea[name='body']").value.trim();
+    var files = Array.from(input.files || []);
+    if (body === "" && files.length === 0) {
+      label.textContent = "Add some text or at least one file";
+      return;
+    }
+    submit.disabled = true;
+    submit.textContent = "Posting…";
+    try {
+      // 1) Submit the comment body (+ first file, so the comment is
+      //    never empty even if the user posted only files).
+      var fd = new FormData();
+      fd.append("body", body);
+      if (files.length > 0) fd.append("attachment", files[0]);
+      var res = await fetch(form.action, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+        headers: { "HX-Request": "true" }
+      });
+      if (!res.ok) throw new Error("comment create failed: " + res.status);
+      var commentKey = res.headers.get("X-Comment-Key");
+
+      // 2) Upload the remaining files to the auto-mounted attachment
+      //    endpoint, one POST per file.
+      for (var i = 1; i < files.length; i++) {
+        submit.textContent = "Uploading " + i + "/" + (files.length - 1) + "…";
+        var ffd = new FormData();
+        ffd.append("attachment", files[i]);
+        var fres = await fetch("/comments/" + encodeURIComponent(commentKey) + "/attachment", {
+          method: "POST",
+          body: ffd,
+          credentials: "same-origin"
+        });
+        if (!fres.ok) console.warn("attachment " + files[i].name + " failed: " + fres.status);
+      }
+
+      // 3) Reload the page to pick up the freshly-attached files.
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      submit.disabled = false;
+      submit.textContent = "Post Comment";
+      label.textContent = "Failed — " + err.message;
+    }
+  });
+})();
+</script>

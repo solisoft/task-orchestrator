@@ -18,6 +18,12 @@
       </div>
     <% end %>
 
-    <%- partial("features/form", { "feature": feature, "projects": projects, "project": project }) %>
+    <%- partial("features/form", {
+      "feature":            feature,
+      "projects":           projects,
+      "project":            project,
+      "opencode_models":    opencode_models,
+      "default_plan_model": default_plan_model
+    }) %>
   </div>
 </div>

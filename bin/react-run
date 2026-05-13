@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#
+# react-run <project> <slug> <prompt_path>
+#
+# Runs a one-shot agent in a re-created worktree to implement review
+# feedback. The agent makes code changes but does NOT commit — the
+# reviewer commits and pushes via the task-page button.
+#
+# Appends to the existing run log / status journal so the run viewer
+# stays current. Leaves the worktree in place for the commit-push flow.
+
+set -euo pipefail
+
+script_dir=$(dirname "$(realpath "$0")")
+project_root=$(dirname "$script_dir")
+
+if [[ -f "$project_root/.env" ]]; then
+  set -a; source "$project_root/.env"; set +a
+fi
+
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 <project> <slug> <prompt_path>" >&2
+  exit 64
+fi
+
+repo_name=$1
+slug=$2
+prompt_path=$3
+
+prompt=$(cat "$prompt_path")
+rm -f "$prompt_path"
+
+branch="task/${slug}"
+
+ROOT=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
+project_path="$ROOT/$repo_name"
+if [[ ! -d "$project_path" ]]; then
+  echo "react-run: project path not found: $project_path" >&2
+  exit 65
+fi
+
+local_only=0
+if ! git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
+  local_only=1
+fi
+
+required=(git jq curl)
+[[ $local_only -eq 0 ]] || required+=(gh)
+for cmd in "${required[@]}"; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "react-run: '$cmd' not on PATH" >&2
+    exit 127
+  fi
+done
+
+HOST=${SOLIDB_HOST:-http://localhost:6745}
+DB=${SOLIDB_DATABASE:-tasks}
+USER=${SOLIDB_USERNAME:-admin}
+PASS=${SOLIDB_PASSWORD:-admin}
+
+state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
+state_dir="$state_root/$repo_name"
+log_file="$state_dir/$slug.log"
+status_file="$state_dir/$slug.status"
+mkdir -p "$state_dir"
+
+worktree_root=${TASK_ORCH_WORKTREES:-$HOME/.cache/task-orchestrator/worktrees}
+worktree_dir="$worktree_root/$repo_name/$slug"
+mkdir -p "$worktree_root/$repo_name"
+
+key="${repo_name}--${slug}"
+
+log() {
+  printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$log_file"
+}
+
+write_status() {
+  printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"
+}
+
+fail() {
+  log "FAIL: $*"
+  write_status "failed:$*"
+  exit 1
+}
+
+# Write a status line immediately so the run viewer polls from page load.
+write_status "starting react"
+
+# ── Fetch the task row from DB
+body_url="$HOST/_api/database/$DB/document/tasks/$key"
+row_json=$(curl -s -u "$USER:$PASS" "$body_url")
+task_key=$(printf '%s' "$row_json" | jq -r '._key // empty')
+task_model=$(printf '%s' "$row_json" | jq -r '.model // empty')
+task_title=$(printf '%s' "$row_json" | jq -r '.title // empty')
+if [[ -z "$task_key" ]]; then
+  fail "task row not found ($key)"
+fi
+log "task_model=${task_model:-<unset, default claude>}"
+
+# ── Resolve agent kind, variant, and binary. Mirrors bin/task-run: an
+# empty model means "use the legacy claude CLI default".
+task_variant=""
+if [[ "$task_model" == */*:* ]]; then
+  task_variant="${task_model##*:}"
+  task_model="${task_model%:*}"
+  log "model variant=$task_variant"
+fi
+
+if [[ "$task_model" == */* ]]; then
+  agent_kind="opencode"
+  if ! command -v opencode >/dev/null 2>&1; then
+    fail "task picked $task_model but 'opencode' is not on PATH"
+  fi
+else
+  agent_kind="claude"
+  if ! command -v claude >/dev/null 2>&1; then
+    fail "task picked ${task_model:-claude default} but 'claude' is not on PATH"
+  fi
+fi
+log "agent_kind=$agent_kind"
+
+# ── Pick the base ref to branch off of
+if [[ $local_only -eq 1 ]]; then
+  if git -C "$project_path" show-ref --verify --quiet "refs/heads/$branch"; then
+    base_ref="$branch"
+  elif git -C "$project_path" show-ref --verify --quiet refs/heads/main; then
+    base_ref="main"
+  elif git -C "$project_path" show-ref --verify --quiet refs/heads/master; then
+    base_ref="master"
+  else
+    fail "neither '$branch' nor 'main'/'master' exists in $project_path"
+  fi
+else
+  log "fetching origin"
+  git -C "$project_path" fetch --quiet origin main "$branch" 2>/dev/null || true
+  if git -C "$project_path" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    base_ref="origin/$branch"
+  else
+    base_ref="origin/main"
+  fi
+fi
+
+# ── Prepare worktree
+write_status "preparing worktree for react"
+if [[ -d "$worktree_dir" ]]; then
+  log "removing stale worktree $worktree_dir"
+  git -C "$project_path" worktree remove --force "$worktree_dir" 2>/dev/null || rm -rf "$worktree_dir"
+fi
+
+log "creating worktree at $worktree_dir on branch $branch (base $base_ref)"
+git -C "$project_path" worktree add -B "$branch" "$worktree_dir" "$base_ref" \
+  >> "$log_file" 2>&1 || fail "git worktree add"
+
+# ── Seed skills and .env.test
+canonical_skills="$project_root/.claude/skills"
+if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; then
+  mkdir -p "$worktree_dir/.claude/skills"
+  cp -r "$canonical_skills/do-task" "$worktree_dir/.claude/skills/"
+  cp -r "$canonical_skills/review-task" "$worktree_dir/.claude/skills/"
+  log "seeded .claude/skills"
+fi
+
+if [[ -f "$project_path/.env.test" ]]; then
+  cp "$project_path/.env.test" "$worktree_dir/.env.test"
+  log "seeded .env.test"
+fi
+
+# ── Build the agent prompt
+# Frame it so the agent understands the context but does NOT commit.
+full_prompt="The task \"${task_title}\" has an open pull request. A reviewer left the following feedback:
+
+${prompt}
+
+Implement the changes requested in this feedback. Follow the project conventions described in CLAUDE.md — including running the verification loop (lint, test, coverage) after making changes.
+
+IMPORTANT: Do NOT commit your changes. Make the code modifications only and leave them uncommitted. The reviewer will review and commit the changes manually."
+
+# ── Run agent
+write_status "reacting to feedback"
+log "react: running $agent_kind with prompt (${#prompt} bytes)"
+
+claude_jq="$script_dir/_stream-format.jq"
+
+set +e
+case "$agent_kind" in
+  opencode)
+    opencode_cmd=(opencode run --format json --dangerously-skip-permissions -m "$task_model")
+    if [[ -n "$task_variant" ]]; then
+      opencode_cmd+=(--variant "$task_variant")
+    fi
+    (
+      cd "$worktree_dir"
+      "${opencode_cmd[@]}" < /dev/null "$full_prompt" 2>>"$log_file"
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+    rc=${PIPESTATUS[0]}
+    ;;
+  *)
+    claude_args=(--dangerously-skip-permissions -p --output-format stream-json --verbose)
+    if [[ -n "$task_model" ]]; then
+      claude_args+=(--model "$task_model")
+    fi
+    (
+      cd "$worktree_dir"
+      claude "${claude_args[@]}" < /dev/null "$full_prompt" 2>>"$log_file"
+    ) | tee -a "$log_file.jsonl" \
+      | jq -r --unbuffered -f "$claude_jq" >> "$log_file"
+    rc=${PIPESTATUS[0]}
+    ;;
+esac
+set -e
+
+if [[ $rc -ne 0 ]]; then
+  fail "agent exited non-zero (rc=$rc)"
+fi
+
+write_status "react done"
+log "react: agent finished — changes are uncommitted; run 'Commit & push' from the task page to send to PR"
+
+exit 0

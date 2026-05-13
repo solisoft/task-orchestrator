@@ -13,9 +13,17 @@
       <div>
         <h1 class="text-2xl font-bold gradient-text"><%= task.title %></h1>
         <p class="text-xs text-slate-500 mt-1 font-mono"><%= task.slug %></p>
-        <p class="text-xs text-slate-500 mt-1">
-          Status:
-          <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
+        <p class="text-xs text-slate-500 mt-1 flex items-center flex-wrap gap-2">
+          <span>
+            Status:
+            <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
+          </span>
+          <% if task.pr_url != nil and task.pr_url != "" %>
+            <a href="<%= task.pr_url %>" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 border border-indigo-400/30 px-2.5 py-0.5 text-xs font-medium transition-colors">
+              Open PR
+              <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V8h1v6H2V2h6v1H3zm6.5 0h3.5v3.5h-1V4.7L8.4 9.3l-.7-.7L12.3 4H9.5V3z"/></svg>
+            </a>
+          <% end %>
         </p>
       </div>
       <div class="flex gap-2">
@@ -23,6 +31,9 @@
         <% if task.status == "todo" %>
           <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/queue">
             <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">Queue &rarr; agent</button>
+          </form>
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/archive" onsubmit="return confirm('Archive this todo task?')">
+            <button type="submit" class="rounded-lg bg-slate-600/90 hover:bg-slate-500 text-white text-sm font-medium px-4 py-2 transition-colors">Archive</button>
           </form>
         <% end %>
         <% if task.status == "review" %>
@@ -59,6 +70,21 @@
       </div>
     </header>
 
+    <% if task.status == "review" and task.pr_url != nil and task.pr_url != "" %>
+      <div class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
+        <details open>
+          <summary class="text-sm font-semibold text-indigo-300 cursor-pointer select-none">React to PR — send feedback to agent</summary>
+          <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/react" class="mt-3">
+            <textarea name="prompt" rows="4" placeholder="e.g. fix the null check in handle_response, add unit test for edge case, update the docs…" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-sm text-slate-100 resize-y" required></textarea>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <span>The agent will implement changes in the worktree (no commit). Use &ldquo;Commit &amp; push fixes &rarr; PR&rdquo; after review.</span>
+              <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">React</button>
+            </div>
+          </form>
+        </details>
+      </div>
+    <% end %>
+
     <% if branch_info != nil %>
       <div class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
         <div class="flex items-center justify-between flex-wrap gap-3">
@@ -80,20 +106,16 @@
             <% end %>
           </div>
           <% if branch_info["exists"] and not branch_info["merged"] %>
-            <form method="post"
-                  action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
-                  onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
-              <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
-                Merge into <%= branch_info["main"] %>
-              </button>
-            </form>
-            <% if branch_info["worktree_path"] != nil %>
-              <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/checkout">
-                <button type="submit" class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-medium px-4 py-2 transition-colors">
-                  Checkout worktree
+            <% if branch_info["is_local_branch"] and task.status == "review" %>
+              <form method="post"
+                    action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
+                    onsubmit="return confirm('Merge \'<%= branch_info["name"] %>\' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.')">
+                <button type="submit" class="rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+                  Merge into <%= branch_info["main"] %>
                 </button>
               </form>
-            <% else %>
+            <% end %>
+            <% if branch_info["worktree_path"] == nil %>
               <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/checkout">
                 <button type="submit" class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-medium px-4 py-2 transition-colors">
                   Checkout for testing
@@ -102,7 +124,20 @@
             <% end %>
           <% end %>
         </div>
-        <% if branch_info["exists"] and not branch_info["merged"] %>
+        <% if branch_info["worktree_path"] != nil %>
+          <div class="mt-3 flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-400 shrink-0">Worktree</span>
+            <code id="worktree-path" class="font-mono text-xs text-indigo-300 bg-slate-900/60 border border-white/5 rounded px-2 py-1 break-all flex-1 min-w-0"><%= branch_info["worktree_path"] %></code>
+            <button type="button"
+                    onclick="navigator.clipboard.writeText(document.getElementById('worktree-path').textContent); this.textContent='Copied'; setTimeout(() => this.textContent='Copy', 1500);"
+                    class="shrink-0 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white text-xs font-medium px-2.5 py-1 transition-colors">
+              Copy
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">
+            Branch is checked out in this worktree — <code class="font-mono">cd</code> in to inspect; can't be checked out in <code class="font-mono"><%= project["path"] %></code> while the worktree is active.
+          </p>
+        <% elsif branch_info["exists"] and not branch_info["merged"] %>
           <p class="text-xs text-slate-500 mt-2">
             Requires <code class="font-mono"><%= branch_info["main"] %></code> checked out and a clean working tree in <code class="font-mono"><%= project["path"] %></code>.
           </p>
