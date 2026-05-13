@@ -1,0 +1,51 @@
+<%
+  # Renders one project group: project header, up to 10 feature cards,
+  # and a "Load more" HTMX button when there are more pages.
+  # Locals: group (project, features, total, has_more), q
+  let _pname = group["project"]
+  let _pkey = _pname.slugify()
+  let _features = group["features"]
+  let _total = group["total"]
+  let _per_page_rendered = _features.length()
+%>
+<div class="flex items-baseline gap-3 mb-3 px-1">
+  <h2 class="text-xs uppercase tracking-wider font-semibold text-slate-400 font-mono"><%= _pname %></h2>
+  <span class="text-xs text-slate-600"><%= _total %> brief<%= _total == 1 ? "" : "s" %></span>
+  <div class="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
+</div>
+<div class="grid sm:grid-cols-2 gap-3" id="features-<%= _pkey %>">
+  <% for _feature in _features %>
+    <a href="/features/<%= _feature._key %>" class="feature-card block rounded-xl glass-card p-4">
+      <div class="flex items-baseline justify-between gap-3 mb-1.5">
+        <h3 class="text-base font-semibold text-slate-100 truncate"><%= _feature.title %></h3>
+        <span class="status-pill status-pill-<%= _feature.status %>"><%= _feature.status %></span>
+      </div>
+      <% if _feature.description != nil and _feature.description != "" %>
+        <p class="text-sm text-slate-400 line-clamp-2 leading-relaxed"><%= truncate_text(_feature.description, 200, "…") %></p>
+      <% else %>
+        <p class="text-sm text-slate-600 italic">No description yet</p>
+      <% end %>
+      <% let _created = format_date(_feature.created_at) %>
+      <% let _author = (_feature.author ?? "").trim() %>
+      <% if _created != "" or _author != "" %>
+        <p class="text-xs text-slate-500 mt-2">
+          <% if _created != "" %>Created <%= _created %><% end %>
+          <% if _author != "" %>
+            <% if _created != "" %> <% end %>by <%= _author %>
+          <% end %>
+        </p>
+      <% end %>
+    </a>
+  <% end %>
+</div>
+<% if group["has_more"] %>
+  <div id="lm-<%= _pkey %>" class="mt-3">
+    <button type="button"
+            hx-get="/features?project=<%= _pname %>&offset=<%= _per_page_rendered %><%= q != "" ? "&q=" + h(q) : "" %>"
+            hx-target="#features-<%= _pkey %>"
+            hx-swap="beforeend"
+            class="w-full rounded-lg bg-slate-700/30 text-slate-400 border border-slate-500/20 px-4 py-2 text-sm font-medium hover:bg-slate-600/30 hover:text-slate-300 transition-colors">
+      Load more (<%= _total - _per_page_rendered %> remaining)
+    </button>
+  </div>
+<% end %>

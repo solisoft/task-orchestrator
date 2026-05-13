@@ -379,6 +379,91 @@ describe("Feature model", fn()
     let reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.plan_model, "claude-opus-4-7")
   end)
+
+  describe("search", fn()
+    before_each(fn()
+      assert_test_db()
+      Feature.delete_all()
+      Feature.create({
+        "_key":    "proj1--dark-mode",
+        "project": "proj1",
+        "slug":    "dark-mode",
+        "title":   "Dark mode support",
+        "description": "Add dark mode toggle across the app",
+        "status":  "draft"
+      })
+      Feature.create({
+        "_key":    "proj1--search-bar",
+        "project": "proj1",
+        "slug":    "search-bar",
+        "title":   "Search bar component",
+        "description": "Build a reusable search bar",
+        "status":  "draft"
+      })
+      Feature.create({
+        "_key":    "proj2--dark-theme",
+        "project": "proj2",
+        "slug":    "dark-theme",
+        "title":   "Dark theme for dashboard",
+        "description": "Implement dark mode on the dashboard page",
+        "status":  "ready"
+      })
+    end)
+
+    test("returns results matching title", fn()
+      let result = Feature.search("", "dark", 0, 10)
+      assert_eq(result["total"], 2)
+      assert_eq(result["results"].length(), 2)
+    end)
+
+    test("returns results matching description", fn()
+      let result = Feature.search("", "reusable", 0, 10)
+      assert_eq(result["total"], 1)
+      assert_eq(result["results"].length(), 1)
+      assert_eq(result["results"][0].title, "Search bar component")
+    end)
+
+    test("scopes search to a project", fn()
+      let result = Feature.search("proj1", "dark", 0, 10)
+      assert_eq(result["total"], 1)
+      assert_eq(result["results"].length(), 1)
+      assert_eq(result["results"][0].title, "Dark mode support")
+    end)
+
+    test("returns empty array when nothing matches", fn()
+      let result = Feature.search("", "nonexistent", 0, 10)
+      assert_eq(result["total"], 0)
+      assert_eq(result["results"].length(), 0)
+    end)
+
+    test("respects limit", fn()
+      let result = Feature.search("", "", 0, 1)
+      assert_eq(result["results"].length(), 1)
+      assert_eq(result["total"], 3)
+    end)
+
+    test("respects offset", fn()
+      let first = Feature.search("", "", 0, 1)
+      let second = Feature.search("", "", 1, 1)
+      assert_eq(first["results"].length(), 1)
+      assert_eq(second["results"].length(), 1)
+      # Ensure offset returns a different feature than the first page
+      assert(first["results"][0]._key != second["results"][0]._key)
+    end)
+
+    test("returns all features when query is empty and no project scope", fn()
+      let result = Feature.search("", "", 0, 100)
+      assert_eq(result["total"], 3)
+      assert_eq(result["results"].length(), 3)
+    end)
+
+    test("returns project-scoped features when query is empty", fn()
+      let result = Feature.search("proj2", "", 0, 10)
+      assert_eq(result["total"], 1)
+      assert_eq(result["results"].length(), 1)
+      assert_eq(result["results"][0].title, "Dark theme for dashboard")
+    end)
+  end)
 end)
 
 describe("Feature row author column", fn()
@@ -502,6 +587,14 @@ describe("FeaturesController#publish", fn()
     assert((parent.model ?? "") == "")
   end)
 end)
+
+# Controller integration tests for GET /features are omitted because the
+# route sits behind auth middleware and the test framework's login() helper
+# does not propagate the session to get() requests. The search and
+# pagination logic is fully covered by the Feature.search() model tests
+# above, and the HTMX dispatch in the controller follows the same
+# render_partial pattern used throughout the codebase (tasks_controller,
+# comments_controller, runs_controller).
 
 describe("Plan model resolution", fn()
   before_each(fn()

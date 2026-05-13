@@ -17,100 +17,25 @@
       </a>
     </header>
 
-    <% if project_filter != nil %>
-      <div class="mb-6 flex items-center gap-2 text-sm animate-fade-in animate-fade-in-1">
-        <span class="text-slate-500">Filtering by project:</span>
-        <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 px-3 py-1 text-xs font-medium font-mono"><%= project_filter %></span>
-        <a href="/features" class="text-slate-500 hover:text-slate-300 text-xs underline underline-offset-2">show all</a>
-      </div>
-    <% end %>
-
-    <% if features.length() == 0 %>
-      <div class="relative animate-fade-in animate-fade-in-1">
-        <div class="absolute inset-0 -z-10 overflow-hidden rounded-3xl">
-          <div class="absolute -top-20 -left-20 w-80 h-80 rounded-full bg-indigo-500/15 blur-3xl"></div>
-          <div class="absolute -bottom-20 -right-10 w-96 h-96 rounded-full bg-fuchsia-500/15 blur-3xl"></div>
-        </div>
-
-        <div class="rounded-3xl glass-card p-10 lg:p-14 text-center relative overflow-hidden">
-          <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/30 to-fuchsia-500/30 border border-white/10 mb-6 animate-float">
-            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-200"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          </div>
-          <h2 class="text-2xl lg:text-3xl font-bold mb-2"><span class="gradient-text">Start with a brief.</span></h2>
-          <p class="text-slate-400 text-sm max-w-xl mx-auto mb-10">
-            Capture the product story in markdown &mdash; the why, the UX, the acceptance criteria.
-            Then let the planner fan it into linked tasks.
-          </p>
-
-          <div class="grid md:grid-cols-3 gap-4 max-w-3xl mx-auto mb-10 text-left">
-            <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 text-xs font-bold flex items-center justify-center">1</span>
-                <h3 class="text-sm font-semibold text-slate-100">Write a brief</h3>
-              </div>
-              <p class="text-xs text-slate-500 leading-relaxed">Markdown description of what you want and why. Discussed inline with comments.</p>
-            </div>
-            <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/30 text-fuchsia-300 text-xs font-bold flex items-center justify-center">2</span>
-                <h3 class="text-sm font-semibold text-slate-100">Generate tasks <span class="ai-sparkle">&#x2728;</span></h3>
-              </div>
-              <p class="text-xs text-slate-500 leading-relaxed">One click. The planner breaks the brief into 3&ndash;7 focused, actionable tasks.</p>
-            </div>
-            <div class="rounded-xl bg-white/[0.03] border border-white/5 p-4">
-              <div class="flex items-center gap-2 mb-2">
-                <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold flex items-center justify-center">3</span>
-                <h3 class="text-sm font-semibold text-slate-100">Ship</h3>
-              </div>
-              <p class="text-xs text-slate-500 leading-relaxed">Agents pick up tasks in worktrees, open PRs, and the brief tracks the rollup.</p>
-            </div>
-          </div>
-
-          <a href="/features/new" class="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-6 py-3 transition-all btn-glow shadow-lg shadow-indigo-500/25 cta-shimmer">
-            Create your first brief
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    <form id="features-search-form" class="mb-8 animate-fade-in animate-fade-in-1" method="GET" action="/features">
+      <div class="flex gap-3">
+        <input type="search" name="q" value="<%= h(q) %>"
+               placeholder="Search features by title or description..."
+               hx-get="/features"
+               hx-trigger="keyup changed delay:300ms"
+               hx-target="#features-groups"
+               hx-push-url="true"
+               class="flex-1 rounded-lg bg-slate-900/60 border border-slate-500/30 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-400/50 focus:ring-1 focus:ring-sky-400/20 transition-colors">
+        <% if q != "" %>
+          <a href="/features" class="rounded-lg bg-slate-700/30 text-slate-400 border border-slate-500/20 px-4 py-2.5 text-sm font-medium hover:bg-slate-600/30 transition-colors">
+            Clear
           </a>
-        </div>
-      </div>
-    <% else %>
-      <div class="space-y-8">
-        <% let g_idx = 0 %>
-        <% for group in groups %>
-          <section class="animate-fade-in animate-fade-in-<%= (g_idx % 5) + 1 %>">
-            <div class="flex items-baseline gap-3 mb-3 px-1">
-              <h2 class="text-xs uppercase tracking-wider font-semibold text-slate-400 font-mono"><%= group["project"] %></h2>
-              <span class="text-xs text-slate-600"><%= group["features"].length() %> brief<%= group["features"].length() == 1 ? "" : "s" %></span>
-              <div class="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent"></div>
-            </div>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <% for feature in group["features"] %>
-                <a href="/features/<%= feature._key %>" class="feature-card block rounded-xl glass-card p-4">
-                  <div class="flex items-baseline justify-between gap-3 mb-1.5">
-                    <h3 class="text-base font-semibold text-slate-100 truncate"><%= feature.title %></h3>
-                    <span class="status-pill status-pill-<%= feature.status %>"><%= feature.status %></span>
-                  </div>
-                  <% if feature.description != nil and feature.description != "" %>
-                    <p class="text-sm text-slate-400 line-clamp-2 leading-relaxed"><%= truncate_text(feature.description, 200, "…") %></p>
-                  <% else %>
-                    <p class="text-sm text-slate-600 italic">No description yet</p>
-                  <% end %>
-                  <% let _created = format_date(feature.created_at) %>
-                  <% let _author = (feature.author ?? "").trim() %>
-                  <% if _created != "" or _author != "" %>
-                    <p class="text-xs text-slate-500 mt-2">
-                      <% if _created != "" %>Created <%= _created %><% end %>
-                      <% if _author != "" %>
-                        <% if _created != "" %> <% end %>by <%= _author %>
-                      <% end %>
-                    </p>
-                  <% end %>
-                </a>
-              <% end %>
-            </div>
-          </section>
-          <% g_idx = g_idx + 1 %>
         <% end %>
       </div>
-    <% end %>
+    </form>
+
+    <div id="features-groups">
+      <%- render_partial("features/groups", { "groups": groups, "q": q }) %>
+    </div>
   </div>
 </div>
