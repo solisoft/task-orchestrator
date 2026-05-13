@@ -568,6 +568,51 @@ def _tq_seed_plan(plan_id, status, log_text, body_text, pending_question)
   })
 end
 
+describe("TasksController#create author stamping", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Plan.delete_all()
+    Setting.delete_all()
+    ActivityLog.delete_all()
+    User.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  # The controller reads `session_get("user_email")` directly because
+  # task routes run outside the auth-middleware scope. Driving the
+  # signed-in flow through the test client would force us to satisfy
+  # Soli's CSRF guard (Origin/Referer must match the dynamic test-
+  # server port). The `change_author` propagation onto the action
+  # endpoints (queue / mark-done / archive) is covered at the model
+  # layer in `activity_log_spec.sl` — same code path, zero CSRF
+  # surface. Here we just check the unauthenticated branch.
+  test("leaves author empty when no session is set", fn()
+    let response = post("/projects/proj/tasks", {
+      "title":   "Anon task",
+      "body_md": "# Anon task\n\nbody"
+    })
+    assert_eq(res_status(response), 302)
+    let task = Task.find_by_slug("proj", "anon-task")
+    assert_eq(task.author ?? "", "")
+  end)
+
+  test("persists Task.author when create receives one", fn()
+    let task = Task.create({
+      "_key":    "proj--by-author",
+      "project": "proj",
+      "slug":    "by-author",
+      "title":   "By author",
+      "author":  "alice@example.com",
+      "status":  "todo"
+    })
+    assert(task._errors == nil)
+    let reloaded = Task.find_by_slug("proj", "by-author")
+    assert_eq(reloaded.author, "alice@example.com")
+  end)
+end)
+
 describe("TasksController#create plan linkage", fn()
   before_each(fn()
     assert_test_db()

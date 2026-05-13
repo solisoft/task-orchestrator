@@ -463,6 +463,13 @@ class Task < Model
       return nil
     end
     self.last_notified_status = new_status
+    ActivityLog.log_status_change(
+      self._key,
+      self.feature_slug,
+      prev_status,
+      new_status,
+      self.change_author
+    ) rescue null
     let url = "/projects/" + (self.project ?? "") +
               "/tasks/" + (self.slug ?? "")
     web_push_send_to_all({

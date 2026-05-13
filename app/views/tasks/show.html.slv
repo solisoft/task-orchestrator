@@ -18,6 +18,10 @@
             Status:
             <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
           </span>
+          <% let _author = (task.author ?? "").trim() %>
+          <% if _author != "" %>
+            <span>by <span class="text-slate-400"><%= _author %></span></span>
+          <% end %>
           <% if task.pr_url != nil and task.pr_url != "" %>
             <a href="<%= task.pr_url %>" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 border border-indigo-400/30 px-2.5 py-0.5 text-xs font-medium transition-colors">
               Open PR

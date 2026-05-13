@@ -231,6 +231,11 @@ fn create(req)
   # already validates against the SDK allowlist + the opencode shape,
   # so the value is safe to store and forward to bin/task-run.
   let model = _stitched_plan_model(form)
+  # Task routes run outside the auth middleware scope (so `task-queue`
+  # and the dispatcher can hit them without a session), so we read the
+  # changing user directly from the session cookie instead of relying
+  # on `req["current_user"]`.
+  let author = session_get("user_email") ?? ""
   let task = Task.create({
     "_key":    Task.key_for(project["name"], slug),
     "project": project["name"],
@@ -238,6 +243,7 @@ fn create(req)
     "title":   title,
     "body_md": body,
     "model":   model,
+    "author":  author,
     "status":  "todo"
   })
   if task._errors
@@ -469,6 +475,7 @@ fn mark_done(req)
       return {"status": 422, "body": "PR not merged"}
     end
   end
+  task.change_author = _current_changer(req)
   task.status = "done"
   task.finished_at = DateTime.now().to_iso()
   task.save()
@@ -609,11 +616,17 @@ fn queue(req)
   if denied != nil
     return _queue_limit_response(req, project, denied)
   end
-  move_response(req, fn(t) t.queue!())
+  let changer = _current_changer(req)
+  move_response(req, fn(t) {
+    t.change_author = changer
+    t.queue!()
+  })
 end
 
 fn unqueue(req)
+  let changer = _current_changer(req)
   move_response(req, fn(t) {
+    t.change_author = changer
     t.unqueue!()
     clear_run_state(t.project, t.slug)
   })
@@ -1042,6 +1055,7 @@ fn archive(req)
             "body": "archive is only available for todo, done, or failed tasks " +
                     "(current: " + task.status + ")"}
   end
+  task.change_author = _current_changer(req)
   task.status = "archived"
   task.save()
   if task._errors
@@ -1064,6 +1078,7 @@ fn unarchive(req)
             "body": "unarchive is only available for archived tasks (current: " +
                     task.status + ")"}
   end
+  task.change_author = _current_changer(req)
   task.status = "todo"
   task.finished_at = null
   task.save()
@@ -1127,6 +1142,20 @@ fn _queue_limit_response(req, project, denied)
     }
   end
   return {"status": 422, "body": msg}
+end
+
+# Resolve the email of the user driving the current request. Task
+# routes run outside the auth middleware scope, so `req["current_user"]`
+# is always nil — we fall back to the raw session cookie via
+# `session_get`. Returns "" for unauthenticated requests (background
+# agents, the dispatcher) so the ActivityLog row still gets stamped
+# with a known-empty changer rather than failing the save.
+fn _current_changer(req)
+  let user = req["current_user"] rescue nil
+  if user != nil
+    return user.email ?? ""
+  end
+  return session_get("user_email") ?? ""
 end
 
 fn move_response(req, action)

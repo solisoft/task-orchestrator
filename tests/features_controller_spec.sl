@@ -381,6 +381,33 @@ describe("Feature model", fn()
   end)
 end)
 
+describe("Feature row author column", fn()
+  # /features is auth-gated AND CSRF-checked, so driving it through
+  # the test client requires solving both the dynamic Origin port and
+  # the session cookie surface. The controller logic is a 3-liner
+  # (`req["current_user"].email` into the `author` field); this model
+  # check captures the storage shape and the show/edit/index views
+  # read the same column.
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+  end)
+
+  test("persists author when Feature.create receives one", fn()
+    let f = Feature.create({
+      "_key":    "myapp--by-author",
+      "project": "myapp",
+      "slug":    "by-author",
+      "title":   "By author",
+      "status":  "draft",
+      "author":  "author@example.com"
+    })
+    assert(f._errors == nil)
+    let reloaded = Feature.find_by_slug("myapp", "by-author")
+    assert_eq(reloaded.author, "author@example.com")
+  end)
+end)
+
 # Derive the test server's origin from a probe response's `url` field.
 # `test_server_url()` reports the parent process's port and breaks in
 # parallel-worker mode; the response url reflects the worker's actual

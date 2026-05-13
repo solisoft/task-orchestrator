@@ -38,6 +38,10 @@
           <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>" class="flex-1 min-w-0">
             <div class="text-sm text-slate-100 leading-snug"><%= task.title %></div>
             <div class="text-xs font-mono text-slate-500 mt-0.5 truncate"><%= task.slug %></div>
+            <% let _author = (task.author ?? "").trim() %>
+            <% if _author != "" %>
+              <span class="text-[10px] text-slate-600"><%= _author %></span>
+            <% end %>
           </a>
           <% if agents != nil and agents[task.slug] != nil %>
             <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-slate-800/80 border border-white/5 text-slate-400 px-2 py-0.5 flex-shrink-0" title="agent that runs /do-task"><%= agents[task.slug] %></span>

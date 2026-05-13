@@ -95,8 +95,14 @@
                     <p class="text-sm text-slate-600 italic">No description yet</p>
                   <% end %>
                   <% let _created = format_date(feature.created_at) %>
-                  <% if _created != "" %>
-                    <p class="text-xs text-slate-500 mt-2">Created <%= _created %></p>
+                  <% let _author = (feature.author ?? "").trim() %>
+                  <% if _created != "" or _author != "" %>
+                    <p class="text-xs text-slate-500 mt-2">
+                      <% if _created != "" %>Created <%= _created %><% end %>
+                      <% if _author != "" %>
+                        <% if _created != "" %> <% end %>by <%= _author %>
+                      <% end %>
+                    </p>
                   <% end %>
                 </a>
               <% end %>
