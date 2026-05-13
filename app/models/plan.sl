@@ -331,3 +331,73 @@ class Plan < Model
     s
   end
 end
+
+# Read the DB-backed state for a plan_id. Returns
+#   { status, log, body, pending_question, model, prompt }.
+# Lives in the model layer (not the controller) so the WS stream
+# handlers in tasks_controller / features_controller can both call it
+# AND the spec suite — which doesn't auto-load controller files — can
+# exercise the building blocks without going through HTTP.
+fn read_plan_state(plan_id)
+  let plan = Plan.find_by_plan_id(plan_id)
+  if plan == nil
+    return {
+      "status":           "unknown",
+      "log":              "",
+      "body":             "",
+      "pending_question": nil,
+      "model":            "claude-sonnet-4-6",
+      "prompt":           "" }
+  end
+  {
+    "status":           plan.effective_status,
+    "log":              plan.log ?? "",
+    "body":             plan.body ?? "",
+    "pending_question": plan.pending_question,
+    "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
+    "prompt":           plan.prompt ?? "" }
+end
+
+# Plain-data payload for the WS plan/feature-generate stream handlers.
+# Returns the same shape regardless of which kind of plan it is:
+#   { "event": "snapshot"|"delta",
+#     "log_chunk": String, "log_offset": Int,
+#     "status": String, "pending_question": Hash | nil,
+#     "terminal": Bool, "reload": Bool }
+# The controller layers `status_html` / `question_html` (rendered with
+# `render_partial`) on top before sending. `reload: true` tells the
+# client to navigate after the agent finishes — used for `done` so the
+# server-rendered post-agent view replaces the streaming UI.
+fn plan_stream_payload(plan_id, event_type, offset)
+  let state = read_plan_state(plan_id)
+  if state["status"] == "unknown"
+    return { "event": "error", "terminal": true, "message": "unknown plan" }
+  end
+  let cursor = offset
+  if cursor == nil or cursor < 0
+    cursor = 0
+  end
+  let log = state["log"] ?? ""
+  let size = log.length
+  # Cursor past end (truncate / restart) wraps back to 0 — we'd rather
+  # double-paint a few bytes than skip them.
+  if cursor > size
+    cursor = 0
+  end
+  let chunk = ""
+  if cursor < size
+    chunk = log.substring(cursor, size)
+  end
+  let status_token = state["status"]
+  let done = status_token == "done"
+  let failed = status_token.starts_with("failed:")
+  {
+    "event":            event_type == "connect" ? "snapshot" : "delta",
+    "log_chunk":        chunk,
+    "log_offset":       size,
+    "status":           status_token,
+    "pending_question": state["pending_question"],
+    "terminal":         done or failed,
+    "reload":           done
+  }
+end

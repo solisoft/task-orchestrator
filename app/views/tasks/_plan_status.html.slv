@@ -1,0 +1,16 @@
+<%
+  let failed = status.starts_with("failed")
+  let pq = pending_question
+  let has_question = pq != nil and pq["input"] != nil and pq["input"]["questions"] != nil
+%>
+<% if failed %>
+  <span class="inline-flex items-center gap-2 rounded-full border bg-red-500/15 text-red-300 border-red-500/30 px-2 py-0.5">x <%= status %></span>
+<% elsif has_question %>
+  <span class="inline-flex items-center gap-2 rounded-full border bg-amber-400/15 text-amber-300 border-amber-400/30 px-2 py-0.5">awaiting answer</span>
+<% else %>
+  <span class="inline-flex items-center gap-2 rounded-full border bg-amber-400/15 text-amber-300 border-amber-400/30 px-2 py-0.5">
+    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+    <%= status %>
+  </span>
+<% end %>
+<span class="text-slate-500">plan-task · <%= plan_id %></span>

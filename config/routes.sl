@@ -55,12 +55,24 @@ get("/projects/:name/tasks/plan-log/:plan_id", "tasks#plan_log")
 post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
 post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
 post("/projects/:name/tasks/plan-retry/:plan_id",  "tasks#plan_retry")
+router_websocket("/ws/plan-stream", "tasks#plan_stream")
+# Sits outside the `authenticate` block: the WS handler is event-driven, so
+# cookie-based session lookup isn't reliably available here. The plan_id
+# (a server-generated nonce) is what gates access, mirroring how
+# `runs#stream` treats its slug.
+router_websocket("/ws/feature-generate-stream", "features#generate_stream")
 
 # ── Runs ─────────────────────────────
 
 get("/projects/:name/tasks/:slug/run", "runs#show")
 get("/projects/:name/tasks/:slug/run/log", "runs#log")
 post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
+# Live WebSocket streams — the views drive these instead of 2s polling.
+# Soli 1.0.3's `router_websocket` does not extract `:name`-style path
+# params for WS routes, so all three streams ride a single static
+# endpoint each; the client identifies the resource by echoing `project`
+# / `slug` / `plan_id` / `feature_id` on every tick.
+router_websocket("/ws/run-stream", "runs#stream")
 
 # ── Push notifications ───────────────
 
