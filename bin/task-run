@@ -12,10 +12,14 @@
 #      `/do-task` finds it.
 #   4. Run `claude -p "/do-task ..."` and then `/review-task` headlessly.
 #   5. If review-task produced a commit: push the branch, open a PR via gh,
-#      mark the row `status=done` (with `pr_url`), and tear down the
+#      mark the row `status=review` (with `pr_url`), and tear down the
 #      worktree.
-#   6. Otherwise: mark `status=failed` with a reason. The log file
-#      survives in either case.
+#   6. If review-task produced no commit and the worktree is clean
+#      (Approved-no-fix-needed): mark `status=done, outcome=no-commit`
+#      and tear down the worktree.
+#   7. If review-task produced no commit but left uncommitted changes
+#      (Rejected): mark `status=review` and preserve the worktree so
+#      the user can iterate via the web UI.
 #
 # State files live under $TASK_ORCH_STATE (default ~/.local/state/task-orchestrator).
 # The DB row is the source of truth for status / pr_url / timestamps;
@@ -403,6 +407,19 @@ cleanup_worktree() {
 }
 
 if [[ "$head_sha" == "$base_sha" ]]; then
+  # No commit: either Rejected (uncommitted changes) or
+  # Approved-no-fix-needed (clean worktree, nothing to change).
+  if ! git -C "$worktree_dir" diff --quiet ||
+     ! git -C "$worktree_dir" diff --cached --quiet; then
+    log "uncommitted changes — review rejected, keeping in review state"
+    sync_new_todos
+    iso=$(date -Iseconds)
+    db_update "$(jq -n --arg iso "$iso" \
+      '{status: "review", finished_at: $iso, outcome: "rejected-review"}')"
+    write_status "review:rejected"
+    log "DONE — rejected (review-task declined to commit; worktree preserved at $worktree_dir)"
+    exit 0
+  fi
   log "no commit produced — treating as no-code-change success"
   sync_new_todos
   cleanup_worktree

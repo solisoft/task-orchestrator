@@ -408,6 +408,101 @@ describe("Feature row author column", fn()
   end)
 end)
 
+# Derive the test server's origin from a probe response's `url` field.
+# `test_server_url()` reports the parent process's port and breaks in
+# parallel-worker mode; the response url reflects the worker's actual
+# port (set in the request helper via the thread-local override), so
+# we can build an Origin header that matches the CSRF check's request
+# authority regardless of which worker we're running on.
+def _publish_origin_for_worker()
+  let probe = get("/login")
+  let url = probe["url"] ?? ""
+  # Strip everything after the authority: "http://host:port" — split on the
+  # first "/" past the "http://" prefix without using index_of's offset arg
+  # (Soli's string API doesn't accept a starting offset).
+  let prefix = "http://"
+  if not url.starts_with(prefix)
+    return url
+  end
+  let rest = url.substring(prefix.length(), url.length())
+  let slash = rest.index_of("/")
+  if slash > 0
+    return prefix + rest.substring(0, slash)
+  end
+  return url
+end
+
+describe("FeaturesController#publish", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    # /features is auth-gated — perform a real login so the auth
+    # middleware finds a User and lets publish through to the action.
+    User.register("publish-tester@example.com", "password123", "Publish Tester")
+    login("publish-tester@example.com", "password123")
+  end)
+
+  test("seeds the combined task with feature.plan_model so the agent inherits the choice", fn()
+    Feature.create({
+      "_key":       "proj--brief",
+      "project":    "proj",
+      "slug":       "brief",
+      "title":      "Brief with model",
+      "status":     "ready",
+      "plan_model": "claude-opus-4-7"
+    })
+    Task.create({
+      "_key":         "proj--proposed-one",
+      "project":      "proj",
+      "slug":         "proposed-one",
+      "title":        "Proposed one",
+      "body_md":      "## Task 1\n\nDo a thing.",
+      "status":       "proposed",
+      "feature_slug": "proj--brief"
+    })
+    let response = post("/features/proj--brief/publish", {}, {
+      "headers": { "Origin": _publish_origin_for_worker() }
+    })
+    assert_eq(res_status(response), 302)
+    # The bundled parent task inherits feature.plan_model so the agent
+    # run picks up the user's preferred model without a manual override.
+    let parent = Task.find_by_slug("proj", "brief-with-model")
+    assert_not_null(parent)
+    assert_eq(parent.model, "claude-opus-4-7")
+    assert_eq(parent.status, "todo")
+  end)
+
+  test("leaves the combined task model empty when the feature has none set", fn()
+    Feature.create({
+      "_key":    "proj--brief-no-model",
+      "project": "proj",
+      "slug":    "brief-no-model",
+      "title":   "Brief no model",
+      "status":  "ready"
+    })
+    Task.create({
+      "_key":         "proj--proposed-x",
+      "project":      "proj",
+      "slug":         "proposed-x",
+      "title":        "Proposed x",
+      "body_md":      "## Task 1\n\nWork.",
+      "status":       "proposed",
+      "feature_slug": "proj--brief-no-model"
+    })
+    let response = post("/features/proj--brief-no-model/publish", {}, {
+      "headers": { "Origin": _publish_origin_for_worker() }
+    })
+    assert_eq(res_status(response), 302)
+    let parent = Task.find_by_slug("proj", "brief-no-model")
+    assert_not_null(parent)
+    # Empty/missing feature.plan_model falls through as "" so the agent
+    # uses the global default at run-time.
+    assert((parent.model ?? "") == "")
+  end)
+end)
+
 describe("Plan model resolution", fn()
   before_each(fn()
     assert_test_db()

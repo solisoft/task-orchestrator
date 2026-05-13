@@ -673,7 +673,7 @@ describe("TasksController#plan_log", fn()
     as_guest()
   end)
 
-  test("returns only the plan-stream partial while the plan is running", fn()
+  test("returns the plan-stream partial wired to the WebSocket stream", fn()
     _tq_seed_plan("plan-running", "running", "step 1\nstep 2", "", nil)
     let response = get("/projects/proj/tasks/plan-log/plan-running")
     assert_eq(res_status(response), 200)
@@ -681,11 +681,16 @@ describe("TasksController#plan_log", fn()
     # Right-panel root is present; static prompt aside is NOT.
     assert_contains(body, "id=\"plan-stream\"")
     assert_not(body.contains("Your prompt"))
-    # Polling continues — the section carries the hx-trigger.
-    assert_contains(body, "hx-trigger=\"every 2s\"")
+    # The WS streamer is wired up via data-stream-* attrs — the markup
+    # no longer drives htmx polling. The route URL itself is static
+    # (Soli 1.0.3 doesn't extract :params from router_websocket paths),
+    # so the resource identifier rides as data-stream-plan-id.
+    assert_contains(body, "data-stream-url=\"/ws/plan-stream\"")
+    assert_contains(body, "data-stream-plan-id=\"plan-running\"")
+    assert_not(body.contains("hx-trigger=\"every 2s\""))
   end)
 
-  test("omits hx-trigger and the prompt aside on the awaiting_question state", fn()
+  test("omits the WS wiring and shows the question on the awaiting_question state", fn()
     let pq = {
       "id":    "q1",
       "tool":  "AskUserQuestion",
@@ -699,8 +704,10 @@ describe("TasksController#plan_log", fn()
     assert_contains(body, "id=\"plan-stream\"")
     assert_contains(body, "Pick one")
     assert_not(body.contains("Your prompt"))
-    # Polling is suppressed while a question is pending — otherwise an
-    # in-flight poll can race the user's click and re-render the card.
+    # The WS subscription is suppressed while a question is pending —
+    # otherwise an in-flight tick can race the user's click and
+    # re-render the card.
+    assert_not(body.contains("data-stream-url="))
     assert_not(body.contains("hx-trigger=\"every 2s\""))
   end)
 
@@ -771,6 +778,106 @@ describe("TasksController#plan_answer", fn()
   end)
 end)
 
+describe("plan_stream_payload — model-layer builder for WS stream frames", fn()
+  before_each(fn()
+    assert_test_db()
+    Plan.delete_all()
+  end)
+
+  test("connect → snapshot carrying the full log and a fresh offset", fn()
+    _tq_seed_plan("plan-snap", "running", "line one\nline two\n", "", nil)
+    let p = plan_stream_payload("plan-snap", "connect", 0)
+    assert_eq(p["event"], "snapshot")
+    assert_eq(p["log_chunk"], "line one\nline two\n")
+    assert_eq(p["log_offset"], "line one\nline two\n".length)
+    assert_eq(p["terminal"], false)
+    assert_eq(p["reload"], false)
+    assert_eq(p["status"], "running")
+  end)
+
+  test("tick sends only the bytes appended past the cursor", fn()
+    _tq_seed_plan("plan-tick", "running", "abcde-FGHIJ", "", nil)
+    let p = plan_stream_payload("plan-tick", "message", 5)
+    assert_eq(p["event"], "delta")
+    assert_eq(p["log_chunk"], "-FGHIJ")
+    assert_eq(p["log_offset"], 11)
+  end)
+
+  test("a stale offset past EOF resends from byte 0 (truncate recovery)", fn()
+    # `clear_run_state` / a planner restart shrinks the .log under the
+    # client's cursor. The payload resets to offset 0 so the next paint
+    # matches what's actually on disk — better to re-render a few bytes
+    # than skip them.
+    _tq_seed_plan("plan-trunc", "running", "fresh", "", nil)
+    let p = plan_stream_payload("plan-trunc", "message", 9999)
+    assert_eq(p["log_chunk"], "fresh")
+    assert_eq(p["log_offset"], 5)
+  end)
+
+  test("done flips terminal + reload so the client navigates after the agent finishes", fn()
+    _tq_seed_plan("plan-done", "done", "all done", "# spec", nil)
+    let p = plan_stream_payload("plan-done", "message", 0)
+    assert_eq(p["terminal"], true)
+    assert_eq(p["reload"], true)
+  end)
+
+  test("failed: flips terminal but not reload (stay put for the retry CTA)", fn()
+    _tq_seed_plan("plan-fail", "failed:cancelled", "boom", "", nil)
+    let p = plan_stream_payload("plan-fail", "message", 0)
+    assert_eq(p["terminal"], true)
+    assert_eq(p["reload"], false)
+  end)
+
+  test("carries the pending_question hash through verbatim", fn()
+    let pq = {
+      "id":    "q1",
+      "tool":  "AskUserQuestion",
+      "input": { "questions": [{ "question": "Pick a path",
+                                  "options":  [{ "label": "A" }, { "label": "B" }] }] }
+    }
+    _tq_seed_plan("plan-q-ws", "awaiting_question", "thinking", "", pq)
+    let p = plan_stream_payload("plan-q-ws", "connect", 0)
+    assert_not_null(p["pending_question"])
+    assert_eq(p["pending_question"]["id"], "q1")
+  end)
+
+  test("returns an error frame for an unknown plan", fn()
+    let p = plan_stream_payload("no-such-plan", "connect", 0)
+    assert_eq(p["event"], "error")
+    assert_eq(p["terminal"], true)
+  end)
+
+  test("normalises a negative or nil offset to 0", fn()
+    _tq_seed_plan("plan-neg", "running", "abc", "", nil)
+    let a = plan_stream_payload("plan-neg", "message", -5)
+    assert_eq(a["log_chunk"], "abc")
+    let b = plan_stream_payload("plan-neg", "message", nil)
+    assert_eq(b["log_chunk"], "abc")
+  end)
+end)
+
+describe("read_plan_state — DB-backed plan rehydration", fn()
+  before_each(fn()
+    assert_test_db()
+    Plan.delete_all()
+  end)
+
+  test("returns the canonical unknown shape when the plan_id misses", fn()
+    let s = read_plan_state("ghost")
+    assert_eq(s["status"], "unknown")
+    assert_eq(s["log"], "")
+    assert_eq(s["model"], "claude-sonnet-4-6")
+  end)
+
+  test("populates fields from the Plan row", fn()
+    _tq_seed_plan("plan-read", "running", "stdout", "# body", nil)
+    let s = read_plan_state("plan-read")
+    assert_eq(s["status"], "running")
+    assert_eq(s["log"], "stdout")
+    assert_eq(s["body"], "# body")
+  end)
+end)
+
 def _tq_worktree_path(slug)
   let root = getenv("TASK_ORCH_WORKTREES") ?? "/tmp/task-orch-spec-worktree"
   root + "/proj/" + slug
@@ -816,6 +923,147 @@ def _tq_setup_worktree_repo_no_origin(slug)
   System.run_sync(["bash", "-c", cmd])
   return worktree
 end
+
+describe("TasksController#save model persistence", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("persists plan_model on task.model when the form carries one", fn()
+    Task.create({
+      "_key":    "proj--save-model",
+      "project": "proj",
+      "slug":    "save-model",
+      "title":   "Save model",
+      "body_md": "# original",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-model/save", {
+      "title":        "Save model",
+      "body_md":      "# updated",
+      "plan_model":   "claude-opus-4-7",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-model")
+    assert_eq(t.model, "claude-opus-4-7")
+    assert_eq(t.body_md, "# updated")
+  end)
+
+  test("stitches plan_variant onto an opencode plan_model", fn()
+    Task.create({
+      "_key":    "proj--save-stitched",
+      "project": "proj",
+      "slug":    "save-stitched",
+      "title":   "Stitched",
+      "body_md": "# x",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-stitched/save", {
+      "body_md":      "# x",
+      "plan_model":   "deepseek/deepseek-chat",
+      "plan_variant": "high"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-stitched")
+    assert_eq(t.model, "deepseek/deepseek-chat:high")
+  end)
+
+  test("leaves task.model untouched when no plan_model is submitted", fn()
+    Task.create({
+      "_key":    "proj--save-keep",
+      "project": "proj",
+      "slug":    "save-keep",
+      "title":   "Keep",
+      "body_md": "# x",
+      "model":   "claude-opus-4-7",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/save-keep/save", {
+      "body_md": "# updated"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "save-keep")
+    assert_eq(t.model, "claude-opus-4-7")
+    assert_eq(t.body_md, "# updated")
+  end)
+end)
+
+describe("TasksController#queue model override", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("persists plan_model and transitions to queued in one request", fn()
+    Task.create({
+      "_key":    "proj--queue-with-model",
+      "project": "proj",
+      "slug":    "queue-with-model",
+      "title":   "Queue with model",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/queue-with-model/queue", {
+      "plan_model":   "claude-opus-4-7",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "queue-with-model")
+    assert_eq(t.status, "queued")
+    assert_eq(t.model, "claude-opus-4-7")
+  end)
+
+  test("queues normally and preserves task.model when no override is sent", fn()
+    Task.create({
+      "_key":    "proj--queue-no-model",
+      "project": "proj",
+      "slug":    "queue-no-model",
+      "title":   "Queue without override",
+      "model":   "claude-haiku-4-5-20251001",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/queue-no-model/queue", {})
+    assert_eq(res_status(response), 302)
+    let t = Task.find_by_slug("proj", "queue-no-model")
+    assert_eq(t.status, "queued")
+    assert_eq(t.model, "claude-haiku-4-5-20251001")
+  end)
+end)
+
+describe("TasksController#show model picker", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("renders model picker pre-selected to task.model on todo tasks", fn()
+    Task.create({
+      "_key":    "proj--show-picker",
+      "project": "proj",
+      "slug":    "show-picker",
+      "title":   "Show picker",
+      "model":   "claude-opus-4-7",
+      "status":  "todo"
+    })
+    let response = get("/projects/proj/tasks/show-picker")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # The picker is in the Queue form; preselection is rendered as the
+    # selected attribute on the matching option.
+    assert_contains(body, "name=\"plan_model\"")
+    assert_contains(body, "value=\"claude-opus-4-7\" selected")
+  end)
+end)
 
 describe("TasksController#sidebar", fn()
   before_each(fn()

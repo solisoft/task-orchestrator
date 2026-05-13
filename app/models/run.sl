@@ -177,6 +177,75 @@ fn run_log_tail(repo, slug, max_bytes)
   body.substring(body.length - max_bytes, body.length)
 end
 
+# Current size of the .log file in bytes. The WS stream handler uses
+# this to send a starting byte offset alongside the snapshot, so the
+# client knows where to ask for deltas from.
+fn run_log_size(repo, slug)
+  let path = run_log_path(repo, slug)
+  if not Trusted.exists(path)
+    return 0
+  end
+  let body = Trusted.read(path) rescue ""
+  body.length
+end
+
+# Bytes appended to the .log since `offset`, or "" if there's nothing
+# new. If the file shrank (truncate/clear-run-state) we re-send from 0
+# so the client picks up the fresh start without manual resync. Returns
+# `{ "chunk": String, "offset": Int }` so the caller can both send the
+# delta and advance its cursor in one call.
+fn run_log_delta(repo, slug, offset)
+  let path = run_log_path(repo, slug)
+  if not Trusted.exists(path)
+    return { "chunk": "", "offset": 0 }
+  end
+  let body = Trusted.read(path) rescue ""
+  let size = body.length
+  let start = offset
+  if start == nil or start < 0
+    start = 0
+  end
+  if start > size
+    start = 0
+  end
+  if start == size
+    return { "chunk": "", "offset": size }
+  end
+  { "chunk": body.substring(start, size), "offset": size }
+end
+
+# Plain-data payload for the WS run-stream handler. Returns:
+#   { "event": String,             # "snapshot" | "delta"
+#     "log_chunk": String,         # bytes appended past `offset`
+#     "log_offset": Int,           # new client cursor
+#     "status": Hash | nil,        # latest status row, same shape as run_current_status
+#     "pr_url": String | nil,
+#     "todos": Array,              # latest TodoWrite payload
+#     "terminal": Bool }           # done:/failed: status reached
+# Caller (the controller's WS handler) layers the rendered HTML
+# partials on top, JSON-stringifies, and returns `{ "send": ... }`.
+# Splitting the data layer out keeps it testable without spinning up a
+# WS client or loading controllers into the spec harness.
+fn run_stream_payload(repo, slug, event_type, offset)
+  let cursor = offset
+  if cursor == nil or cursor < 0
+    cursor = 0
+  end
+  let status = run_current_status(repo, slug)
+  let token = status == nil ? nil : status["status"]
+  let terminal = token != nil and (token.starts_with("done:") or token.starts_with("failed:"))
+  let delta = run_log_delta(repo, slug, cursor)
+  {
+    "event":      event_type == "connect" ? "snapshot" : "delta",
+    "log_chunk":  delta["chunk"],
+    "log_offset": delta["offset"],
+    "status":     status,
+    "pr_url":     run_pr_url(repo, slug),
+    "todos":      run_latest_todos(repo, slug),
+    "terminal":   terminal
+  }
+end
+
 # Path to the per-task raw JSON-lines transcript. The .log next to it is
 # the human-rendered view (post-`_stream-format.jq`); this is the source.
 fn run_log_jsonl_path(repo, slug)
@@ -208,19 +277,20 @@ fn run_latest_todos(repo, slug)
   end
   let lines = body.split("\n")
   let latest = []
-  let i = 0
-  while i < lines.length
+  let i = lines.length - 1
+  while i >= 0
     let line = lines[i]
-    if line != ""
+    if line != "" and line.contains("\"todo")
       let obj = JSON.parse(line) rescue nil
       if obj != nil
         let todos = _extract_todos_from_event(obj)
         if todos != nil
           latest = todos
+          i = -1
         end
       end
     end
-    i = i + 1
+    i = i - 1
   end
   latest
 end

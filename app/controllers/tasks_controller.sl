@@ -306,12 +306,21 @@ fn show(req)
   if task == nil
     return {"status": 404, "body": "Task not found: " + req["params"]["slug"]}
   end
+  # Pre-compute the model-picker locals for todo tasks so the Queue and
+  # Save forms can let the user pick a model before enqueuing. View
+  # scope can't resolve Plan.X, so the partitioning has to happen here.
+  let default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+  let picker_current = (task.model ?? "") == "" ? default_model : task.model
+  let picker = plan_model_picker_data(picker_current)
   render("tasks/show", {
     "title": task.slug,
     "project": project,
     "task": task,
     "branch_info": _branch_info_for(task, project),
     "can_commit_push": _can_commit_push(task, project),
+    "default_plan_model": default_model,
+    "claude_options":     picker["claude_options"],
+    "opencode_options":   picker["opencode_options"],
     "theme": Setting.current_theme()
   })
 end
@@ -554,10 +563,21 @@ fn save(req)
   if task.status != "todo"
     return {"status": 422, "body": "Can only edit tasks in todo (current: " + task.status + ")"}
   end
-  task.body_md = req["form"]["body_md"] ?? ""
-  let title = (req["form"]["title"] ?? "").trim()
+  # Read via `req["all"]` (route + query + form + JSON merged) so the
+  # same code path works for production htmx form posts and the test
+  # client (which sends JSON).
+  let form = req["all"] ?? {}
+  task.body_md = form["body_md"] ?? ""
+  let title = (form["title"] ?? "").trim()
   if title != ""
     task.title = title
+  end
+  # Persist the model picker choice when the form carries one — lets the
+  # user pre-save a model before clicking Queue. Skipped when absent so
+  # callers that POST a partial form don't clobber an existing choice.
+  let raw_model = (form["plan_model"] ?? "").trim()
+  if raw_model != ""
+    task.model = _stitched_plan_model(form)
   end
   task.save()
   if task._errors
@@ -579,6 +599,18 @@ fn queue(req)
   let task = Task.find_by_slug(project["name"], req["params"]["slug"])
   if task == nil
     return {"status": 404, "body": "Task not found"}
+  end
+  # Pick-model-and-queue in one step: when the Queue form posts a
+  # `plan_model` field, persist it before the limit check so the
+  # effective-agent budget is computed against the chosen model.
+  let form = req["all"] ?? {}
+  let queue_model = (form["plan_model"] ?? "").trim()
+  if queue_model != ""
+    task.model = _stitched_plan_model(form)
+    task.save()
+    if task._errors
+      return {"status": 422, "body": "Save failed"}
+    end
   end
   let denied = _queue_limit_denial(task)
   if denied != nil
@@ -645,6 +677,55 @@ fn plan(req)
       "prompt":           notes
     })
   }
+end
+
+# WebSocket handler for the live plan-task agent transcript.
+#
+# Mirrors `runs#stream`: client opens the socket, sends `tick` frames
+# with its byte cursor, server replies with `delta` frames carrying the
+# new bytes since that cursor plus a re-rendered status + question
+# fragment. On a terminal status (done / failed) we set `reload: true`
+# so the client re-fetches `/tasks/new?plan_id=...`, letting the
+# controller render the planned-body view in place of #form-stage.
+#
+# Suppression around the awaiting_question state is enforced on the
+# client side (it stops sending ticks while the question card is up,
+# so the agent's pollAnswer loop never races the user's click) — but
+# we also defensively don't push log bytes when `has_question` is true.
+fn plan_stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let plan_id = (parsed["plan_id"] ?? "").trim()
+  let project_name = (parsed["project"] ?? "").trim()
+  let project = find_project(project_name) rescue nil
+  if project == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown project", "terminal": true }) }
+  end
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = plan_stream_payload(plan_id, frame_kind, offset)
+  if data["event"] == "error"
+    return { "send": JSON.stringify(data) }
+  end
+  let pq = data["pending_question"]
+  data["status_html"] = render_partial("tasks/plan_status", {
+    "plan_id":          plan_id,
+    "status":           data["status"],
+    "pending_question": pq
+  })
+  data["question_html"] = render_partial("tasks/plan_question", {
+    "project":          project,
+    "plan_id":          plan_id,
+    "pending_question": pq
+  })
+  { "send": JSON.stringify(data) }
 end
 
 # HTMX poll endpoint for the in-flight plan agent. Returns ONLY the
@@ -955,27 +1036,10 @@ fn _stitched_plan_model(form)
   return _allow_plan_model(base)
 end
 
-# Read the DB-backed state for a plan_id. Returns { status, log, body,
-# pending_question, model, prompt }. body is read only when status=="done".
-fn read_plan_state(plan_id)
-  let plan = Plan.find_by_plan_id(plan_id)
-  if plan == nil
-    return {
-      "status":           "unknown",
-      "log":              "",
-      "body":             "",
-      "pending_question": nil,
-      "model":            "claude-sonnet-4-6",
-      "prompt":           "" }
-  end
-  {
-    "status":           plan.effective_status,
-    "log":              plan.log ?? "",
-    "body":             plan.body ?? "",
-    "pending_question": plan.pending_question,
-    "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
-    "prompt":           plan.prompt ?? "" }
-end
+# `read_plan_state(plan_id)` lives in `app/models/plan.sl` so the WS
+# stream handlers and the spec suite can both call it without going
+# through HTTP. This module reaches for it as a free-standing function
+# (auto-loaded with the model file at server boot).
 
 fn archive(req)
   let project = find_project(req["params"]["name"])
