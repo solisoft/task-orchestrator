@@ -83,12 +83,12 @@ end
 
 # Generate an HTML link
 def link_to(text: String, url: String) -> String
-    return "<a href=\"" + html_escape(_safe_link_url(url)) + "\">" + html_escape(text) + "</a>"
+    return "<a href=\"" + h(_safe_link_url(url)) + "\">" + h(text) + "</a>"
 end
 
 # Generate an HTML link with CSS class
 def link_to_class(text: String, url: String, css_class: String) -> String
-    return "<a href=\"" + html_escape(_safe_link_url(url)) + "\" class=\"" + html_escape(css_class) + "\">" + html_escape(text) + "</a>"
+    return "<a href=\"" + h(_safe_link_url(url)) + "\" class=\"" + h(css_class) + "\">" + h(text) + "</a>"
 end
 
 # Pluralize a word based on count

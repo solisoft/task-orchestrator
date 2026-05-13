@@ -1,3 +1,9 @@
+import { find_project, task_branch_name, task_branch_exists } from "../helpers/model_exports.sl"
+import { run_worktree_path, project_main_branch, task_branch_merged } from "../helpers/model_exports.sl"
+import { run_worktree_exists, merge_task_branch, project_current_branch } from "../helpers/model_exports.sl"
+import { commit_and_push, clear_run_state, pr_merged } from "../helpers/model_exports.sl"
+import { task_worktree_branch_exists, plan_write_notes } from "../helpers/run_helper.sl"
+
 # Task viewer + queue/save/new actions. All persistence goes through
 # `Task < Model` (solidb-backed). The `.md` files in `tasks/<status>/`
 # are no longer the source of truth — they're historical artefacts.
@@ -266,7 +272,8 @@ fn _branch_info_for(task, project)
   let project_path = project["path"]
   let exists_in_project = task_branch_exists(project_path, task.slug)
   let wt_path = run_worktree_path(project["name"], task.slug)
-  let exists_in_worktree = Trusted.is_dir(wt_path) and task_worktree_branch_exists(project["name"], task.slug)
+  let wt_exists = run_worktree_exists(project["name"], task.slug)
+  let exists_in_worktree = wt_exists and task_worktree_branch_exists(project["name"], task.slug)
   let exists = exists_in_project or exists_in_worktree
   {
     "name":   branch_name,
@@ -787,7 +794,7 @@ fn spawn_plan_agent(notes, model, project_path)
   let nonce = str(DateTime.now().to_unix() rescue 0)
   let plan_id = "plan-" + nonce
   let notes_path = "/tmp/plan-task-" + nonce + ".md"
-  Trusted.write(notes_path, notes)
+  plan_write_notes(notes_path, notes)
   let project = ""
   if project_path != nil and project_path != ""
     let segs = project_path.split("/")
@@ -919,17 +926,6 @@ fn unarchive(req)
     return {"status": 422, "body": "Save failed"}
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
-end
-
-fn read_last_status(path)
-  let txt = (Trusted.read(path) rescue "").trim()
-  if txt == ""
-    return "starting"
-  end
-  let lines = txt.split("\n")
-  let last_line = lines[lines.length - 1].trim()
-  let parts = last_line.split("\t")
-  parts[parts.length - 1]
 end
 
 # Returns nil if the task is within its daily AND weekly cap for the
