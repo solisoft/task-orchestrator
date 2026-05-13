@@ -1,7 +1,3 @@
-import { find_project, run_current_status, run_pr_url } from "../helpers/model_exports.sl"
-import { run_log_tail, run_latest_todos, run_indicator } from "../helpers/model_exports.sl"
-import { run_worktree_exists, run_worktree_path } from "../helpers/model_exports.sl"
-
 # Live agent-run viewer. The HTML page (GET) is the chrome; the
 # `/log` endpoint (GET, HTMX-target) returns just the tail fragment so
 # polling is cheap and the surrounding page doesn't redraw.

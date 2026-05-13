@@ -1,9 +1,3 @@
-import { find_project, task_branch_name, task_branch_exists } from "../helpers/model_exports.sl"
-import { run_worktree_path, project_main_branch, task_branch_merged } from "../helpers/model_exports.sl"
-import { run_worktree_exists, merge_task_branch, project_current_branch } from "../helpers/model_exports.sl"
-import { commit_and_push, clear_run_state, pr_merged } from "../helpers/model_exports.sl"
-import { task_worktree_branch_exists, plan_write_notes } from "../helpers/run_helper.sl"
-
 # Task viewer + queue/save/new actions. All persistence goes through
 # `Task < Model` (solidb-backed). The `.md` files in `tasks/<status>/`
 # are no longer the source of truth — they're historical artefacts.
@@ -31,54 +25,110 @@ fn new(req)
       end
     end
   end
+  # `current` for the picker depends on which stage the view renders:
+  #   - plan_state done → planned_body partial preselects state["model"]
+  #   - otherwise        → fresh form preselects the global default
+  # `Plan.filter_allowed` always keeps `current` in the option list, so a
+  # previously persisted choice never silently disappears even if it's
+  # no longer on the allowlist.
+  let default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+  let picker_current = (plan_state != nil and plan_state["status"] == "done")
+                       ? (plan_state["model"] ?? default_model)
+                       : default_model
+  let picker = plan_model_picker_data(picker_current)
   render("tasks/new", {
-    "title":           "New task — " + project["name"],
-    "project":         project,
-    "task":            null,
-    "plan_id":         plan_id == "" ? nil : plan_id,
-    "plan_state":      plan_state,
-    "plan_title":      plan_title,
-    "opencode_models": list_opencode_models(),
-    "theme":           Setting.current_theme()
+    "title":              "New task — " + project["name"],
+    "project":            project,
+    "task":               null,
+    "plan_id":            plan_id == "" ? nil : plan_id,
+    "plan_state":         plan_state,
+    "plan_title":         plan_title,
+    "default_plan_model": default_model,
+    "claude_options":     picker["claude_options"],
+    "opencode_options":   picker["opencode_options"],
+    "theme":              Setting.current_theme()
   })
 end
 
 # Pre-compute the locals the `features/plan_model_select` partial needs.
-# View templates can't resolve model classes (`Plan` reads as `null`
-# from template scope), so the Claude + opencode lists are filtered
-# through the user's `allowed_models` allowlist here and threaded into
-# render() as `claude_options` / `opencode_options`. `current` is always
-# kept in the output so a persisted choice never silently disappears.
-# Returns:
-#   {
-#     "claude_options":   [{ "id": ..., "label": ... }, ...],
-#     "opencode_options": [...],
-#     "opencode_all":     [...]   # full unfiltered list; the settings
-#                                 # allowlist panel renders one checkbox
-#                                 # per entry here, ignoring the filter.
-#   }
+# Built purely from the DB allowlist — never shells out to opencode.
+# View templates can't resolve model classes, so the partitioning into
+# Claude vs opencode happens here and is threaded into render() as
+# `claude_options` / `opencode_options`. The settings page is the only
+# caller that needs the full unfiltered opencode universe; it calls
+# `list_opencode_models()` directly to render the allowlist panel.
 fn plan_model_picker_data(current)
-  let opencode_all = list_opencode_models()
-  let labels       = Plan.claude_model_labels()
-  let claude_ids   = Plan.filter_allowed(Plan.claude_model_ids(), current)
-  let claude_opts  = []
+  let allow      = Plan.allowed_model_ids()
+  let claude_all = Plan.claude_model_ids()
+  let labels     = Plan.claude_model_labels()
+  let claude_set = {}
+  for c in claude_all
+    claude_set[c] = true
+  end
+  # Partition the allowlist into Claude vs opencode. Anything that isn't
+  # a known Claude id is treated as an opencode "provider/model[:variant]"
+  # entry — `Plan.is_allowed_model` already gates what reaches the DB.
+  let claude_ids   = []
+  let opencode_ids = []
+  for id in allow
+    if claude_set[id] == true
+      claude_ids.push(id)
+    else
+      opencode_ids.push(id)
+    end
+  end
+  # Empty allowlist (= "no filter applied") falls back to the canonical
+  # Claude list so a fresh DB still has a usable picker. We deliberately
+  # don't seed opencode here — that's a settings-page-only path.
+  if allow.length() == 0
+    claude_ids = claude_all
+  end
+  # Preserve a persisted `current` that's no longer on the allowlist so
+  # the existing choice stays visible in the dropdown.
+  let cur = (current ?? "").trim()
+  if cur != ""
+    let seen = false
+    for c in claude_ids
+      if c == cur
+        seen = true
+      end
+    end
+    for o in opencode_ids
+      if o == cur
+        seen = true
+      end
+    end
+    if not seen
+      if claude_set[cur] == true
+        claude_ids.push(cur)
+      else
+        opencode_ids.push(cur)
+      end
+    end
+  end
+  let claude_opts = []
   for id in claude_ids
     claude_opts.push({ "id": id, "label": labels[id] ?? id })
   end
   {
     "claude_options":   claude_opts,
-    "opencode_options": Plan.filter_allowed(opencode_all, current),
-    "opencode_all":     opencode_all
+    "opencode_options": opencode_ids
   }
 end
 
 # Shell out to `opencode models`, return the (possibly empty) list of
-# `provider/model` strings. We do this on every page load so the
-# dropdown reflects whatever opencode currently has configured —
-# providers come and go faster than we want to redeploy.
-# Failures (binary missing, no credentials) silently degrade to an
-# empty list, which the view renders as "no opencode optgroup".
+# `provider/model` strings. Cached in the Setting table for 5 minutes so
+# we don't pay the shell exec on every page load. The cache reflects
+# whatever opencode currently has configured — providers come and go,
+# but not faster than the TTL.
 fn list_opencode_models()
+  let cached = Setting.get_or("opencode_models_cache", nil)
+  if cached != nil
+    let age = (cached["_cached_at"] ?? 0)
+    if DateTime.now().to_unix() - age < 300
+      return cached["models"] ?? []
+    end
+  end
   let res = System.run_sync(["opencode", "models"]) rescue nil
   if res == nil or res["exit_code"] != 0
     return []
@@ -87,13 +137,11 @@ fn list_opencode_models()
   let out = []
   for line in lines
     let s = line.trim()
-    # Shape-validate every line before we let it touch the form: the
-    # value reaches a shell command line via `spawn_plan_agent`, so
-    # nothing past this regex should ever ship to bash.
     if _looks_like_opencode_model(s)
       out.push(s)
     end
   end
+  Setting.set("opencode_models_cache", { "_cached_at": DateTime.now().to_unix(), "models": out })
   out
 end
 
@@ -601,7 +649,8 @@ fn plan_log(req)
   let plan_id = req["params"]["plan_id"]
   let state = read_plan_state(plan_id)
   if state["status"] == "done"
-    let title = parse_title_from_body(state["body"])
+    let title  = parse_title_from_body(state["body"])
+    let picker = plan_model_picker_data(state["model"] ?? "")
     return {
       "status": 200,
       "headers": {
@@ -610,12 +659,13 @@ fn plan_log(req)
         "HX-Reswap":    "innerHTML"
       },
       "body": render_partial("tasks/planned_body", {
-        "project":         project,
-        "plan_id":         plan_id,
-        "body":            state["body"],
-        "title":           title,
-        "model":           state["model"],
-        "opencode_models": list_opencode_models()
+        "project":          project,
+        "plan_id":          plan_id,
+        "body":             state["body"],
+        "title":            title,
+        "model":            state["model"],
+        "claude_options":   picker["claude_options"],
+        "opencode_options": picker["opencode_options"]
       })
     }
   end
@@ -776,7 +826,8 @@ fn plan_answer(req)
   # answer raced the agent finishing, retarget to #form-stage so the
   # planned-body view replaces the whole stage.
   if state["status"] == "done"
-    let title = parse_title_from_body(state["body"])
+    let title  = parse_title_from_body(state["body"])
+    let picker = plan_model_picker_data(state["model"] ?? "")
     return {
       "status": 200,
       "headers": {
@@ -785,12 +836,13 @@ fn plan_answer(req)
         "HX-Reswap":    "innerHTML"
       },
       "body": render_partial("tasks/planned_body", {
-        "project":         project,
-        "plan_id":         plan_id,
-        "body":            state["body"],
-        "title":           title,
-        "model":           state["model"],
-        "opencode_models": list_opencode_models()
+        "project":          project,
+        "plan_id":          plan_id,
+        "body":             state["body"],
+        "title":            title,
+        "model":            state["model"],
+        "claude_options":   picker["claude_options"],
+        "opencode_options": picker["opencode_options"]
       })
     }
   end

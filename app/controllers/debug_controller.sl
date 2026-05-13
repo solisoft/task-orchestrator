@@ -1,5 +1,3 @@
-import { run_state_root } from "../helpers/model_exports.sl"
-
 fn comments_probe(req)
   let lines = []
   lines.push("=== COMMENTS ===")

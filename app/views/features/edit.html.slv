@@ -23,7 +23,8 @@
     <%- partial("features/form", {
       "feature":            feature,
       "projects":           projects,
-      "opencode_models":    opencode_models,
+      "claude_options":     claude_options,
+      "opencode_options":   opencode_options,
       "default_plan_model": default_plan_model
     }) %>
   </div>

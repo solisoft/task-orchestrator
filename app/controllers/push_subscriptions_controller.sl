@@ -1,5 +1,3 @@
-import { web_push_public_key } from "../helpers/model_exports.sl"
-
 # PushSubscriptionsController — browser subscribe / unsubscribe + a
 # read-only endpoint the service worker hits to fetch the current
 # VAPID public key.

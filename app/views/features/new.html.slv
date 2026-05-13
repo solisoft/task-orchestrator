@@ -22,7 +22,8 @@
       "feature":            feature,
       "projects":           projects,
       "project":            project,
-      "opencode_models":    opencode_models,
+      "claude_options":     claude_options,
+      "opencode_options":   opencode_options,
       "default_plan_model": default_plan_model
     }) %>
   </div>

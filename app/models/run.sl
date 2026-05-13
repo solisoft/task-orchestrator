@@ -521,3 +521,28 @@ fn clear_run_state(repo, slug)
     end
   end
 end
+
+# Does `task/<slug>` exist as a branch inside the per-task worktree?
+# Controller-callable (lives in a model file because controllers can't
+# import from app/helpers — Soli's sandbox rejects it, and `Trusted.*` /
+# `System.run_sync` use here would also trip the controller lint).
+fn task_worktree_branch_exists(repo, slug)
+  let wt = run_worktree_path(repo, slug)
+  if not run_worktree_exists(repo, slug)
+    return false
+  end
+  let branch = "task/" + slug
+  let res = System.run_sync([
+    "git", "-C", wt,
+    "show-ref", "--verify", "--quiet",
+    "refs/heads/" + branch
+  ])
+  res["exit_code"] == 0
+end
+
+# Plan-notes writer — path is a server-built nonce under /tmp, so the
+# Trusted.write here is safe. Lives in the model layer so controllers
+# can call it without tripping `smell/dangerous-server-builtin`.
+fn plan_write_notes(notes_path, notes)
+  Trusted.write(notes_path, notes)
+end

@@ -60,7 +60,6 @@ fn _picker_locals(feature)
   {
     "claude_options":     pmd["claude_options"],
     "opencode_options":   pmd["opencode_options"],
-    "opencode_models":    pmd["opencode_all"],
     "default_plan_model": _default_plan_model()
   }
 end
@@ -104,7 +103,6 @@ fn show(req)
     "current_user": req["current_user"],
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
-    "opencode_models":    _pkr["opencode_models"],
     "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
@@ -179,7 +177,6 @@ fn new(req)
     "project": project,
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
-    "opencode_models":    _pkr["opencode_models"],
     "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
@@ -214,8 +211,7 @@ fn create(req)
       "projects": list_projects() rescue [],
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
-      "opencode_models":    _pkr["opencode_models"],
-      "default_plan_model": _pkr["default_plan_model"],
+        "default_plan_model": _pkr["default_plan_model"],
       "theme": Setting.current_theme()
     })
   end
@@ -235,7 +231,6 @@ fn edit(req)
     "projects": list_projects() rescue [],
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
-    "opencode_models":    _pkr["opencode_models"],
     "default_plan_model": _pkr["default_plan_model"],
     "theme": Setting.current_theme()
   })
@@ -267,8 +262,7 @@ fn update(req)
       "projects": list_projects() rescue [],
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
-      "opencode_models":    _pkr["opencode_models"],
-      "default_plan_model": _pkr["default_plan_model"],
+        "default_plan_model": _pkr["default_plan_model"],
       "theme": Setting.current_theme()
     })
   end
