@@ -1258,3 +1258,126 @@ describe("TasksController#show tags badge", fn()
     assert_eq(reloaded.tags[0], "follow_up")
   end)
 end)
+
+# Create an empty directory at the EXACT path `run_worktree_path` would
+# compute for ("proj", slug). The controller's `run_worktree_exists`
+# uses the same fn, so the existence check passes in tests regardless of
+# whether `TASK_ORCH_WORKTREES` is exported in the runner's env.
+def _tq_setup_run_worktree(slug)
+  let wt = run_worktree_path("proj", slug)
+  System.run_sync(["mkdir", "-p", wt])
+  return wt
+end
+
+describe("TasksController#code_review", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("redirects to the run page when the worktree exists and the task is in review", fn()
+    let slug = "review-me"
+    _tq_setup_run_worktree(slug)
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "Review me",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/code-review", {
+      "plan_model":   "claude-sonnet-4-6",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    # The redirect lands on the run page so the user can watch the live
+    # transcript of the review agent.
+    assert_contains(res_header(response, "Location") ?? "",
+                    "/projects/proj/tasks/" + slug + "/run")
+    # Tear down so a follow-up test in this file doesn't see a stale dir.
+    System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
+  end)
+
+  test("rejects with 422 when the task is not in review status", fn()
+    Task.create({
+      "_key":    "proj--cr-not-review",
+      "project": "proj",
+      "slug":    "cr-not-review",
+      "title":   "Not in review",
+      "status":  "todo"
+    })
+    let response = post("/projects/proj/tasks/cr-not-review/code-review", {
+      "plan_model":   "claude-sonnet-4-6",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available for review tasks")
+  end)
+
+  test("rejects with 422 when the worktree does not exist", fn()
+    # No `_tq_setup_worktree_repo` call — the row exists but the
+    # scratch worktree was never created (or was cleaned up).
+    Task.create({
+      "_key":    "proj--cr-no-tree",
+      "project": "proj",
+      "slug":    "cr-no-tree",
+      "title":   "No worktree",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/cr-no-tree/code-review", {
+      "plan_model":   "claude-sonnet-4-6",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "worktree not found")
+  end)
+end)
+
+describe("TasksController#show code-review panel", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+  end)
+
+  test("renders the code-review form when the task is in review", fn()
+    Task.create({
+      "_key":    "proj--cr-panel",
+      "project": "proj",
+      "slug":    "cr-panel",
+      "title":   "CR panel",
+      "status":  "review"
+    })
+    let response = get("/projects/proj/tasks/cr-panel")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "Run code review")
+    assert_contains(body, "/projects/proj/tasks/cr-panel/code-review")
+  end)
+
+  test("omits the code-review form for non-review tasks", fn()
+    let kept_statuses = ["todo", "queued", "inprogress", "done", "archived", "failed"]
+    for status in kept_statuses
+      let slug = "cr-omit-" + status
+      Task.delete_all()
+      Task.create({
+        "_key":    "proj--" + slug,
+        "project": "proj",
+        "slug":    slug,
+        "title":   "CR omit " + status,
+        "status":  status
+      })
+      let response = get("/projects/proj/tasks/" + slug)
+      assert_eq(res_status(response), 200)
+      let body = res_body(response)
+      assert_not(body.contains("Run code review"))
+    end
+  end)
+end)

@@ -114,6 +114,16 @@
       </div>
     <% end %>
 
+    <% if task.status == "review" %>
+      <%- partial("tasks/code_review", {
+        "project":            project,
+        "task":               task,
+        "default_plan_model": default_plan_model,
+        "claude_options":     claude_options,
+        "opencode_options":   opencode_options
+      }) %>
+    <% end %>
+
     <% if branch_info != nil %>
       <div class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
         <div class="flex items-center justify-between flex-wrap gap-3">
