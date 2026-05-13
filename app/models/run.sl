@@ -446,7 +446,9 @@ end
 # squash/rebased into main still reads as merged when the tip's
 # commits are reachable. Returns false if either ref is missing,
 # or if the branch tip equals the main tip (just-created branch
-# with no work yet — trivially an ancestor, but nothing was merged).
+# with no work yet — trivially an ancestor, but nothing was merged),
+# or if merge-base(branch, main) == branch tip (branch created from
+# an ancestor of main but never advanced past it — nothing merged).
 fn task_branch_merged(project_path, slug)
   let main = project_main_branch(project_path)
   if not task_branch_exists(project_path, slug)
@@ -462,7 +464,18 @@ fn task_branch_merged(project_path, slug)
     "merge-base", "--is-ancestor",
     task_branch_name(slug), main
   ])
-  res["exit_code"] == 0
+  if res["exit_code"] != 0
+    return false
+  end
+  let merge_base_res = System.run_sync([
+    "git", "-C", project_path,
+    "merge-base",
+    task_branch_name(slug), main
+  ])
+  if merge_base_res["exit_code"] != 0
+    return false
+  end
+  (merge_base_res["stdout"] ?? "").trim() != branch_sha
 end
 
 fn _git_rev_parse(project_path, ref)
