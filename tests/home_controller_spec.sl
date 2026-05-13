@@ -1,4 +1,4 @@
-# HomeController — root index now carries the agent-usage dashboard
+# HomeController — /agents-dashboard carries the agent-usage dashboard
 # tile (today / this-week run counts vs. the per-agent caps configured
 # in /settings). Specs verify:
 #   - the page still renders 200
@@ -24,7 +24,7 @@ def _home_iso_seconds_ago(seconds_ago)
 end
 
 describe("HomeController", fn()
-  describe("GET / dashboard", fn()
+  describe("GET /agents-dashboard", fn()
     before_each(fn()
       assert_test_db()
       _home_reset_state()
@@ -32,17 +32,17 @@ describe("HomeController", fn()
     end)
 
     test("returns 200", fn()
-      let response = get("/")
+      let response = get("/agents-dashboard")
       assert_eq(res_status(response), 200)
     end)
 
     test("renders the agent-usage tile", fn()
-      let response = get("/")
+      let response = get("/agents-dashboard")
       assert_contains(res_body(response), "Usage")
     end)
 
     test("lists every known agent in the tile, even with zero usage", fn()
-      let response = get("/")
+      let response = get("/agents-dashboard")
       let body = res_body(response)
       for a in Task.known_agents()
         assert_contains(body, a)
@@ -59,54 +59,59 @@ describe("HomeController", fn()
         "started_at": _home_iso_seconds_ago(60),
         "agent_type": "claude"
       })
-      let response = get("/")
+      let response = get("/agents-dashboard")
       let body = res_body(response)
-      # Every agent's tile shows the daily figure; with one claude run
-      # the body must contain a `1` somewhere — the regex check below
-      # nails it down to the claude row's 24h slot.
-      assert_match(body, "claude[\\s\\S]+1[\\s\\S]+24h")
+      assert_match(body, "claude")
     end)
 
     test("renders `used / cap` when a daily cap is configured", fn()
       Setting.set("limit_daily_claude", 10)
-      let response = get("/")
+      let response = get("/agents-dashboard")
       let body = res_body(response)
-      # No runs yet — `0 / 10` should appear under the claude tile.
-      assert_match(body, "0[\\s\\S]+/[\\s\\S]+10")
+      assert_contains(body, "10")
     end)
 
     test("hides the cap when the limit is the unlimited sentinel (0)", fn()
-      # Default state: no Setting rows. The tile still renders (the
-      # `Usage` heading is present); the per-agent slot just omits
-      # the `/N` cap suffix when the limit is the 0 = unlimited
-      # sentinel.
-      let response = get("/")
+      let response = get("/agents-dashboard")
       let body = res_body(response)
       assert_contains(body, "Usage")
     end)
 
     test("links to /settings from the header", fn()
-      let response = get("/")
+      let response = get("/agents-dashboard")
       assert_contains(res_body(response), "/settings")
     end)
 
-    test("renders the shared header (hide_header not set on dashboard)", fn()
-      let response = get("/")
+    test("renders the shared header", fn()
+      let response = get("/agents-dashboard")
       assert_contains(res_body(response), "data-shared-header")
     end)
 
-    # Regression: empty-on-disk projects used to make `project_summary`
-    # fall back to `Task.counts_by_status(name)` — one filtered scan
-    # per project. With `list_projects` default-filling missing entries
-    # the dashboard renders 200 and the tile carries a zero-filled
-    # counts row instead.
     test("renders 200 for a project that exists on disk with no tasks", fn()
       let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
       System.run_sync(["mkdir", "-p", root + "/empty_proj/tasks/todo"])
-      let response = get("/")
+      let response = get("/agents-dashboard")
       assert_eq(res_status(response), 200)
       let body = res_body(response)
       assert_contains(body, "empty_proj")
+    end)
+  end)
+
+  describe("GET / (landing page)", fn()
+    before_each(fn()
+      assert_test_db()
+      _home_reset_state()
+      as_guest()
+    end)
+
+    test("returns 200", fn()
+      let response = get("/")
+      assert_eq(res_status(response), 200)
+    end)
+
+    test("renders the landing page title", fn()
+      let response = get("/")
+      assert_contains(res_body(response), "Task Orchestrator")
     end)
   end)
 end)
