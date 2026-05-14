@@ -6,7 +6,7 @@
   #
   # Locals:
   #   - project, task                     — current row context
-  #   - default_plan_model                — fallback when task.model is unset
+  #   - default_review_model              — fallback when task.model is unset
   #   - claude_options / opencode_options — already filtered by the
   #                                         user's allowlist
 %>
@@ -18,7 +18,7 @@
         <label for="plan_model" class="text-right">Model</label>
         <%- partial("features/plan_model_select", {
           "name":             "plan_model",
-          "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
+          "current":          (task.model ?? "") == "" ? default_review_model : task.model,
           "claude_options":   claude_options,
           "opencode_options": opencode_options,
           "include_blank":    false,

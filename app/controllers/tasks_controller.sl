@@ -318,7 +318,8 @@ fn show(req)
     "task": task,
     "branch_info": _branch_info_for(task, project),
     "can_commit_push": _can_commit_push(task, project),
-    "default_plan_model": default_model,
+    "default_plan_model":   default_model,
+    "default_review_model": Plan.default_review_model(),
     "claude_options":     picker["claude_options"],
     "opencode_options":   picker["opencode_options"],
     "theme": Setting.current_theme()

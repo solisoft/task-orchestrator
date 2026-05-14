@@ -116,11 +116,12 @@
 
     <% if task.status == "review" %>
       <%- partial("tasks/code_review", {
-        "project":            project,
-        "task":               task,
-        "default_plan_model": default_plan_model,
-        "claude_options":     claude_options,
-        "opencode_options":   opencode_options
+        "project":              project,
+        "task":                 task,
+        "default_plan_model":   default_plan_model,
+        "default_review_model": default_review_model,
+        "claude_options":       claude_options,
+        "opencode_options":     opencode_options
       }) %>
     <% end %>
 
