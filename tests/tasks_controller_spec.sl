@@ -1362,6 +1362,61 @@ describe("TasksController#show code-review panel", fn()
     assert_contains(body, "/projects/proj/tasks/cr-panel/code-review")
   end)
 
+  test("code-review form defaults to default_review_model when task.model is unset", fn()
+    Setting.set("review_model", "claude-haiku-4-5-20251001")
+    Setting.set("plan_model", "claude-sonnet-4-6")
+    Task.create({
+      "_key":    "proj--cr-review-default",
+      "project": "proj",
+      "slug":    "cr-review-default",
+      "title":   "CR review default",
+      "status":  "review"
+    })
+    let response = get("/projects/proj/tasks/cr-review-default")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # The picker should pre-select the review_model default, not the
+    # plan_model default, when the task has no per-task model.
+    assert_contains(body, "value=\"claude-haiku-4-5-20251001\" selected")
+  end)
+
+  test("code-review form keeps task.model when it is set", fn()
+    Task.create({
+      "_key":    "proj--cr-task-model",
+      "project": "proj",
+      "slug":    "cr-task-model",
+      "title":   "CR task model",
+      "model":   "claude-opus-4-7",
+      "status":  "review"
+    })
+    let response = get("/projects/proj/tasks/cr-task-model")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "value=\"claude-opus-4-7\" selected")
+  end)
+
+  test("code-review action uses submitted plan_model when present", fn()
+    let slug = "cr-submitted-model"
+    _tq_setup_run_worktree(slug)
+    Task.create({
+      "_key":    "proj--" + slug,
+      "project": "proj",
+      "slug":    slug,
+      "title":   "CR submitted model",
+      "status":  "review",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = post("/projects/proj/tasks/" + slug + "/code-review", {
+      "plan_model":   "claude-opus-4-7",
+      "plan_variant": "default"
+    })
+    assert_eq(res_status(response), 302)
+    # Redirects to run page — model was accepted.
+    assert_contains(res_header(response, "Location") ?? "",
+                    "/projects/proj/tasks/" + slug + "/run")
+    System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
+  end)
+
   test("omits the code-review form for non-review tasks", fn()
     let kept_statuses = ["todo", "queued", "inprogress", "done", "archived", "failed"]
     for status in kept_statuses

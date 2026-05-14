@@ -2,8 +2,9 @@
 # Backed by the `Setting` key/value model.
 
 fn show(req)
-  let current_plan_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
-  let pmd                = plan_model_picker_data(current_plan_model)
+  let current_plan_model   = Setting.get_or("plan_model", "claude-sonnet-4-6")
+  let current_review_model = Plan.default_review_model()
+  let pmd                  = plan_model_picker_data(current_plan_model)
   # Settings is the only page that needs the full opencode universe (to
   # render the allowlist checkbox panel). The shell-out is paid here, not
   # in `plan_model_picker_data`, so every other page stays cheap.
@@ -18,6 +19,7 @@ fn show(req)
     "agents_config": _settings_load_agents_config(),
     "limits": _settings_load_limits(),
     "plan_model": current_plan_model,
+    "review_model": current_review_model,
     "claude_options":   pmd["claude_options"],
     "opencode_options": pmd["opencode_options"],
     "opencode_models":  opencode_all,
@@ -67,6 +69,19 @@ fn update(req)
     # `allowed_models` allowlist (no-op when the allowlist is empty).
     if resolved == candidate and Plan.is_allowed_model(resolved)
       Setting.set("plan_model", resolved)
+    end
+  end
+  let raw_review_model = (form["review_model"] ?? "").trim()
+  if raw_review_model != ""
+    let variant = (form["review_variant"] ?? "").trim()
+    let candidate = raw_review_model
+    let is_opencode = raw_review_model.index_of("/") > 0
+    if is_opencode and variant != "" and variant != "default" and _matches_charset(variant, "variant")
+      candidate = raw_review_model + ":" + variant
+    end
+    let resolved = Plan.allow_plan_model(candidate)
+    if resolved == candidate and Plan.is_allowed_model(resolved)
+      Setting.set("review_model", resolved)
     end
   end
   for a in Task.known_agents()

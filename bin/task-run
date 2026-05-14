@@ -488,5 +488,17 @@ iso=$(date -Iseconds)
 db_update "$(jq -n --arg iso "$iso" --arg url "$pr_url" \
   '{status: "review", pr_url: $url, finished_at: $iso}')"
 printf '%s\n' "$pr_url" > "$state_dir/$slug.pr"
+
+# Auto-spawn a background code review using the review_model from
+# settings so the reviewer runs independently of the task-runner.
+# Falls back to a fast/cheap default when no review_model is saved.
+review_model=$(curl -s -u "$USER:$PASS" \
+  "$HOST/_api/database/$DB/document/settings/review_model" 2>/dev/null \
+  | jq -r '.value // "claude-haiku-4-5-20251001"') || review_model="claude-haiku-4-5-20251001"
+review_id=$(date +%s)
+log "spawning background code review id=$review_id model=$review_model"
+nohup "$script_dir/review-run" "$repo_name" "$slug" "$review_model" "$review_id" \
+  >/dev/null 2>&1 & disown
+
 write_status "done:$pr_url"
 log "DONE — PR: $pr_url"
