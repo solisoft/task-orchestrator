@@ -1,18 +1,18 @@
 ---
 name: review-task
-description: Review the uncommitted fix in this worktree against tasks/todo/<slug>.md, then commit (or stop with a Rejected verdict). Use after /do-task — the orchestrator runs us in the same worktree to verify and commit the change.
+description: Review the uncommitted fix in this worktree against tasks/todo/<slug>.md, then convert draft PR to regular PR (or stop on Rejected). Use after /do-task — the orchestrator runs us in the same worktree to verify and update the PR.
 ---
 
 # review-task
 
-You are running inside the same worktree where `/do-task` just implemented a fix. The orchestrator's DB row tracks the task's lifecycle; your job is the **code review** of the diff and, if approved, the **commit**.
+You are running inside the same worktree where `/do-task` just implemented a fix and created a draft PR. The orchestrator's DB row tracks the task's lifecycle; your job is the **code review** of the diff and, if approved, converting the draft PR to regular.
 
 ## Inputs
 
 - **Argument**: the task slug. The spec lives at `tasks/todo/<slug>.md`. If no argument is passed, infer the slug from the single spec md present.
 - **`CLAUDE.md`** describes the project's conventions, verification loop, and (often) commit-message style.
 
-Do **not** move, rename, or delete the spec md. The orchestrator owns it; leave it where it is — but **never commit it** (see Step 5).
+Do **not** move, rename, or delete the spec md. The orchestrator owns it; leave it where it is.
 
 ## Step 1 — Read the spec
 
@@ -25,7 +25,7 @@ In parallel:
 - `git log --oneline -10` (to match the project's commit-message style)
 - `git diff` and `git diff --cached`
 
-The fix is normally **uncommitted** in the working tree (that's how `/do-task` leaves it). If `git status` shows nothing changed, the verdict will likely be **Approved-no-fix-needed** — continue and let Step 4 decide.
+The fix is **committed** in the working tree (that's how `/do-task` leaves it). If `git status` shows nothing changed, the verdict will likely be **Approved-no-fix-needed** — continue and let Step 4 decide.
 
 ## Step 3 — Review
 
@@ -35,7 +35,7 @@ Read the current state of the files referenced in the spec's Location section. F
 2. **Check completeness.** If the spec lists multiple call sites, verify every one was patched. Do **not** broaden scope — only verify what the spec explicitly described.
 3. **Look for regressions.** Read the diff for the touched files in full. Flag: new unsafe paths, swallowed errors, broadened privileges, removed validation, weakened types.
 4. **Check docs (user-facing changes).** If the project's `CLAUDE.md` describes a documentation policy, verify every surface it names was updated.
-5. **Run static checks** as defined in `CLAUDE.md` (lint / typecheck / format / test / coverage). If they fail, report and stop — do not commit broken code.
+5. **Static checks** were already run in do-task. Do not re-run them in review-task — trust the do-task verification results unless you have specific reason to doubt them.
 
 Report findings as a short markdown bullet list:
 - **Verdict:** Approved / Approved-with-notes / Approved-no-fix-needed / Approved-with-followups / Rejected
@@ -44,10 +44,10 @@ Report findings as a short markdown bullet list:
 
 ## Step 4 — Decision
 
-- **Rejected** — Do **not** commit. Report what's missing and stop. The orchestrator will mark the row failed.
-- **Approved-with-notes** — Notes are non-blocking. Continue to Step 5.
-- **Approved-no-fix-needed** — Review concluded the spec is invalid, describes intended behavior, or is won't-fix. Continue to Step 5; if there is no diff, stop without committing — the orchestrator detects "no commit produced" and treats it as a successful no-code-change close.
-- **Approved-with-followups** — Work is deferred. Before Step 5, POST each follow-up as a Task document directly to the solidb `tasks` collection with `"tags": ["follow_up"]`. Do **not** write `.md` files on disk. The orchestrator seeds `.env` into the worktree; read solidb credentials from it:
+- **Rejected** — Do **not** edit the PR. Report what's wrong and stop. The orchestrator will mark the row failed.
+- **Approved-with-notes** — Notes are non-blocking. Continue to Step 4½.
+- **Approved-no-fix-needed** — Review concluded the spec is invalid, describes intended behavior, or is won't-fix. Stop without editing the PR — the orchestrator detects "no action needed" and handles it.
+- **Approved-with-followups** — Work is deferred. Before Step 4½, POST each follow-up as a Task document directly to the solidb `tasks` collection with `"tags": ["follow_up"]`. Do **not** write `.md` files on disk. The orchestrator seeds `.env` into the worktree; read solidb credentials from it:
 
     ```bash
     script_dir=$(dirname "$0")  # or equivalent
@@ -72,51 +72,42 @@ Report findings as a short markdown bullet list:
     code="${resp##*$'\n'}"
     ```
 
-    The slug must be unique within the project — derive it from the follow-up title (lowercased + dashed, same as `unique_slug_for` in the controller). Continue to Step 5.
+    The slug must be unique within the project — derive it from the follow-up title (lowercased + dashed, same as `unique_slug_for` in the controller). Continue to Step 4½.
 
     **Reality check before creating any follow-up.** For every symbol you name in a follow-up's title or Issue (function, method, file path, doc id), `grep` the worktree to confirm it exists OR explicitly frame the follow-up as a feature task ("Add `<X>`...", with rationale). Don't materialize a follow-up referencing a name you can't find. If unsure, drop the follow-up and note the uncertainty in the verdict.
-- **Approved** — Continue to Step 5.
+- **Approved** — Continue to Step 4½.
 
-## Step 5 — Commit
+## Step 4½ — Update PR
 
-Match the project's commit style — read the recent `git log` output and any guidance in `CLAUDE.md`.
-
-Stage everything that belongs to this task:
-- the implementation diff
-
-`git add -A` will sweep up the orchestrator-seeded spec md too, which we do **not** want in the commit. Always run, immediately after staging:
+Find the draft PR created by `do-task` and convert it to a regular PR:
 
 ```bash
-git restore --staged tasks/todo/<slug>.md
+pr_url=$(gh pr list --head "$(git rev-parse --abbrev-ref HEAD)" --json url --jq '.[0].url' 2>/dev/null)
+if [[ -n "$pr_url" ]]; then
+    gh pr edit "$pr_url" --remove-draft
+fi
 ```
 
-(Substitute the actual slug.) This drops the spec from the index while keeping the file on disk. Verify with `git status` that `tasks/todo/<slug>.md` shows as untracked again before committing.
+If no draft PR is found, note it in your summary and continue.
 
-Use a HEREDOC so the message formats correctly. Pick a subject that matches the verdict:
-- **Approved** / **Approved-with-notes** — `fix(...)` / `feat(...)` describing the change.
-- **Approved-no-fix-needed** — `chore(<scope>): close <slug> (won't fix)` or `(invalid)`; the body must explain the decision.
-- **Approved-with-followups** — `chore(<scope>): close <slug> (deferred)`; the body must list the slugs of the follow-up tasks that were created.
+## Step 5 — Report
 
-```bash
-git commit -m "$(cat <<'EOF'
-fix(<scope>): <subject>
+Report findings as a short markdown bullet list:
+- **Verdict:** Approved / Approved-with-notes / Approved-no-fix-needed / Approved-with-followups / Rejected
+- **Coverage:** what was checked
+- **Findings:** issues (each: severity, file:line, what's wrong, suggested follow-up)
+- **PR:** link to the PR (updated or noted as not found)
 
-Closes <slug>.
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
-EOF
-)"
-```
-
-After commit, run `git status` to confirm the working tree is clean (the spec md will still appear excluded; that's expected).
+End with the verdict summary.
 
 ## Constraints
 
 - **Never** use `pkill`, `kill`, `killall`, or any process-killing command.
-- **Never** commit if the verdict is Rejected.
-- **Never** skip hooks (`--no-verify`) or bypass signing. If a pre-commit hook fails, fix the underlying issue and create a new commit.
-- **Never** push. The orchestrator handles push + PR after this skill returns.
+- **Never** edit the PR if the verdict is Rejected.
+- **Never** skip hooks (`--no-verify`) or bypass signing. If a pre-commit hook fails, report and stop.
+- **Never** push. The orchestrator handles push + PR merge after review approves the change.
 - **Never** `git mv` the spec between `tasks/{todo,inprogress,review,done}/`. The DB tracks status; folder-shuffling is the old file-based queue.
 - **Do not** edit the spec md content. If review surfaces follow-ups, write new `tasks/todo/<slug>.md` files instead.
 - Process exactly **one** task per invocation.
-- If `--allow-empty` feels tempting, stop and re-read Step 4 — an Approved-no-fix-needed with no diff means **no commit**, not an empty commit.
+- If `--allow-empty` feels tempting, stop and re-read Step 4 — an Approved-no-fix-needed with no diff means **no PR update**, not an empty commit.
+- Do not run static checks in review-task if they were already run in do-task (trust the do-task verification results).

@@ -1,11 +1,11 @@
 ---
 name: do-task
-description: Implement the fix described in tasks/todo/<slug>.md, run the project's verification loop, and stop without committing. Use when the orchestrator dispatches a task into a fresh worktree and asks you to do the work.
+description: Implement the fix described in tasks/todo/<slug>.md, run the project's verification loop, commit, create a draft PR, and stop. Use when the orchestrator dispatches a task into a fresh worktree and asks you to do the work.
 ---
 
 # do-task
 
-You are running inside a fresh git worktree that the task-orchestrator just created. The DB row owns the task's lifecycle (queued → inprogress → review → done) — your job is the **implementation**, nothing more.
+You are running inside a fresh git worktree that the task-orchestrator just created. The DB row owns the task's lifecycle (queued → inprogress → review → done) — your job is the **implementation + draft PR**, nothing more.
 
 ## Inputs
 
@@ -41,21 +41,59 @@ If verification fails, fix the root cause. **Never** suppress warnings, skip hoo
 
 If a check fails on a pre-existing issue clearly unrelated to your change, note it in your summary and continue — but be conservative about that judgement.
 
-## Step 5 — Stop
+## Step 5 — Commit
 
-Leave all implementation changes **uncommitted** in the working tree. The `review-task` skill, which the orchestrator runs immediately after, is responsible for reviewing the diff and creating the commit. Pre-committing forces an amend or revert if review rejects the fix.
+Stage all implementation changes and commit:
+
+```bash
+git add -A
+git restore --staged tasks/todo/<slug>.md 2>/dev/null || true
+git commit -m "$(cat <<'EOF'
+fix(<scope>): <subject>
+
+Closes <slug>.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
+
+Match the project's commit style from `git log`. Drop the spec md from staging if it was picked up.
+
+## Step 6 — Create draft PR
+
+```bash
+branch=$(git rev-parse --abbrev-ref HEAD)
+origin=${origin:-origin}
+
+resp=$(gh pr create \
+    --head "$branch" \
+    --base main \
+    --title "fix: <slug>" \
+    --body "<!-- task: <slug> -->" \
+    --draft \
+    2>&1)
+```
+
+If the command fails, note the error in your summary and continue without the PR.
+
+## Step 7 — Stop
+
+Leave the working tree clean (committed changes only).
 
 End with a short summary to the user:
 - Which task (slug).
 - What was changed (file list).
 - What was verified (commands run + outcome).
+- Draft PR URL (if created).
 - Any follow-ups dropped as new `tasks/todo/<slug>.md` files.
 
 ## Constraints
 
 - Process exactly **one** task per invocation.
 - **Never** use `pkill`, `kill`, `killall`, or any process-killing command.
-- **Never** commit, push, or skip hooks.
+- **Never** skip hooks (`--no-verify`) or bypass signing.
+- **Never** push. The orchestrator handles push + PR merge after the review approves the change.
 - **Never** edit the spec md content. It's the historical record. Surface follow-ups via new `tasks/todo/<slug>.md` files instead.
 - **Never** `git mv` the spec between `tasks/todo/`, `tasks/inprogress/`, `tasks/review/`, etc. The DB tracks status; folder-shuffling is the old file-based queue.
 - If verification fails and you can't fix it within the scope of the spec, revert your changes (`git restore .`) and report — don't leave a half-done task in the worktree.
