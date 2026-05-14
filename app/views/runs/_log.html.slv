@@ -1,7 +1,7 @@
 <% let token = status == nil ? nil : status["status"] %>
 <% let polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
 <% let todo_list = todos ?? [] %>
-<% let initial_offset = (tail ?? "").length %>
+<% let initial_offset = log_size %>
 
 <div id="run-panel"
   <% if polling %>

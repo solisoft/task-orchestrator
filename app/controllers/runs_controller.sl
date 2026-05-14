@@ -20,6 +20,7 @@ fn show(req)
     "status": run_current_status(project["name"], slug),
     "pr_url": run_pr_url(project["name"], slug),
     "tail": run_log_tail(project["name"], slug, 16384),
+    "log_size": run_log_size(project["name"], slug),
     "todos": run_latest_todos(project["name"], slug),
     "branch_info": _branch_info_for(task, project),
     "theme": Setting.current_theme()
@@ -94,6 +95,7 @@ fn log(req)
       "status": run_current_status(project["name"], slug),
       "pr_url": run_pr_url(project["name"], slug),
       "tail": run_log_tail(project["name"], slug, 16384),
+      "log_size": run_log_size(project["name"], slug),
       "todos": run_latest_todos(project["name"], slug)
     })
   }

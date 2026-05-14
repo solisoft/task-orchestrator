@@ -108,7 +108,8 @@
     this.maxBackoffMs = 8000;
     this.closed = false;
     this.terminal = false;
-    this.suppressed = false; // true while the plan/feature panel is awaiting an answer
+    this.suppressed = false;
+    this.tickWatchdog = null;
     this.firstMessageSent = false;
     this.ws = null;
     this.tickTimer = null;
@@ -170,6 +171,11 @@
     try {
       this.ws.send(JSON.stringify(msg));
       this.firstMessageSent = true;
+      var c = this;
+      c.tickWatchdog = setTimeout(function () {
+        c.clearTickTimer();
+        if (!c.terminal && !c.closed) c.scheduleReconnect();
+      }, c.tickMs * 2);
     } catch (err) {
       // The next onclose will fire and the reconnect timer will handle it.
     }
@@ -187,9 +193,14 @@
       clearTimeout(this.tickTimer);
       this.tickTimer = null;
     }
+    if (this.tickWatchdog) {
+      clearTimeout(this.tickWatchdog);
+      this.tickWatchdog = null;
+    }
   };
 
   Controller.prototype.handleMessage = function (raw) {
+    if (this.tickWatchdog) { clearTimeout(this.tickWatchdog); this.tickWatchdog = null; }
     var msg;
     try { msg = JSON.parse(raw); } catch (e) { return; }
     var ev = msg.event || msg.type;
