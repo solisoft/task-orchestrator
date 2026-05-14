@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# review-run <project> <slug> <model>
+# review-run <project> <slug> <model> <review_id>
 #
 # Runs the /review-task skill in the task's EXISTING worktree to perform
 # a code review of the PR under a user-chosen agent. Unlike bin/task-run
@@ -20,14 +20,15 @@ if [[ -f "$project_root/.env" ]]; then
   set -a; source "$project_root/.env"; set +a
 fi
 
-if [[ $# -ne 3 ]]; then
-  echo "usage: $0 <project> <slug> <model>" >&2
+if [[ $# -ne 4 ]]; then
+  echo "usage: $0 <project> <slug> <model> <review_id>" >&2
   exit 64
 fi
 
 repo_name=$1
 slug=$2
 task_model=$3
+review_id=$4
 
 ROOT=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
 project_path="$ROOT/$repo_name"
@@ -68,7 +69,7 @@ if [[ ! -d "$worktree_dir" ]]; then
   fail "worktree not found: $worktree_dir"
 fi
 
-log "review: worktree=$worktree_dir model=${task_model:-<default claude>}"
+log "review: id=$review_id worktree=$worktree_dir model=${task_model:-<default claude>}"
 
 # Resolve agent kind / variant from the model string. Same shape as
 # bin/task-run and bin/react-run: "provider/model[:variant]" routes

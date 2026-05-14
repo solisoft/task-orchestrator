@@ -146,13 +146,6 @@ class Plan < Model
     Setting.get_or("review_model", "claude-haiku-4-5-20251001")
   end
 
-  # Model ids valid for code review — mirrors the Claude SDK list from
-  # `claude_model_ids`. A separate method keeps the review surface
-  # decoupled from the plan model list.
-  static def review_model_ids()
-    Plan.claude_model_ids()
-  end
-
   # Resolve the plan model id for a feature run. Precedence:
   #   1. form override (`plan_model` + optional `plan_variant`)
   #   2. per-feature `plan_model` field
