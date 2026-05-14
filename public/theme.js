@@ -3,7 +3,8 @@
 
   function readPreferred() {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "light" || saved === "dark") return saved;
+    if (saved === "light" || saved === "dark" || saved.startsWith("custom:"))
+      return saved;
     return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
       ? "light"
       : "dark";

@@ -27,7 +27,8 @@ fn show(req)
     "claude_model_labels":  claude_labels,
     "allowed_set":          _settings_allowed_set(allowed),
     "allowed_orphans":      _settings_allowed_orphans(allowed, claude_ids, opencode_all),
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "presets": ThemePreset.all_with_builtins()
   })
 end
 
@@ -97,6 +98,57 @@ fn update(req)
     Setting.set("limit_daily_"  + a, _settings_parse_limit(form["limit_daily_"  + a]))
     Setting.set("limit_weekly_" + a, _settings_parse_limit(form["limit_weekly_" + a]))
   end
+  redirect("/settings")
+end
+
+fn create_preset(req)
+  let json = req["json"]
+  if json == nil
+    return { "status": 400, "body": "JSON expected" }
+  end
+  let name = (json["name"] ?? "").trim()
+  let css_vars = json["css_vars"]
+  if name == "" or css_vars == nil
+    return { "status": 422, "body": "name and css_vars are required" }
+  end
+  let key = "custom:" + name
+  Setting.set_theme_preset(key, css_vars)
+  ThemePreset.create({ "_key": key, "name": name, "css_vars": css_vars })
+  redirect("/settings")
+end
+
+fn update_preset(req)
+  let name = req.params["name"]
+  let json = req["json"]
+  if json == nil
+    return { "status": 400, "body": "JSON expected" }
+  end
+  let key = "custom:" + name
+  let existing = ThemePreset.find_by("_key", key)
+  if existing == nil
+    return { "status": 404, "body": "Preset not found" }
+  end
+  let css_vars = json["css_vars"]
+  if css_vars == nil
+    return { "status": 422, "body": "css_vars is required" }
+  end
+  existing.css_vars = css_vars
+  if json["name"] != nil and json["name"].trim() != ""
+    existing.name = json["name"].trim()
+  end
+  existing.save()
+  Setting.set_theme_preset(key, css_vars)
+  redirect("/settings")
+end
+
+fn delete_preset(req)
+  let name = req.params["name"]
+  let key = "custom:" + name
+  let existing = ThemePreset.find_by("_key", key)
+  if existing != nil
+    existing.delete()
+  end
+  Setting.remove_theme_preset(key)
   redirect("/settings")
 end
 
@@ -182,11 +234,8 @@ fn _settings_known_agent(name)
   return false
 end
 
-# Whitelist for the theme setting — the layout only knows how to render
-# these two values, so anything else gets dropped on POST rather than
-# silently persisting a value that produces a broken page.
 fn _settings_known_theme(name)
-  return name == "dark" or name == "light"
+  return name == "dark" or name == "light" or name.starts_with("custom:")
 end
 
 # Walk the form looking for `allowed_<id>=1` checkboxes, keep only the

@@ -115,17 +115,73 @@
 
       <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Theme</legend>
-        <p class="mt-2 text-sm text-slate-400">Pick the UI palette. Saved server-side so the page renders in the correct theme on first paint.</p>
-        <div class="mt-4 flex items-center gap-6 text-sm">
-          <label class="inline-flex items-center gap-2">
-            <input type="radio" name="theme" value="dark" <%= theme == "dark" ? "checked" : "" %> class="h-4 w-4 border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
-            <span class="font-mono text-slate-200">dark</span>
-          </label>
-          <label class="inline-flex items-center gap-2">
-            <input type="radio" name="theme" value="light" <%= theme == "light" ? "checked" : "" %> class="h-4 w-4 border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
-            <span class="font-mono text-slate-200">light</span>
-          </label>
+        <p class="mt-2 text-sm text-slate-400">Pick a preset or create your own. Saved server-side so the page renders in the correct theme on first paint.</p>
+        <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4" id="preset-grid">
+          <% for preset in presets %>
+            <div class="preset-card rounded-xl border border-white/10 overflow-hidden cursor-pointer hover:border-indigo-400/50 transition-colors"
+                 data-preset-key="<%= preset["_key"] %>"
+                 data-bg="<%= preset["css_vars"]["--color-bg"] %>"
+                 data-text="<%= preset["css_vars"]["--color-text"] %>"
+                 data-accent="<%= preset["css_vars"]["--color-accent"] %>"
+                 data-border="<%= preset["css_vars"]["--color-border"] %>"
+                 data-surface="<%= preset["css_vars"]["--color-surface"] %>"
+                 data-muted="<%= preset["css_vars"]["--color-muted"] %>">
+              <div class="preset-preview h-20 text-sm font-mono flex items-center justify-center"
+                   style="background: <%= preset["css_vars"]["--color-bg"] %>; color: <%= preset["css_vars"]["--color-text"] %>;">
+                <span class="opacity-60">Aa</span>
+              </div>
+              <div class="p-3" style="background: <%= preset["css_vars"]["--color-surface"] %>;">
+                <div class="text-sm font-medium" style="color: <%= preset["css_vars"]["--color-text"] %>;"><%= preset["name"] %></div>
+                <% if preset["is_default"] == true %>
+                  <div class="text-xs" style="color: <%= preset["css_vars"]["--color-muted"] %>;">built-in</div>
+                <% else %>
+                  <div class="text-xs" style="color: <%= preset["css_vars"]["--color-muted"] %>;">custom</div>
+                <% end %>
+                <% if preset["is_default"] != true %>
+                  <div class="flex gap-2 mt-1">
+                    <button type="button" class="preset-edit-btn text-xs text-indigo-400 hover:text-indigo-300" data-preset-key="<%= preset["_key"] %>">Edit</button>
+                    <button type="button" class="preset-delete-btn text-xs text-red-400 hover:text-red-300" data-preset-key="<%= preset["_key"] %>">Delete</button>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
         </div>
+
+        <div class="mt-4 flex items-center gap-4">
+          <button type="button" id="new-preset-btn"
+                  class="px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors">
+            + New preset
+          </button>
+        </div>
+
+        <div id="new-preset-form" class="mt-4 hidden">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="preset-name" class="block text-xs font-medium text-slate-300 mb-1">Preset name</label>
+              <input type="text" id="preset-name" name="preset_name"
+                     class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
+                     placeholder="e.g. Solarized">
+            </div>
+            <div>
+              <label for="preset-accent" class="block text-xs font-medium text-slate-300 mb-1">Accent color</label>
+              <input type="color" id="preset-accent" name="preset_accent"
+                     class="w-full h-10 rounded-md bg-slate-900 border border-white/10 px-1 py-1 text-sm cursor-pointer">
+            </div>
+          </div>
+          <div class="mt-3 flex gap-3">
+            <button type="button" id="save-preset-btn"
+                    class="px-4 py-2 rounded-md bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors">
+              Save preset
+            </button>
+            <button type="button" id="cancel-preset-btn"
+                    class="px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <input type="hidden" name="theme" id="selected-theme" value="<%= theme %>">
       </fieldset>
 
       <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-5">
@@ -229,6 +285,141 @@
         });
         // Wait a tick so push.js has time to define window.taskOrchPush.
         window.addEventListener('load', refresh);
+      })();
+    </script>
+
+    <script>
+      (function () {
+        const grid          = document.getElementById('preset-grid');
+        const newPresetBtn  = document.getElementById('new-preset-btn');
+        const newPresetForm = document.getElementById('new-preset-form');
+        const cancelBtn     = document.getElementById('cancel-preset-btn');
+        const saveBtn       = document.getElementById('save-preset-btn');
+        const selectedTheme = document.getElementById('selected-theme');
+        const accentColor  = document.getElementById('preset-accent');
+
+        function getCssVars(forKey) {
+          var card = grid.querySelector('[data-preset-key="' + forKey + '"]');
+          if (!card) return {};
+          return {
+            '--color-bg':      card.getAttribute('data-bg'),
+            '--color-text':    card.getAttribute('data-text'),
+            '--color-accent':  card.getAttribute('data-accent'),
+            '--color-border':  card.getAttribute('data-border'),
+            '--color-surface': card.getAttribute('data-surface'),
+            '--color-muted':   card.getAttribute('data-muted')
+          };
+        }
+
+        function applyCssVars(cssVars) {
+          const root = document.documentElement;
+          for (var k in cssVars) {
+            root.style.setProperty(k, cssVars[k]);
+          }
+        }
+
+        function resetCssVars() {
+          const current = selectedTheme.value;
+          const allCards = grid.querySelectorAll('.preset-card');
+          for (var i = 0; i < allCards.length; i++) {
+            if (allCards[i].getAttribute('data-preset-key') === current) {
+              try {
+                var cv = JSON.parse(allCards[i].getAttribute('data-css-vars') || "{}");
+                applyCssVars(cv);
+              } catch (e) {}
+              break;
+            }
+          }
+        }
+
+        if (grid) {
+          grid.addEventListener('click', function (e) {
+            var card = e.target.closest && e.target.closest('.preset-card');
+            if (!card) return;
+            var key = card.getAttribute('data-preset-key');
+            var cssVars = getCssVars(key);
+            applyCssVars(cssVars);
+            selectedTheme.value = key;
+            document.querySelectorAll('.preset-card').forEach(function (c) {
+              c.classList.remove('ring-2', 'ring-indigo-400');
+            });
+            card.classList.add('ring-2', 'ring-indigo-400');
+          });
+        }
+
+        if (newPresetBtn && newPresetForm) {
+          newPresetBtn.addEventListener('click', function () {
+            newPresetForm.classList.remove('hidden');
+            newPresetBtn.classList.add('hidden');
+          });
+          cancelBtn.addEventListener('click', function () {
+            newPresetForm.classList.add('hidden');
+            newPresetBtn.classList.remove('hidden');
+            resetCssVars();
+          });
+          accentColor.addEventListener('input', function () {
+            var preview = newPresetForm.querySelector('.preset-preview');
+            if (preview) preview.style.background = accentColor.value;
+          });
+          saveBtn.addEventListener('click', function () {
+            var name = document.getElementById('preset-name').value.trim();
+            if (!name) { alert('Preset name is required'); return; }
+            var accent = accentColor.value || '#6366f1';
+            var cssVars = {
+              '--color-bg':      '#1e293b',
+              '--color-text':    '#e2e8f0',
+              '--color-accent':  accent,
+              '--color-border': '#334155',
+              '--color-surface':'#1e293b',
+              '--color-muted':  '#64748b'
+            };
+            fetch('/settings/presets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: name, css_vars: cssVars })
+            }).then(function (r) {
+              if (r.ok) { window.location.href = '/settings'; }
+              else { alert('Failed to save preset'); }
+            });
+          });
+        }
+
+        document.querySelectorAll('.preset-edit-btn').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var key = btn.getAttribute('data-preset-key');
+            var name = key.replace('custom:', '');
+            var cssVars = getCssVars(key);
+            document.getElementById('preset-name').value = name;
+            if (accentColor) accentColor.value = cssVars['--color-accent'] || '#6366f1';
+            newPresetForm.classList.remove('hidden');
+            newPresetBtn.classList.add('hidden');
+            applyCssVars(cssVars);
+          });
+        });
+
+        document.querySelectorAll('.preset-delete-btn').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var key = btn.getAttribute('data-preset-key');
+            var name = key.replace('custom:', '');
+            if (!confirm('Delete preset "' + name + '"?')) return;
+            fetch('/settings/presets/' + encodeURIComponent(name), {
+              method: 'DELETE'
+            }).then(function (r) {
+              if (r.ok) { window.location.href = '/settings'; }
+              else { alert('Failed to delete preset'); }
+            });
+          });
+        });
+
+        window.addEventListener('load', function () {
+          var current = selectedTheme.value;
+          var card = grid && grid.querySelector('[data-preset-key="' + current + '"]');
+          if (card) {
+            card.classList.add('ring-2', 'ring-indigo-400');
+          }
+        });
       })();
     </script>
   </div>

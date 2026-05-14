@@ -346,15 +346,15 @@ describe("SettingsController", fn()
     test("defaults to dark when nothing is persisted", fn()
       let response = get("/settings")
       let body = res_body(response)
-      # The dark radio should be pre-selected on a fresh DB.
-      assert_contains(body, "value=\"dark\" checked")
+      assert_contains(body, "data-preset-key=\"dark\"")
+      assert_contains(body, "id=\"selected-theme\" value=\"dark\"")
     end)
 
-    test("renders both dark and light radio inputs", fn()
+    test("renders preset cards for dark and light", fn()
       let response = get("/settings")
       let body = res_body(response)
-      assert_contains(body, "name=\"theme\" value=\"dark\"")
-      assert_contains(body, "name=\"theme\" value=\"light\"")
+      assert_contains(body, "data-preset-key=\"dark\"")
+      assert_contains(body, "data-preset-key=\"light\"")
     end)
 
     test("persists theme=light on POST", fn()
@@ -374,11 +374,11 @@ describe("SettingsController", fn()
       assert_eq(Setting.get("theme"), "light")
     end)
 
-    test("GET echoes the saved theme as the checked radio", fn()
+    test("GET echoes the saved theme as selected", fn()
       Setting.set("theme", "light")
       let response = get("/settings")
       let body = res_body(response)
-      assert_contains(body, "value=\"light\" checked")
+      assert_contains(body, "id=\"selected-theme\" value=\"light\"")
     end)
 
     test("Setting.get_or('theme', 'dark') round-trips both values", fn()
@@ -386,6 +386,79 @@ describe("SettingsController", fn()
       assert_eq(Setting.get_or("theme", "dark"), "light")
       post("/settings", { "theme": "dark" })
       assert_eq(Setting.get_or("theme", "dark"), "dark")
+    end)
+  end)
+
+  describe("theme presets", fn()
+    test("defaults to dark when nothing is persisted", fn()
+      let response = get("/settings")
+      let body = res_body(response)
+      assert_contains(body, "data-preset-key=\"dark\"")
+      assert_contains(body, "id=\"selected-theme\" value=\"dark\"")
+    end)
+
+    test("renders preset cards for dark and light", fn()
+      let response = get("/settings")
+      let body = res_body(response)
+      assert_contains(body, "data-preset-key=\"dark\"")
+      assert_contains(body, "data-preset-key=\"light\"")
+    end)
+
+    test("GET echoes the saved theme as selected via hidden input", fn()
+      Setting.set("theme", "light")
+      let response = get("/settings")
+      let body = res_body(response)
+      assert_contains(body, "id=\"selected-theme\" value=\"light\"")
+    end)
+
+    test("POST /settings/presets creates a custom preset", fn()
+      let response = post("/settings/presets", {
+        "name": "Solarized", "css_vars": {
+          "--color-bg": "#002b36", "--color-text": "#93a1a1",
+          "--color-accent": "#268bd2", "--color-border": "#073642",
+          "--color-surface": "#073642", "--color-muted": "#586e75"
+        }
+      }, { "content_type": "application/json" })
+      assert_eq(res_status(response), 302)
+      let found = ThemePreset.find_by("_key", "custom:Solarized")
+      assert_not_null(found)
+    end)
+
+    test("POST /settings/presets persists css_vars to Setting", fn()
+      post("/settings/presets", {
+        "name": "Monokai", "css_vars": {
+          "--color-bg": "#272822", "--color-text": "#f8f8f2",
+          "--color-accent": "#f92672", "--color-border": "#49483e",
+          "--color-surface": "#1e1f1c", "--color-muted": "#75715e"
+        }
+      }, { "content_type": "application/json" })
+      let stored = Setting.get("theme_presets")
+      assert_not_null(stored)
+      assert_not_null(stored["custom:Monokai"])
+    end)
+
+    test("DELETE /settings/presets/:name removes a preset", fn()
+      post("/settings/presets", {
+        "name": "ToDelete", "css_vars": {
+          "--color-bg": "#000", "--color-text": "#fff",
+          "--color-accent": "#f00", "--color-border": "#333",
+          "--color-surface": "#111", "--color-muted": "#666"
+        }
+      }, { "content_type": "application/json" })
+      let del = delete("/settings/presets/ToDelete")
+      assert_eq(res_status(del), 302)
+      let remaining = ThemePreset.find_by("_key", "custom:ToDelete")
+      assert_null(remaining)
+    end)
+
+    test("POST /settings with custom theme name persists it", fn()
+      Setting.set("theme_presets", {
+        "custom:TestPres": { "css_vars": { "--color-bg": "#000", "--color-text": "#fff",
+          "--color-accent": "#f00", "--color-border": "#333",
+          "--color-surface": "#111", "--color-muted": "#666" } }
+      })
+      post("/settings", { "theme": "custom:TestPres" })
+      assert_eq(Setting.get("theme"), "custom:TestPres")
     end)
   end)
 end)
