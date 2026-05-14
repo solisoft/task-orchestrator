@@ -330,6 +330,7 @@ fn show(req)
     "claude_options":     picker["claude_options"],
     "opencode_options":   picker["opencode_options"],
     "code_reviews":       code_reviews,
+    "flash_error":        nil,
     "theme": Setting.current_theme()
   })
 end
@@ -421,7 +422,11 @@ fn _can_commit_push(task, project)
   if task.pr_url == nil or task.pr_url == ""
     return false
   end
-  run_worktree_exists(project["name"], task.slug)
+  if not run_worktree_exists(project["name"], task.slug)
+    return false
+  end
+  let worktree_path = run_worktree_path(project["name"], task.slug)
+  project_worktree_dirty(worktree_path)
 end
 
 # POST /projects/:name/tasks/:slug/merge — merge the per-task branch
@@ -548,7 +553,23 @@ fn commit_push(req)
   let worktree_path = run_worktree_path(project["name"], task.slug)
   let result = commit_and_push(worktree_path, task.slug)
   if not result["ok"]
-    return {"status": 422, "body": "commit-push failed: " + result["error"]}
+    let err = result["error"]
+    let picker = plan_model_picker_data(Setting.get_or("plan_model", "claude-sonnet-4-6"))
+    let code_reviews = CodeReview.for_task(project["name"], task.slug)
+    return render("tasks/show", {
+      "title": task.slug,
+      "project": project,
+      "task": task,
+      "branch_info": _branch_info_for(task, project),
+      "can_commit_push": _can_commit_push(task, project),
+      "default_plan_model":   Setting.get_or("plan_model", "claude-sonnet-4-6"),
+      "default_review_model": Plan.default_review_model(),
+      "claude_options":     picker["claude_options"],
+      "opencode_options":   picker["opencode_options"],
+      "code_reviews":       code_reviews,
+      "flash_error":        err,
+      "theme": Setting.current_theme()
+    })
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
@@ -601,35 +622,6 @@ fn react(req)
         "reviews":            CodeReview.for_task(project["name"], task.slug)
       })
     }
-  end
-  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
-end
-  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
-  if task == nil
-    return {"status": 404, "body": "Task not found"}
-  end
-  if task.status != "review"
-    return {"status": 422,
-            "body": "react is only available for review tasks (current: " +
-                    task.status + ")"}
-  end
-  if task.pr_url == nil or task.pr_url == ""
-    return {"status": 422,
-            "body": "react is only available for tasks with an open PR"}
-  end
-  let prompt = (req["form"]["prompt"] ?? "").trim()
-  if prompt == ""
-    return {"status": 422, "body": "Prompt is required"}
-  end
-  let nonce = str(DateTime.now().to_unix() rescue 0)
-  let prompt_path = "/tmp/react-prompt-" + nonce + ".md"
-  Trusted.write(prompt_path, prompt)
-  let line = "nohup ./bin/react-run " + project["name"] + " " +
-             task.slug + " " + prompt_path +
-             " >/dev/null 2>&1 & disown"
-  let res = System.run_sync(["bash", "-c", line])
-  if res["exit_code"] != 0
-    return {"status": 500, "body": "Failed to spawn react agent — check server log"}
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
 end
