@@ -47,8 +47,16 @@
         "pending_question": pq
       }) %>
     </div>
+    <!-- The "starting agent..." placeholder sits OUTSIDE the <pre> so the
+         WS client (public/run-stream.js) finds no <pre> on empty-log boot,
+         wipes the placeholder, and creates a fresh <pre> for the deltas.
+         Once a <pre> is present, deltas append to it. -->
     <div id="plan-log" class="max-h-[70vh] overflow-y-auto" data-tail="bottom">
-      <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% if log == "" %><span class="text-slate-600 italic">starting agent...</span><% else %><% for line in log.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %><% end %></pre>
+      <% if log == "" %>
+        <p class="font-mono text-xs text-slate-600 italic p-4">starting agent...</p>
+      <% else %>
+        <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in log.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
+      <% end %>
     </div>
   </div>
 

@@ -50,29 +50,52 @@
     return "text-slate-300";
   }
 
-  function appendLogChunk(logEl, chunk) {
+  function appendLogChunk(logEl, chunk, isSnapshot) {
     if (!logEl || !chunk) return;
     var pre = logEl.querySelector("pre");
     if (!pre) {
-      // First chunk into an empty panel: replace the "no log yet"
-      // placeholder with a fresh <pre>.
       logEl.innerHTML =
         '<pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"></pre>';
       pre = logEl.querySelector("pre");
     }
-    var lines = chunk.split("\n");
+    if (isSnapshot) pre._partialSpan = null;
+
     var frag = document.createDocumentFragment();
-    for (var i = 0; i < lines.length; i++) {
-      // Skip a trailing empty string that comes from a chunk ending
-      // in "\n" — we don't want to render an empty <span> for it.
-      if (i === lines.length - 1 && lines[i] === "") break;
+    var start = 0;
+    var len = chunk.length;
+
+    // If the last span from the previous chunk was a partial line
+    // (didn't end with \n), extend it in-place instead of starting
+    // a new span.
+    if (pre._partialSpan) {
+      var nl = chunk.indexOf("\n");
+      if (nl === -1) {
+        pre._partialSpan.textContent += chunk;
+        logEl.scrollTop = logEl.scrollHeight;
+        return;
+      }
+      pre._partialSpan.textContent += chunk.substring(0, nl);
+      pre._partialSpan = null;
+      start = nl + 1;
+    }
+
+    while (start < len) {
+      var nl2 = chunk.indexOf("\n", start);
+      if (nl2 === -1) {
+        var span = document.createElement("span");
+        span.className = "block " + lineClass(chunk.substring(start));
+        span.textContent = chunk.substring(start);
+        frag.appendChild(span);
+        pre._partialSpan = span;
+        break;
+      }
       var span = document.createElement("span");
-      span.className = "block " + lineClass(lines[i]);
-      span.textContent = lines[i];
+      span.className = "block " + lineClass(chunk.substring(start, nl2));
+      span.textContent = chunk.substring(start, nl2);
       frag.appendChild(span);
+      start = nl2 + 1;
     }
     pre.appendChild(frag);
-    // Keep the bottom in view as new lines arrive.
     logEl.scrollTop = logEl.scrollHeight;
   }
 
@@ -98,8 +121,14 @@
     // Identifiers echoed on every tick. Soli's `router_websocket` routes
     // are static, so the URL alone can't tell the handler which resource
     // we're following. The page renders these into data-stream-* attrs.
+    // Optional fragment-refetch wiring. When a stream goes terminal AND
+    // `reload: true` arrives, prefer swapping a fragment via HTMX over a
+    // full window.location.reload() — keeps panels (eg. the task code
+    // review history) from jumping the user back to the top of the page.
+    this.refetchUrl = root.getAttribute("data-stream-refetch-url") || null;
+    this.refetchTarget = root.getAttribute("data-stream-refetch-target") || null;
     this.identifiers = {};
-    var keys = ["project", "slug", "plan_id", "feature_id"];
+    var keys = ["project", "slug", "plan_id", "feature_id", "review_id"];
     for (var i = 0; i < keys.length; i++) {
       var v = root.getAttribute("data-stream-" + keys[i].replace("_", "-"));
       if (v != null && v !== "") this.identifiers[keys[i]] = v;
@@ -206,7 +235,7 @@
     var ev = msg.event || msg.type;
     if (ev === "delta" || ev === "snapshot") {
       if (typeof msg.log_chunk === "string" && msg.log_chunk.length) {
-        appendLogChunk(this.find(this.logSel), msg.log_chunk);
+        appendLogChunk(this.find(this.logSel), msg.log_chunk, ev === "snapshot");
       }
       if (typeof msg.log_offset === "number") this.offset = msg.log_offset;
       if (typeof msg.todos_html === "string") replaceHtml(this.find(this.todosSel), msg.todos_html);
@@ -228,11 +257,23 @@
         // `reload` is the plan/feature streams' way of transitioning the
         // page to its post-agent layout: when the controller would have
         // returned a different partial after the agent finished, a fresh
-        // GET lands the user on it cleanly.
+        // GET lands the user on it cleanly. Panels that opt into
+        // fragment-refetch (data-stream-refetch-url + -target) get a
+        // scoped htmx swap instead — keeps scroll position intact.
         if (msg.reload === true) {
-          // Defer slightly so any final DOM mutations from this frame land
-          // before the reload — useful when the user is mid-scroll.
-          setTimeout(function () { window.location.reload(); }, 50);
+          var refetchUrl = this.refetchUrl;
+          var refetchTarget = this.refetchTarget;
+          setTimeout(function () {
+            if (refetchUrl && refetchTarget && window.htmx && typeof window.htmx.ajax === "function") {
+              try {
+                window.htmx.ajax("GET", refetchUrl, { target: refetchTarget, swap: "outerHTML" });
+                return;
+              } catch (e) {
+                // Fall through to full reload on any htmx error.
+              }
+            }
+            window.location.reload();
+          }, 50);
         }
         return;
       }

@@ -2,14 +2,23 @@
 #
 # review-run <project> <slug> <model> <review_id>
 #
-# Runs the /review-task skill in the task's EXISTING worktree to perform
-# a code review of the PR under a user-chosen agent. Unlike bin/task-run
-# and bin/react-run, this never recreates the worktree — the review must
-# execute against the same tree /do-task and /review-task already left
-# in place, with all its in-flight edits.
+# Runs a code review for a task in `review` status under a user-chosen
+# agent, persisting the transcript + verdict to the `code_reviews`
+# solidb collection so the task show page can render a history list
+# of past reviews with per-entry toggleable details. Picks one of two
+# modes:
 #
-# Appends to the existing run log / status journal so the run viewer
-# stays current.
+#   * worktree mode — the task's worktree still exists locally. The
+#     agent runs /review-task against the uncommitted/committed tree
+#     in place (the original post-/do-task flow).
+#   * pr mode — the worktree has been cleaned up (e.g. after merge) but
+#     the task row has a `pr_url`. The agent runs against the project
+#     repo with a custom prompt that fetches the PR diff via `gh pr
+#     diff` and reviews it against the task spec.
+#
+# Streams the rendered transcript into `code_reviews.<row>.log` line by
+# line (so the WS in tasks_controller#code_review_stream can deliver
+# incremental updates), and writes the final report into `.body`.
 
 set -euo pipefail
 
@@ -37,22 +46,50 @@ if [[ ! -d "$project_path" ]]; then
   exit 65
 fi
 
-state_root=${TASK_ORCH_STATE:-$HOME/.local/state/task-orchestrator}
-state_dir="$state_root/$repo_name"
-log_file="$state_dir/$slug.log"
-status_file="$state_dir/$slug.status"
-mkdir -p "$state_dir"
-
 worktree_root=${TASK_ORCH_WORKTREES:-$HOME/.cache/task-orchestrator/worktrees}
 worktree_dir="$worktree_root/$repo_name/$slug"
 
-log() {
-  printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$log_file"
+HOST=${SOLIDB_HOST:-http://localhost:6745}
+DB=${SOLIDB_DATABASE:-tasks}
+DBUSER=${SOLIDB_USERNAME:-admin}
+DBPASS=${SOLIDB_PASSWORD:-admin}
+
+review_key="${repo_name}--${slug}--${review_id}"
+
+# Atomic AQL UPDATE on the code_reviews row. `db_update` patches given
+# fields; `append_log` concatenates onto the log column. Mirrors the
+# helpers in bin/plan-run.
+db_update() {
+  local patch_json="$1"
+  local body
+  body=$(jq -n --arg key "$review_key" --argjson patch "$patch_json" \
+    '{
+       query: "UPDATE @key WITH @patch IN code_reviews",
+       bindVars: { key: $key, patch: $patch }
+     }')
+  curl -s -u "$DBUSER:$DBPASS" -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' -d "$body" 2>/dev/null \
+    || printf '[%s] db_update failed: %s\n' "$(date -Is)" "$patch_json" >&2
 }
 
-write_status() {
-  printf '%s\t%s\n' "$(date -Is)" "$1" >> "$status_file"
+append_log() {
+  local body
+  body=$(jq -n --arg key "$review_key" --arg line "$1"$'\n' \
+    '{
+       query: "LET r = DOCUMENT(\"code_reviews\", @key) UPDATE @key WITH { log: CONCAT(r.log, @line) } IN code_reviews",
+       bindVars: { key: $key, line: $line }
+     }')
+  curl -s -u "$DBUSER:$DBPASS" -X POST "$HOST/_api/database/$DB/cursor" \
+    -H 'content-type: application/json' -d "$body" 2>/dev/null \
+    || printf '[%s] append_log failed: %s\n' "$(date -Is)" "$1" >&2
 }
+
+write_status() { db_update "$(jq -n --arg s "$1" '{status: $s, updated_at: now | todateiso8601}')"; }
+write_log()    { append_log "$1"; }
+write_body()   { db_update "$(jq -n --arg b "$1" '{body: $b}')"; }
+write_pid()    { db_update "$(jq -n --argjson p "$1" '{pid: $p}')"; }
+
+log() { printf '[%s] %s\n' "$(date -Is)" "$*" >&2; }
 
 fail() {
   log "FAIL: $*"
@@ -60,25 +97,55 @@ fail() {
   exit 1
 }
 
-write_status "starting code review"
+jsonl_file=$(mktemp -t review-run.XXXXXX.jsonl)
+# Clean up the temp jsonl + null the pid on any exit path so the
+# `effective_status` zombie detector flips a row to failed:zombie
+# instead of leaving it stuck at `running`.
+trap 'rm -f "$jsonl_file"; \
+      db_update "$(jq -n "{pid: null}")" >/dev/null 2>&1 || true' EXIT
 
-# The worktree MUST already exist — the review runs against the same
-# tree /do-task and /review-task already left in place. We never
-# recreate it here.
-if [[ ! -d "$worktree_dir" ]]; then
-  fail "worktree not found: $worktree_dir"
+write_status "starting"
+write_pid "$$"
+log "review_id=$review_id repo=$repo_name slug=$slug model=${task_model:-<default>}"
+
+# ── Pick mode ──────────────────────────────────────────────────────
+
+task_key="${repo_name}--${slug}"
+task_row=$(curl -s -u "$DBUSER:$DBPASS" "$HOST/_api/database/$DB/document/tasks/$task_key" || true)
+pr_url=$(printf '%s' "$task_row" | jq -r '.pr_url // empty' 2>/dev/null || true)
+
+if [[ -d "$worktree_dir" ]]; then
+  review_mode=worktree
+  review_dir="$worktree_dir"
+elif [[ -n "$pr_url" ]]; then
+  review_mode=pr
+  review_dir="$project_path"
+  if ! command -v gh >/dev/null 2>&1; then
+    fail "pr-review needs 'gh' (GitHub CLI) on PATH"
+  fi
+  # Parse the PR number out of the canonical pull/<N> URL shape. We do
+  # NOT interpolate `$pr_url` into any shell command — the agent gets
+  # the number via the prompt and runs `gh pr diff` itself.
+  pr_number="${pr_url##*/}"
+  if ! [[ "$pr_number" =~ ^[0-9]+$ ]]; then
+    fail "could not parse PR number from pr_url: $pr_url"
+  fi
+else
+  fail "no worktree at $worktree_dir and no pr_url on task row"
 fi
 
 log "review: id=$review_id worktree=$worktree_dir model=${task_model:-<default claude>}"
+write_log "▸ review-run mode=$review_mode dir=$review_dir model=${task_model:-<default claude>}"
+if [[ "$review_mode" == "pr" ]]; then
+  write_log "▸ review-run pr_url=$pr_url pr_number=$pr_number"
+fi
 
-# Resolve agent kind / variant from the model string. Same shape as
-# bin/task-run and bin/react-run: "provider/model[:variant]" routes
-# through opencode; bare "claude-*" or empty stays on the claude CLI.
+# ── Resolve agent kind / variant ──────────────────────────────────
+
 task_variant=""
 if [[ "$task_model" == */*:* ]]; then
   task_variant="${task_model##*:}"
   task_model="${task_model%:*}"
-  log "model variant=$task_variant"
 fi
 
 if [[ "$task_model" == */* ]]; then
@@ -92,12 +159,31 @@ else
     fail "model ${task_model:-claude default} needs 'claude' on PATH"
   fi
 fi
-log "agent_kind=$agent_kind"
 
 claude_jq="$script_dir/_stream-format.jq"
 
-write_status "running /review-task"
-log "review: running $agent_kind /review-task $slug"
+# ── Build prompt ──────────────────────────────────────────────────
+
+if [[ "$review_mode" == "worktree" ]]; then
+  agent_prompt="/review-task $slug"
+else
+  agent_prompt="You are reviewing GitHub PR #$pr_number ($pr_url) for task '$slug'. The local worktree has been cleaned up, so review the PR diff on GitHub rather than the working tree.
+
+Steps:
+1. Read the task spec at tasks/done/$slug.md (or tasks/todo/$slug.md — whichever exists).
+2. Run \`gh pr diff $pr_number\` to fetch the diff. Optionally \`gh pr view $pr_number\` for title/body context.
+3. Verify the diff implements the spec correctly. Use the same criteria /review-task uses: correctness, completeness across all listed call-sites, no regressions, lint/test rules from CLAUDE.md.
+4. Do NOT modify any files, commit, push, or comment on the PR. This is read-only review.
+
+Report findings as markdown:
+- **Verdict:** Approved / Approved-with-notes / Approved-with-followups / Rejected
+- **Coverage:** what was checked
+- **Findings:** issues (each: severity, file:line, what's wrong, suggested follow-up)"
+fi
+
+write_status "running"
+
+# ── Run the agent ─────────────────────────────────────────────────
 
 set +e
 case "$agent_kind" in
@@ -107,10 +193,15 @@ case "$agent_kind" in
       opencode_cmd+=(--variant "$task_variant")
     fi
     (
-      cd "$worktree_dir"
-      "${opencode_cmd[@]}" < /dev/null "/review-task $slug" 2> >(tr -d '\r' >> "$log_file")
-    ) | tee -a "$log_file.jsonl" \
-      | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+      cd "$review_dir"
+      "${opencode_cmd[@]}" < /dev/null "$agent_prompt" 2>&1
+    ) \
+      | tee "$jsonl_file" \
+      | stdbuf -oL jq -r --unbuffered -f "$claude_jq" 2>/dev/null \
+      | stdbuf -oL tr -d '\r' \
+      | while read -r line; do
+          write_log "$line"
+        done
     rc=${PIPESTATUS[0]}
     ;;
   *)
@@ -119,20 +210,57 @@ case "$agent_kind" in
       claude_args+=(--model "$task_model")
     fi
     (
-      cd "$worktree_dir"
-      claude "${claude_args[@]}" < /dev/null "/review-task $slug" 2> >(tr -d '\r' >> "$log_file")
-    ) | tee -a "$log_file.jsonl" \
-      | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+      cd "$review_dir"
+      claude "${claude_args[@]}" < /dev/null "$agent_prompt" 2>&1
+    ) \
+      | tee "$jsonl_file" \
+      | stdbuf -oL jq -r --unbuffered -f "$claude_jq" 2>/dev/null \
+      | stdbuf -oL tr -d '\r' \
+      | while read -r line; do
+          write_log "$line"
+        done
     rc=${PIPESTATUS[0]}
     ;;
 esac
 set -e
 
 if [[ $rc -ne 0 ]]; then
-  fail "agent exited non-zero (rc=$rc)"
+  fail "agent exited rc=$rc"
 fi
 
-write_status "code review done"
-log "review: agent finished"
+# ── Extract verdict / report from the final assistant message ─────
+
+case "$agent_kind" in
+  opencode)
+    body=$(jq -R 'fromjson? // empty' "$jsonl_file" | jq -rs '
+      ([.[] | select(.type == "text") | .part.messageID] | last) as $m
+      | [.[] | select(.type == "text" and .part.messageID == $m) | .part.text]
+      | join("")
+    ')
+    ;;
+  *)
+    body=$(jq -R 'fromjson? // empty' "$jsonl_file" | jq -rs '
+      [.[] | select(.type == "assistant")] | last
+      | (.message.content // [])
+      | map(select(.type == "text") | .text)
+      | add // ""
+    ')
+    ;;
+esac
+
+# Strip optional code-fence wrap around the spec.
+body=$(printf '%s' "$body" | awk '
+  NR==1 && /^```/ { in_fence=1; next }
+  in_fence && /^```$/ { in_fence=0; next }
+  { print }
+')
+
+if [[ -n "$body" ]]; then
+  write_body "$body"
+  log "wrote review body (${#body} bytes)"
+fi
+
+write_status "done"
+log "review_id=$review_id done"
 
 exit 0

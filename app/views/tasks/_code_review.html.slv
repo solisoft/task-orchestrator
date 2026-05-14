@@ -1,46 +1,178 @@
 <%
   # Code-review panel rendered inside the `if task.status == "review"`
-  # block on the task show page. Lets the user spawn `/review-task` in
-  # the existing worktree under a chosen agent model — the transcript
-  # streams to the same run log as `/do-task`.
+  # block on the task show page. Top: form to spawn a new review.
+  # Below: history list of past reviews (most recent first). A
+  # currently-running review shows a spinner + WS-driven status pill;
+  # when the WS reports terminal status the panel refetches itself so
+  # the spinner is replaced by the completed history entry.
   #
   # Locals:
   #   - project, task                     — current row context
   #   - default_review_model              — fallback when task.model is unset
   #   - claude_options / opencode_options — already filtered by the
   #                                         user's allowlist
+  #   - reviews                           — [CodeReview, ...] newest first
 %>
-<div class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
-  <details>
-    <summary class="text-sm font-semibold text-indigo-300 cursor-pointer select-none">Run code review — review the PR with an agent</summary>
-    <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/code-review" class="mt-3">
-      <div class="grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-xs text-slate-400 mb-3">
-        <label for="plan_model" class="text-right">Model</label>
-        <%- partial("features/plan_model_select", {
-          "name":             "plan_model",
-          "current":          (task.model ?? "") == "" ? default_review_model : task.model,
-          "claude_options":   claude_options,
-          "opencode_options": opencode_options,
-          "include_blank":    false,
-          "blank_label":      ""
-        }) %>
-        <label for="code-review-plan-variant" class="text-right">Effort</label>
-        <div class="flex items-center gap-2">
-          <select id="code-review-plan-variant" name="plan_variant"
-                  title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
-                  class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
-            <option value="default" selected>Default</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-          <span class="text-[11px] text-slate-500 italic">opencode only</span>
+<%
+  let _reviews = reviews ?? []
+  let _running = nil
+  for _r in _reviews
+    let _s = _r.status ?? ""
+    if _running == nil and _s != "done" and not _s.starts_with("failed:")
+      _running = _r
+    end
+  end
+%>
+<div id="code-review-panel" class="mb-6 rounded-xl glass-card p-4 animate-fade-in animate-fade-in-1">
+  <% if _running != nil %>
+    <div id="code-review-running"
+         class="flex items-center justify-between gap-3 rounded-lg bg-amber-400/10 border border-amber-400/30 px-4 py-3"
+         data-stream-url="/ws/code-review-stream"
+         data-stream-review-id="<%= _running.review_id %>"
+         data-stream-status="#code-review-status"
+         data-stream-refetch-url="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/code-review"
+         data-stream-refetch-target="#code-review-panel"
+         data-stream-offset="<%= (_running.log ?? "").length %>"
+         data-stream-tick-ms="500">
+      <div class="flex items-center gap-3 min-w-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin shrink-0 text-amber-300">
+          <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+          <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+          <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+        </svg>
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-amber-200">Code review in progress</div>
+          <div id="code-review-status" class="text-xs text-amber-300/80 font-mono mt-0.5"><%= _running.status ?? "starting" %></div>
         </div>
       </div>
-      <div class="mt-2 flex items-center justify-between text-xs text-slate-500 gap-3">
-        <span>Runs <code class="font-mono">/review-task</code> in the existing worktree and appends to the run log.</span>
-        <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Run code review</button>
+      <span class="text-xs text-slate-500 font-mono shrink-0"><%= _running.review_id %></span>
+    </div>
+  <% else %>
+    <details>
+      <summary class="text-sm font-semibold text-indigo-300 cursor-pointer select-none">Run code review — review the PR with an agent</summary>
+      <form hx-post="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/code-review"
+            hx-target="#code-review-panel"
+            hx-swap="outerHTML"
+            class="mt-3">
+        <div class="grid grid-cols-[5rem_1fr] items-center gap-x-3 gap-y-2 text-xs text-slate-400 mb-3">
+          <label for="plan_model" class="text-right">Model</label>
+          <%- partial("features/plan_model_select", {
+            "name":             "plan_model",
+            "current":          (task.model ?? "") == "" ? default_review_model : task.model,
+            "claude_options":   claude_options,
+            "opencode_options": opencode_options,
+            "include_blank":    false,
+            "blank_label":      ""
+          }) %>
+          <label for="code-review-plan-variant" class="text-right">Effort</label>
+          <div class="flex items-center gap-2">
+            <select id="code-review-plan-variant" name="plan_variant"
+                    title="Reasoning effort. Applies to opencode reasoning models only — claude ignores it."
+                    class="rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+              <option value="default" selected>Default</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <span class="text-[11px] text-slate-500 italic">opencode only</span>
+          </div>
+        </div>
+        <div class="mt-2 flex items-center justify-between text-xs text-slate-500 gap-3">
+          <span>Runs <code class="font-mono">/review-task</code> against the worktree, or <code class="font-mono">gh pr diff</code> on the PR when the worktree is gone.</span>
+          <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">Run code review</button>
+        </div>
+      </form>
+    </details>
+  <% end %>
+
+  <% if _reviews.length() > 0 %>
+    <div class="mt-4 pt-4 border-t border-white/5">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+        <span>Past code reviews</span>
+        <span class="text-slate-600 font-mono normal-case text-[10px]"><%= _reviews.length() %></span>
+      </h3>
+      <div class="space-y-2">
+        <% for r in _reviews %>
+          <% let r_status = r.status ?? "" %>
+          <% let r_failed = r_status.starts_with("failed:") %>
+          <% let r_done = r_status == "done" %>
+          <% let r_verdict = r.verdict() %>
+          <% let r_body = (r.body ?? "").trim() %>
+          <% let r_log = (r.log ?? "").trim() %>
+          <details class="rounded-lg bg-slate-900/40 border border-white/5">
+            <summary class="cursor-pointer select-none flex items-baseline justify-between gap-3 px-3 py-2 text-xs hover:bg-white/[0.02]">
+              <div class="flex items-baseline gap-2 min-w-0">
+                <% if r_done %>
+                  <% if r_verdict == "Rejected" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/15 text-red-300 px-2 py-0.5">Rejected</span>
+                  <% elsif r_verdict == "Approved" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/15 text-emerald-300 px-2 py-0.5">Approved</span>
+                  <% elsif r_verdict == "Approved-with-notes" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-blue-400/30 bg-blue-400/15 text-blue-300 px-2 py-0.5">Approved w/ notes</span>
+                  <% elsif r_verdict == "Approved-no-fix-needed" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-slate-400/30 bg-slate-400/15 text-slate-300 px-2 py-0.5">No fix needed</span>
+                  <% elsif r_verdict == "Approved-with-followups" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/15 text-amber-300 px-2 py-0.5">Approved w/ followups</span>
+                  <% elsif r_verdict != nil and r_verdict != "" %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/15 text-emerald-300 px-2 py-0.5"><%= r_verdict %></span>
+                  <% else %>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/15 text-emerald-300 px-2 py-0.5">done</span>
+                  <% end %>
+                <% elsif r_failed %>
+                  <span class="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/15 text-red-300 px-2 py-0.5"><%= r_status %></span>
+                <% else %>
+                  <span class="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/15 text-amber-300 px-2 py-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <%= r_status %>
+                  </span>
+                <% end %>
+                <span class="font-mono text-slate-500 truncate"><%= r.review_id %></span>
+                <% if (r.model ?? "") != "" %>
+                  <span class="font-mono text-slate-500 truncate">· <%= r.model %></span>
+                <% end %>
+              </div>
+              <span class="font-mono text-slate-600 shrink-0"><%= format_date(r.created_at) %></span>
+            </summary>
+            <div class="border-t border-white/5 px-3 py-3 space-y-3">
+              <% if r_done and r_verdict == "Rejected" and task.pr_url != nil and task.pr_url != "" %>
+                <% if task.status == "review" %>
+                  <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/react"
+                        hx-target="#code-review-panel"
+                        hx-swap="outerHTML"
+                        class="flex items-center justify-between">
+                    <input type="hidden" name="prompt" value="<%= h(r_body) %>">
+                    <span class="text-xs text-slate-400">Fix the issues reported above</span>
+                    <button type="submit" class="rounded-lg bg-amber-500/90 hover:bg-amber-400 text-slate-900 text-sm font-medium px-4 py-2 transition-colors">Fix</button>
+                  </form>
+                <% else %>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Fix in progress...</span>
+                    <span class="rounded-lg bg-emerald-500/20 text-emerald-300 text-sm font-medium px-4 py-2">Fix applied</span>
+                  </div>
+                <% end %>
+              <% end %>
+              <% if r_body != "" %>
+                <div>
+                  <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Report</div>
+                  <article class="task-md text-sm">
+                    <%- Markdown.to_safe_html(r_body) %>
+                  </article>
+                </div>
+              <% end %>
+              <% if r_log != "" %>
+                <details>
+                  <summary class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 cursor-pointer select-none hover:text-slate-300">Log <span class="font-mono normal-case text-slate-600">(<%= r_log.length() %> bytes)</span></summary>
+                  <pre class="mt-2 text-[11px] font-mono leading-relaxed text-slate-300 whitespace-pre-wrap max-h-96 overflow-y-auto rounded-md bg-slate-950/60 border border-white/5 p-3"><% for _ll in r_log.split("\n") %><span class="block <%= task_log_line_class(_ll) %>"><%= _ll %></span><% end %></pre>
+                </details>
+              <% end %>
+              <% if r_body == "" and r_log == "" %>
+                <p class="text-xs text-slate-500 italic">No transcript captured.</p>
+              <% end %>
+            </div>
+          </details>
+        <% end %>
       </div>
-    </form>
-  </details>
+    </div>
+  <% end %>
 </div>

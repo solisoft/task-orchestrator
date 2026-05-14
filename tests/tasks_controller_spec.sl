@@ -1273,12 +1273,13 @@ describe("TasksController#code_review", fn()
   before_each(fn()
     assert_test_db()
     Task.delete_all()
+    CodeReview.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
     as_guest()
   end)
 
-  test("redirects to the run page when the worktree exists and the task is in review", fn()
+  test("redirects to the task page and persists a CodeReview row when the worktree exists", fn()
     let slug = "review-me"
     _tq_setup_run_worktree(slug)
     Task.create({
@@ -1294,10 +1295,14 @@ describe("TasksController#code_review", fn()
       "plan_variant": "default"
     })
     assert_eq(res_status(response), 302)
-    # The redirect lands on the run page so the user can watch the live
-    # transcript of the review agent.
+    # Non-htmx POST redirects to the task show page; the panel there
+    # renders the spinner + history list driven by the WS stream.
     assert_contains(res_header(response, "Location") ?? "",
-                    "/projects/proj/tasks/" + slug + "/run")
+                    "/projects/proj/tasks/" + slug)
+    # A CodeReview row was persisted so the panel has something to
+    # show on the next render.
+    let reviews = CodeReview.for_task("proj", slug)
+    assert(reviews.length() > 0)
     # Tear down so a follow-up test in this file doesn't see a stale dir.
     System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
   end)
@@ -1318,14 +1323,16 @@ describe("TasksController#code_review", fn()
     assert_contains(res_body(response), "only available for review tasks")
   end)
 
-  test("rejects with 422 when the worktree does not exist", fn()
-    # No `_tq_setup_worktree_repo` call — the row exists but the
-    # scratch worktree was never created (or was cleaned up).
+  test("falls through to PR-mode when the worktree is gone but a pr_url is set", fn()
+    # The worktree was cleaned up (merged/abandoned), but the task is
+    # still in `review` and has a PR. The controller should accept the
+    # request — `bin/review-run` decides the mode at runtime and falls
+    # back to `gh pr diff` review.
     Task.create({
       "_key":    "proj--cr-no-tree",
       "project": "proj",
       "slug":    "cr-no-tree",
-      "title":   "No worktree",
+      "title":   "No worktree, has PR",
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
@@ -1333,8 +1340,25 @@ describe("TasksController#code_review", fn()
       "plan_model":   "claude-sonnet-4-6",
       "plan_variant": "default"
     })
+    assert_eq(res_status(response), 302)
+    assert_contains(res_header(response, "Location") ?? "",
+                    "/projects/proj/tasks/cr-no-tree")
+  end)
+
+  test("rejects with 422 when there is neither a worktree nor a PR", fn()
+    Task.create({
+      "_key":    "proj--cr-no-tree-no-pr",
+      "project": "proj",
+      "slug":    "cr-no-tree-no-pr",
+      "title":   "No worktree, no PR",
+      "status":  "review"
+    })
+    let response = post("/projects/proj/tasks/cr-no-tree-no-pr/code-review", {
+      "plan_model":   "claude-sonnet-4-6",
+      "plan_variant": "default"
+    })
     assert_eq(res_status(response), 422)
-    assert_contains(res_body(response), "worktree not found")
+    assert_contains(res_body(response), "neither")
   end)
 end)
 

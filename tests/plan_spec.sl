@@ -140,3 +140,63 @@ describe("Plan.effective_status", fn() {
         assert_eq(plan.effective_status, "starting")
     })
 })
+
+describe("plan_stream_payload — model-layer builder for the plan/feature WS frame", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Plan.delete_all()
+    })
+
+    test("connect → snapshot returns the entire log as one chunk", fn() {
+        let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+        let live_pid = spawn["stdout"].trim().to_int()
+        Plan.create({
+            "_key":    "plan-stream-snap",
+            "project": "x",
+            "plan_id": "plan-stream-snap",
+            "status":  "starting",
+            "log":     "boot...\nready\n",
+            "pid":     live_pid
+        })
+        let p = plan_stream_payload("plan-stream-snap", "connect", 0)
+        assert_eq(p["event"], "snapshot")
+        assert_eq(p["log_chunk"], "boot...\nready\n")
+        assert_eq(p["log_offset"], "boot...\nready\n".length)
+        assert_eq(p["terminal"], false)
+    })
+
+    test("tick → delta only the bytes past the cursor", fn() {
+        let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+        let live_pid = spawn["stdout"].trim().to_int()
+        Plan.create({
+            "_key":    "plan-stream-delta",
+            "project": "x",
+            "plan_id": "plan-stream-delta",
+            "status":  "starting",
+            "log":     "abcdefghij",
+            "pid":     live_pid
+        })
+        let p = plan_stream_payload("plan-stream-delta", "message", 4)
+        assert_eq(p["event"], "delta")
+        assert_eq(p["log_chunk"], "efghij")
+        assert_eq(p["log_offset"], 10)
+    })
+
+    test("flips terminal=true on done", fn() {
+        Plan.create({
+            "_key":    "plan-stream-done",
+            "project": "x",
+            "plan_id": "plan-stream-done",
+            "status":  "done",
+            "log":     "all green\n"
+        })
+        let p = plan_stream_payload("plan-stream-done", "message", 0)
+        assert_eq(p["terminal"], true)
+    })
+
+    test("unknown plan returns an error frame", fn() {
+        let p = plan_stream_payload("plan-stream-missing", "connect", 0)
+        assert_eq(p["event"], "error")
+        assert_eq(p["terminal"], true)
+    })
+})

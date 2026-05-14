@@ -1,0 +1,10 @@
+<%
+  # Inner body of #generate-progress-log. Mirrors the run-stream
+  # structure so `appendLogChunk` in public/run-stream.js finds a
+  # <pre> on first delta and appends to it (instead of wiping the
+  # SSR content). Empty log → no <pre>; first delta then creates
+  # one via the same path runs/_log.html.slv uses.
+%>
+<% if (log ?? "") != "" %>
+  <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in log.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
+<% end %>

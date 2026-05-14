@@ -339,9 +339,9 @@ run_agent() {
       fi
       (
         cd "$worktree_dir"
-        "${opencode_cmd[@]}" < /dev/null "$prompt" 2> >(tr -d '\r' >> "$log_file")
+        "${opencode_cmd[@]}" < /dev/null "$prompt" 2> >(stdbuf -oL tr -d '\r' >> "$log_file")
       ) | tee -a "$log_file.jsonl" \
-        | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
       ;;
     *)
       local claude_args=(--dangerously-skip-permissions -p --output-format stream-json --verbose)
@@ -350,9 +350,9 @@ run_agent() {
       fi
       (
         cd "$worktree_dir"
-        claude "${claude_args[@]}" < /dev/null "$prompt" 2> >(tr -d '\r' >> "$log_file")
+        claude "${claude_args[@]}" < /dev/null "$prompt" 2> >(stdbuf -oL tr -d '\r' >> "$log_file")
       ) | tee -a "$log_file.jsonl" \
-        | jq -r --unbuffered -f "$claude_jq" | tr -d '\r' >> "$log_file"
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
       ;;
   esac
   local rc=${PIPESTATUS[0]}

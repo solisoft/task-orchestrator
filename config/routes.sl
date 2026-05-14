@@ -39,6 +39,10 @@ get("/projects/:name/tasks/new", "tasks#new")
 # create must precede the static-segment plan route (Soli pruning)
 post("/projects/:name/tasks", "tasks#create")
 get("/projects/:name/tasks/:slug/sidebar", "tasks#sidebar")
+# Static-segment GETs (sidebar, code-review) must precede the bare
+# `:slug` show route — Soli's router would otherwise capture
+# `expose-params/code-review` as the slug.
+get("/projects/:name/tasks/:slug/code-review", "tasks#code_review_panel")
 get("/projects/:name/tasks/:slug", "tasks#show")
 post("/projects/:name/tasks/:slug/save", "tasks#save")
 post("/projects/:name/tasks/:slug/queue", "tasks#queue")
@@ -60,6 +64,7 @@ post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
 post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
 post("/projects/:name/tasks/plan-retry/:plan_id",  "tasks#plan_retry")
 router_websocket("/ws/plan-stream", "tasks#plan_stream")
+router_websocket("/ws/code-review-stream", "tasks#code_review_stream")
 # Sits outside the `authenticate` block: the WS handler is event-driven, so
 # cookie-based session lookup isn't reliably available here. The plan_id
 # (a server-generated nonce) is what gates access, mirroring how
@@ -95,6 +100,12 @@ middleware("authenticate", -> {
   # ── Features ─────────────────────────
 
   resources("features")
+  # Browsers only emit GET/POST from forms, and Soli's router doesn't
+  # honor a `?_method=put|delete` override — so the resources() PUT/DELETE
+  # endpoints aren't reachable from the edit/delete forms. Expose POST
+  # aliases that route to the same actions.
+  post("/features/:id/update", "features#update")
+  post("/features/:id/destroy", "features#destroy")
   post("/features/:id/generate_tasks", "features#generate_tasks")
   post("/features/:id/regenerate_tasks", "features#regenerate_tasks")
   post("/features/:id/refine_tasks", "features#refine_tasks")

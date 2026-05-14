@@ -312,6 +312,13 @@ fn show(req)
   let default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
   let picker_current = (task.model ?? "") == "" ? default_model : task.model
   let picker = plan_model_picker_data(picker_current)
+  # Pre-load past code reviews for the panel's history list. View scope
+  # can't resolve `CodeReview.X`, so we materialise them here. Empty
+  # array when the task hasn't been reviewed yet.
+  let code_reviews = []
+  if task.status == "review"
+    code_reviews = CodeReview.for_task(project["name"], task.slug)
+  end
   render("tasks/show", {
     "title": task.slug,
     "project": project,
@@ -322,8 +329,37 @@ fn show(req)
     "default_review_model": Plan.default_review_model(),
     "claude_options":     picker["claude_options"],
     "opencode_options":   picker["opencode_options"],
+    "code_reviews":       code_reviews,
     "theme": Setting.current_theme()
   })
+end
+
+# GET /projects/:name/tasks/:slug/code-review — htmx fetch that returns
+# just the code-review panel partial. Used after a WS terminal frame
+# fires `reload: true` so the spinner is swapped out for the completed
+# history entry without a full page navigation.
+fn code_review_panel(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return {"status": 404, "body": "Unknown project"}
+  end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  let _pkr = _picker_locals_for(task)
+  {
+    "status": 200,
+    "headers": {"Content-Type": "text/html; charset=utf-8"},
+    "body": render_partial("tasks/code_review", {
+      "project":            project,
+      "task":               task,
+      "default_plan_model": _pkr["default_plan_model"],
+      "claude_options":     _pkr["claude_options"],
+      "opencode_options":   _pkr["opencode_options"],
+      "reviews":            CodeReview.for_task(project["name"], task.slug)
+    })
+  }
 end
 
 # GET /projects/:name/tasks/:slug/sidebar — returns the task as an HTML
@@ -539,6 +575,52 @@ fn react(req)
   if prompt == ""
     return {"status": 422, "body": "Prompt is required"}
   end
+  task.status = "inprogress"
+  task.save()
+  let nonce = str(DateTime.now().to_unix() rescue 0)
+  let prompt_path = "/tmp/react-prompt-" + nonce + ".md"
+  Trusted.write(prompt_path, prompt)
+  let line = "nohup ./bin/react-run " + project["name"] + " " +
+             task.slug + " " + prompt_path +
+             " >/dev/null 2>&1 & disown"
+  let res = System.run_sync(["bash", "-c", line])
+  if res["exit_code"] != 0
+    return {"status": 500, "body": "Failed to spawn react agent — check server log"}
+  end
+  if req["headers"]["hx-request"] == "true"
+    let _pkr = _picker_locals_for(task)
+    return {
+      "status": 200,
+      "headers": { "Content-Type": "text/html; charset=utf-8" },
+      "body": render_partial("tasks/code_review", {
+        "project":            project,
+        "task":               task,
+        "default_plan_model": _pkr["default_plan_model"],
+        "claude_options":     _pkr["claude_options"],
+        "opencode_options":   _pkr["opencode_options"],
+        "reviews":            CodeReview.for_task(project["name"], task.slug)
+      })
+    }
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
+end
+  let task = Task.find_by_slug(project["name"], req["params"]["slug"])
+  if task == nil
+    return {"status": 404, "body": "Task not found"}
+  end
+  if task.status != "review"
+    return {"status": 422,
+            "body": "react is only available for review tasks (current: " +
+                    task.status + ")"}
+  end
+  if task.pr_url == nil or task.pr_url == ""
+    return {"status": 422,
+            "body": "react is only available for tasks with an open PR"}
+  end
+  let prompt = (req["form"]["prompt"] ?? "").trim()
+  if prompt == ""
+    return {"status": 422, "body": "Prompt is required"}
+  end
   let nonce = str(DateTime.now().to_unix() rescue 0)
   let prompt_path = "/tmp/react-prompt-" + nonce + ".md"
   Trusted.write(prompt_path, prompt)
@@ -572,21 +654,103 @@ fn code_review(req)
             "body": "code-review is only available for review tasks (current: " +
                     task.status + ")"}
   end
-  if not run_worktree_exists(project["name"], task.slug)
+  # Allow code-review when EITHER the worktree still exists (in-place
+  # review of /do-task's working tree) OR the task has a `pr_url` (PR
+  # diff review on GitHub). `bin/review-run` chooses the mode based on
+  # what's available at runtime.
+  let has_worktree = run_worktree_exists(project["name"], task.slug)
+  let has_pr = (task.pr_url ?? "") != ""
+  if not has_worktree and not has_pr
     return {"status": 422,
-            "body": "worktree not found — task may not have been run yet"}
+            "body": "code-review needs either a local worktree or a PR — task has neither"}
   end
   # `_stitched_plan_model` validates the picker output against the
   # allowlist, so the value is safe to splice into the shell command.
   let model = _stitched_plan_model(req["all"] ?? {})
+  # Create the audit row up front so the WS handler has something to
+  # find as soon as the page swap lands. `bin/review-run` writes status
+  # / log / body back into this same row via its review_id.
+  let review_id = "rev-" + str(DateTime.now().to_unix() rescue 0)
+  let review = CodeReview.create({
+    "_key":      CodeReview.key_for(project["name"], task.slug, review_id),
+    "project":   project["name"],
+    "slug":      task.slug,
+    "review_id": review_id,
+    "task_key":  task._key,
+    "status":    "starting",
+    "log":       "",
+    "body":      "",
+    "model":     model,
+    "pending":   false
+  })
+  if review._errors
+    return {"status": 500, "body": "Failed to create review row"}
+  end
   let line = "nohup ./bin/review-run " + project["name"] + " " +
-             task.slug + " " + model +
+             task.slug + " " + model + " " + review_id +
              " >/dev/null 2>&1 & disown"
   let res = System.run_sync(["bash", "-c", line])
   if res["exit_code"] != 0
     return {"status": 500, "body": "Failed to spawn review agent — check server log"}
   end
-  redirect("/projects/" + project["name"] + "/tasks/" + task.slug + "/run")
+  # HTMX requests get the panel fragment back in-place (no redirect),
+  # so the spinner appears without leaving the task page. Direct POST
+  # without the HX-Request header still falls back to a redirect so
+  # the action stays usable from curl / non-htmx clients.
+  if req["headers"]["hx-request"] == "true"
+    let _pkr = _picker_locals_for(task)
+    return {
+      "status": 200,
+      "headers": { "Content-Type": "text/html; charset=utf-8" },
+      "body": render_partial("tasks/code_review", {
+        "project":            project,
+        "task":               task,
+        "default_plan_model": _pkr["default_plan_model"],
+        "claude_options":     _pkr["claude_options"],
+        "opencode_options":   _pkr["opencode_options"],
+        "reviews":            CodeReview.for_task(project["name"], task.slug)
+      })
+    }
+  end
+  redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
+end
+
+# WebSocket handler for the code-review panel. The client opens a
+# socket per running review and ticks until status is terminal; on
+# `reload: true` it triggers a panel re-fetch so the spinner is
+# replaced with the completed history entry. Mirrors the protocol used
+# by runs#stream / tasks#plan_stream.
+fn code_review_stream(event)
+  let event_type = event["type"]
+  if event_type != "message"
+    return {}
+  end
+  let raw = (event["message"] ?? "").trim()
+  let parsed = JSON.parse(raw) rescue nil
+  if parsed == nil
+    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
+  end
+  let review_id = (parsed["review_id"] ?? "").trim()
+  let offset = parsed["offset"] ?? 0
+  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  let data = code_review_stream_payload(review_id, frame_kind, offset)
+  if data["event"] == "error"
+    return { "send": JSON.stringify(data) }
+  end
+  { "send": JSON.stringify(data) }
+end
+
+# Helper: package the locals the code-review partial needs (model
+# picker options + global default) so both `code_review` and `show`
+# can hand the partial the same shape.
+fn _picker_locals_for(task)
+  let saved = (task.model ?? "").trim()
+  let picker = plan_model_picker_data(saved)
+  {
+    "claude_options":     picker["claude_options"],
+    "opencode_options":   picker["opencode_options"],
+    "default_plan_model": Plan.default_plan_model()
+  }
 end
 
 fn save(req)

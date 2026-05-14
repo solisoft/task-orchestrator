@@ -1,4 +1,4 @@
-<form method="post" action="<%= feature == nil ? "/features" : "/features/" + feature._key + "?_method=put" %>" class="rounded-xl glass-card p-6 space-y-4">
+<form method="post" action="<%= feature == nil ? "/features" : "/features/" + feature._key + "/update" %>" class="rounded-xl glass-card p-6 space-y-4">
   <div>
     <label class="block text-sm font-medium text-slate-300 mb-1">Project</label>
     <% if feature == nil and project != nil %>

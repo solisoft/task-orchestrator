@@ -17,6 +17,10 @@
           <span>
             Status:
             <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
+            <% let _agent = (task.agent_type ?? "").trim() %>
+            <% if _agent != "" %>
+              <span>Agent: <span class="text-slate-400"><%= _agent %></span></span>
+            <% end %>
             <% if task.tags != nil %>
               <% for tag in task.tags %>
                 <% if tag == "follow_up" %>
@@ -121,7 +125,8 @@
         "default_plan_model":   default_plan_model,
         "default_review_model": default_review_model,
         "claude_options":       claude_options,
-        "opencode_options":     opencode_options
+        "opencode_options":     opencode_options,
+        "reviews":              code_reviews
       }) %>
     <% end %>
 

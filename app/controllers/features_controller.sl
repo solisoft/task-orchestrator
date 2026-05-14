@@ -271,7 +271,9 @@ fn edit(req)
   })
 end
 
-# POST /features/:id (update via method override)
+# POST /features/:id/update — explicit POST alias for the
+# resources() PUT route, since Soli's router doesn't honor a
+# `?_method=put` override on form submissions.
 fn update(req)
   let feature = _find_feature(req)
   if feature == nil
@@ -724,7 +726,14 @@ end
 # yet (the polling endpoint that does the import never fired because the
 # page was refreshed away).
 fn _plan_needs_attention(plan)
-  let status = plan.status ?? ""
+  # Use `effective_status` (not the raw field) so a plan that died
+  # without writing its final status — e.g. SIGKILLed mid-run, leaving
+  # status="starting" pid=null — is treated as terminal via the
+  # `failed:zombie` synthesis path. Without this, the show page picks
+  # the zombie row as active_plan, the WS reports terminal=true, the
+  # client reloads, and the next render picks the same zombie → an
+  # infinite reload loop.
+  let status = plan.effective_status ?? ""
   if status.starts_with("failed:")
     return false
   end
@@ -918,7 +927,11 @@ fn generate_stream(event)
     return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
   end
   let feature_key = (parsed["feature_id"] ?? "").trim()
-  let feature = Feature.find(feature_key) rescue nil
+  # Use find_by to look up by _key — `Model.find` raises a framework 404
+  # on miss, and the WS handler can't surface that the way a controller
+  # action can. The sibling tasks/runs stream handlers use the same
+  # find_by-style lookup for the same reason.
+  let feature = Feature.find_by("_key", feature_key) rescue nil
   if feature == nil
     return { "send": JSON.stringify({ "event": "error", "message": "unknown feature", "terminal": true }) }
   end
@@ -996,11 +1009,15 @@ fn _render_generate_progress(feature, plan_id, inner, initial_log, stream_token)
 end
 
 fn _render_generate_log(log, status, failed, feature)
+  # Render the log body via the shared partial so SSR mirrors the
+  # <pre>+<span> shape `appendLogChunk` (public/run-stream.js) expects.
+  # Without it, the first WS delta wipes the initial log content.
+  let body = render_partial("features/generate_log_pre", { "log": log ?? "" })
   let html = "<div id=\"generate-progress-log\" " +
              "class=\"text-sm font-mono text-slate-300 whitespace-pre-wrap " +
              "max-h-64 overflow-y-auto rounded-lg bg-slate-900/60 border " +
              "border-white/5 p-3\">" +
-             h(log) + "</div>"
+             body + "</div>"
   if failed
     html = html + "<div id=\"generate-progress-status\" class=\"text-red-400 text-sm mt-2\">" +
            "Plan failed: " + h(status) + ". " +
