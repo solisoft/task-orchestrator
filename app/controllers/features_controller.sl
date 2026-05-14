@@ -34,7 +34,9 @@ fn index(req)
         "groups": groups,
         "q": q,
         "projects": projs,
-        "theme": Setting.current_theme()
+        "theme": Setting.current_theme(),
+        "theme_css_vars": Setting.current_theme_css_vars(),
+        "theme_class": Setting.current_theme_class()
       })
     end)
 
@@ -130,7 +132,9 @@ fn show(req)
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
     "default_plan_model": _pkr["default_plan_model"],
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -204,7 +208,9 @@ fn new(req)
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
     "default_plan_model": _pkr["default_plan_model"],
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -247,7 +253,9 @@ fn create(req)
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
         "default_plan_model": _pkr["default_plan_model"],
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class()
     })
   end
   redirect("/features/" + feature._key)
@@ -267,7 +275,9 @@ fn edit(req)
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
     "default_plan_model": _pkr["default_plan_model"],
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -300,7 +310,9 @@ fn update(req)
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
         "default_plan_model": _pkr["default_plan_model"],
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class()
     })
   end
   redirect("/features/" + feature._key)

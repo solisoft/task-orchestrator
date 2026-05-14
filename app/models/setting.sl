@@ -57,6 +57,35 @@ class Setting < Model
     return Setting.get_or("theme", "dark")
   end
 
+  # CSS variables for the currently-active preset — built-in or custom.
+  # Layouts inline these onto `:root` so utility classes that opt into
+  # `var(--color-bg)` etc. flip with the preset. Views can't reach the
+  # model layer directly (see CLAUDE.md), so every controller calls this
+  # and threads the hash through `render()` as `theme_css_vars`.
+  static def current_theme_css_vars()
+    let preset = ThemePreset.find_by_key(Setting.current_theme())
+    if preset == nil
+      return {}
+    end
+    return preset["css_vars"]
+  end
+
+  # "dark" or "light" — which baseline stylesheet the active preset
+  # rides. Goes onto `<html class>` so Tailwind's `dark:` utilities and
+  # `theme-light.css` overrides keep working when a preset like
+  # "Dracula" or "GitHub Light" is selected.
+  static def current_theme_class()
+    let preset = ThemePreset.find_by_key(Setting.current_theme())
+    if preset == nil
+      return "dark"
+    end
+    let base = preset["base"] ?? "dark"
+    if base == "light"
+      return "light"
+    end
+    return "dark"
+  end
+
   # Stored preset map: { "preset_name": { "css_vars": {...} }, ... }
   static def theme_presets()
     return Setting.get("theme_presets") ?? {}

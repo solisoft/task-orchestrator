@@ -52,7 +52,9 @@ fn index(req)
         "prev_page": prev_page,
         "next_page": next_page,
         "linked_tasks": _linked_tasks_for(plans),
-        "theme": Setting.current_theme()
+        "theme": Setting.current_theme(),
+        "theme_css_vars": Setting.current_theme_css_vars(),
+        "theme_class": Setting.current_theme_class()
     })
 end
 

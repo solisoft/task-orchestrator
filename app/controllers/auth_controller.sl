@@ -7,6 +7,8 @@ fn login_form(req)
     "error": nil,
     "email": "",
     "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class(),
     "hide_header": true
   })
 end
@@ -22,6 +24,8 @@ fn login(req)
       "error": "Email and password are required.",
       "email": email,
       "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class(),
       "hide_header": true
     })
   end
@@ -32,6 +36,8 @@ fn login(req)
       "error": "Invalid email or password.",
       "email": email,
       "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class(),
       "hide_header": true
     })
   end

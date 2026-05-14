@@ -116,33 +116,48 @@
       <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Theme</legend>
         <p class="mt-2 text-sm text-slate-400">Pick a preset or create your own. Saved server-side so the page renders in the correct theme on first paint.</p>
+        <p class="mt-1 text-xs text-slate-500">Click a card to apply.</p>
         <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4" id="preset-grid">
           <% for preset in presets %>
+            <% let _cv = preset["css_vars"] %>
+            <% let _bg      = _cv["--color-bg"]      ?? "#0f172a" %>
+            <% let _surface = _cv["--color-surface"] ?? "#1e293b" %>
+            <% let _text    = _cv["--color-text"]    ?? "#e2e8f0" %>
+            <% let _muted   = _cv["--color-muted"]   ?? "#64748b" %>
+            <% let _accent  = _cv["--color-accent"]  ?? "#6366f1" %>
+            <% let _success = _cv["--color-success"] ?? "#10b981" %>
+            <% let _warning = _cv["--color-warning"] ?? "#f59e0b" %>
+            <% let _danger  = _cv["--color-danger"]  ?? "#ef4444" %>
             <div class="preset-card rounded-xl border border-white/10 overflow-hidden cursor-pointer hover:border-indigo-400/50 transition-colors"
                  data-preset-key="<%= preset["_key"] %>"
-                 data-bg="<%= preset["css_vars"]["--color-bg"] %>"
-                 data-text="<%= preset["css_vars"]["--color-text"] %>"
-                 data-accent="<%= preset["css_vars"]["--color-accent"] %>"
-                 data-border="<%= preset["css_vars"]["--color-border"] %>"
-                 data-surface="<%= preset["css_vars"]["--color-surface"] %>"
-                 data-muted="<%= preset["css_vars"]["--color-muted"] %>">
-              <div class="preset-preview h-20 text-sm font-mono flex items-center justify-center"
-                   style="background: <%= preset["css_vars"]["--color-bg"] %>; color: <%= preset["css_vars"]["--color-text"] %>;">
-                <span class="opacity-60">Aa</span>
+                 data-css-vars='<%- JSON.stringify(_cv) %>'>
+              <div class="preset-preview h-20 text-sm font-mono flex items-center justify-center relative"
+                   style="background: <%= _bg %>; color: <%= _text %>;">
+                <span class="opacity-70 text-lg font-semibold">Aa</span>
+                <span class="absolute top-1 right-2 text-[10px] uppercase tracking-wider"
+                      style="color: <%= _accent %>;">accent</span>
               </div>
-              <div class="p-3" style="background: <%= preset["css_vars"]["--color-surface"] %>;">
-                <div class="text-sm font-medium" style="color: <%= preset["css_vars"]["--color-text"] %>;"><%= preset["name"] %></div>
-                <% if preset["is_default"] == true %>
-                  <div class="text-xs" style="color: <%= preset["css_vars"]["--color-muted"] %>;">built-in</div>
-                <% else %>
-                  <div class="text-xs" style="color: <%= preset["css_vars"]["--color-muted"] %>;">custom</div>
-                <% end %>
-                <% if preset["is_default"] != true %>
-                  <div class="flex gap-2 mt-1">
-                    <button type="button" class="preset-edit-btn text-xs text-indigo-400 hover:text-indigo-300" data-preset-key="<%= preset["_key"] %>">Edit</button>
-                    <button type="button" class="preset-delete-btn text-xs text-red-400 hover:text-red-300" data-preset-key="<%= preset["_key"] %>">Delete</button>
-                  </div>
-                <% end %>
+              <div class="px-3 py-2" style="background: <%= _surface %>;">
+                <div class="flex items-baseline justify-between">
+                  <div class="text-sm font-medium truncate" style="color: <%= _text %>;"><%= preset["name"] %></div>
+                  <% if preset["is_default"] == true %>
+                    <div class="text-[10px] uppercase tracking-wider" style="color: <%= _muted %>;">built-in</div>
+                  <% else %>
+                    <div class="text-[10px] uppercase tracking-wider" style="color: <%= _muted %>;">custom</div>
+                  <% end %>
+                </div>
+                <div class="mt-1.5 flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded-full" style="background: <%= _accent %>;" title="accent"></span>
+                  <span class="inline-block w-3 h-3 rounded-full" style="background: <%= _success %>;" title="success"></span>
+                  <span class="inline-block w-3 h-3 rounded-full" style="background: <%= _warning %>;" title="warning"></span>
+                  <span class="inline-block w-3 h-3 rounded-full" style="background: <%= _danger %>;" title="danger"></span>
+                  <% if preset["is_default"] != true %>
+                    <div class="ml-auto flex gap-2">
+                      <button type="button" class="preset-edit-btn text-xs text-indigo-400 hover:text-indigo-300" data-preset-key="<%= preset["_key"] %>">Edit</button>
+                      <button type="button" class="preset-delete-btn text-xs text-red-400 hover:text-red-300" data-preset-key="<%= preset["_key"] %>">Delete</button>
+                    </div>
+                  <% end %>
+                </div>
               </div>
             </div>
           <% end %>
@@ -156,17 +171,57 @@
         </div>
 
         <div id="new-preset-form" class="mt-4 hidden">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
               <label for="preset-name" class="block text-xs font-medium text-slate-300 mb-1">Preset name</label>
               <input type="text" id="preset-name" name="preset_name"
                      class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400/40"
                      placeholder="e.g. Solarized">
             </div>
             <div>
-              <label for="preset-accent" class="block text-xs font-medium text-slate-300 mb-1">Accent color</label>
-              <input type="color" id="preset-accent" name="preset_accent"
-                     class="w-full h-10 rounded-md bg-slate-900 border border-white/10 px-1 py-1 text-sm cursor-pointer">
+              <label class="block text-xs font-medium text-slate-300 mb-1">Base style</label>
+              <select id="preset-base"
+                      class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm text-slate-200">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </div>
+            <div></div>
+            <div>
+              <label for="preset-bg" class="block text-xs font-medium text-slate-300 mb-1">Background</label>
+              <input type="color" id="preset-bg" value="#1e293b" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-surface" class="block text-xs font-medium text-slate-300 mb-1">Surface</label>
+              <input type="color" id="preset-surface" value="#1e293b" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-text" class="block text-xs font-medium text-slate-300 mb-1">Text</label>
+              <input type="color" id="preset-text" value="#e2e8f0" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-muted" class="block text-xs font-medium text-slate-300 mb-1">Muted</label>
+              <input type="color" id="preset-muted" value="#64748b" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-border" class="block text-xs font-medium text-slate-300 mb-1">Border</label>
+              <input type="color" id="preset-border" value="#334155" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-accent" class="block text-xs font-medium text-slate-300 mb-1">Accent</label>
+              <input type="color" id="preset-accent" value="#6366f1" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-success" class="block text-xs font-medium text-slate-300 mb-1">Success</label>
+              <input type="color" id="preset-success" value="#10b981" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-warning" class="block text-xs font-medium text-slate-300 mb-1">Warning</label>
+              <input type="color" id="preset-warning" value="#f59e0b" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
+            </div>
+            <div>
+              <label for="preset-danger" class="block text-xs font-medium text-slate-300 mb-1">Danger</label>
+              <input type="color" id="preset-danger" value="#ef4444" class="preset-color-picker w-full h-9 rounded-md bg-slate-900 border border-white/10 px-1 cursor-pointer">
             </div>
           </div>
           <div class="mt-3 flex gap-3">
@@ -301,14 +356,11 @@
         function getCssVars(forKey) {
           var card = grid.querySelector('[data-preset-key="' + forKey + '"]');
           if (!card) return {};
-          return {
-            '--color-bg':      card.getAttribute('data-bg'),
-            '--color-text':    card.getAttribute('data-text'),
-            '--color-accent':  card.getAttribute('data-accent'),
-            '--color-border':  card.getAttribute('data-border'),
-            '--color-surface': card.getAttribute('data-surface'),
-            '--color-muted':   card.getAttribute('data-muted')
-          };
+          try {
+            return JSON.parse(card.getAttribute('data-css-vars') || '{}');
+          } catch (e) {
+            return {};
+          }
         }
 
         function applyCssVars(cssVars) {
@@ -319,21 +371,16 @@
         }
 
         function resetCssVars() {
-          const current = selectedTheme.value;
-          const allCards = grid.querySelectorAll('.preset-card');
-          for (var i = 0; i < allCards.length; i++) {
-            if (allCards[i].getAttribute('data-preset-key') === current) {
-              try {
-                var cv = JSON.parse(allCards[i].getAttribute('data-css-vars') || "{}");
-                applyCssVars(cv);
-              } catch (e) {}
-              break;
-            }
-          }
+          applyCssVars(getCssVars(selectedTheme.value));
         }
 
         if (grid) {
+          // Click-to-apply: clicking a card persists the theme and
+          // reloads so dark↔light + the CSS-variable inline block on
+          // <html> re-render cleanly. Edit/Delete buttons on custom
+          // presets stop propagation so they don't trigger this.
           grid.addEventListener('click', function (e) {
+            if (e.target.closest('.preset-edit-btn, .preset-delete-btn')) return;
             var card = e.target.closest && e.target.closest('.preset-card');
             if (!card) return;
             var key = card.getAttribute('data-preset-key');
@@ -344,6 +391,12 @@
               c.classList.remove('ring-2', 'ring-indigo-400');
             });
             card.classList.add('ring-2', 'ring-indigo-400');
+            // Persist to server + reload so the layout's html.dark /
+            // html.light class flips to match the new selection.
+            var body = new FormData();
+            body.append('theme', key);
+            fetch('/settings/theme', { method: 'POST', body: body, credentials: 'same-origin' })
+              .then(function (r) { if (r.ok) window.location.reload(); });
           });
         }
 

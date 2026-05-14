@@ -22,7 +22,9 @@ fn index(req)
     "features_by_project": _home_feature_counts(),
     "follow_up_by_project": Task.follow_up_counts(),
     "current_user": req["current_user"],
-    "theme":       Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -52,7 +54,9 @@ fn landing(req)
     "feature_total":  feature_total,
     "current_user":   req["current_user"],
     "hide_header":    true,
-    "theme":          Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 

@@ -1,0 +1,103 @@
+/* ═══════════════════════════════════════════════════════════════
+   Preset CSS variable bridge
+   ───────────────────────────────────────────────────────────────
+   The layout inlines `:root { --color-bg: ...; --color-surface:
+   ...; ... }` from the active ThemePreset. This stylesheet is the
+   *consumer* — it retints the surfaces a user notices first (body
+   mesh, glass cards, accent text, scroll thumbs) so dark-base
+   presets like Dracula / Tokyo Night / Nord visibly differ from
+   plain Dark without rewriting every Tailwind utility.
+
+   For built-in `dark` / `light` the inline `:root` block is empty
+   (the preset's `css_vars` still load, but the existing Tailwind
+   utilities + theme-light.css already paint correctly — these
+   rules sit on top, so they only kick in when a preset supplied
+   the matching variable). The `var(--color-bg, …)` fallbacks
+   reproduce the dark / light defaults so a missing variable
+   doesn't blank out the surface.
+
+   Scope: `html[data-theme]:not([data-theme="dark"]):not([data-
+   theme="light"])` — we deliberately leave `dark` and `light`
+   alone, letting their existing dedicated stylesheets win.
+   ═══════════════════════════════════════════════════════════════ */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) {
+  /* Body / gradient mesh — the largest single surface on every page. */
+}
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .gradient-mesh {
+  background:
+    radial-gradient(ellipse 60% 50% at 15% 0%, var(--color-accent) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 50% at 85% 100%, var(--color-accent-hover, var(--color-accent)) 0%, transparent 50%),
+    var(--color-bg);
+  background-attachment: fixed;
+  background-blend-mode: soft-light;
+}
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) body {
+  color: var(--color-text);
+}
+
+/* Glass cards — the per-section panels (settings fieldsets, run tiles,
+   etc.). We use the preset's surface color with a subtle alpha so the
+   underlying gradient still bleeds through. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .glass-card {
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  border-color: var(--color-border);
+}
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .glass-card-light {
+  background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+  border-color: var(--color-border);
+}
+
+/* Accent bar at the top of every page. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .gradient-accent-bar {
+  background: linear-gradient(90deg,
+    var(--color-accent) 0%,
+    var(--color-accent-hover, var(--color-accent)) 100%);
+}
+
+/* Gradient page-title text — bind to accent so it reads in-theme. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .gradient-text {
+  background: linear-gradient(135deg,
+    var(--color-accent) 0%,
+    var(--color-accent-hover, var(--color-accent)) 50%,
+    var(--color-link, var(--color-accent)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Borders and dividers used as plain hairlines across the dashboard. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .border-white\/5,
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .border-white\/10,
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .border-slate-700,
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) .border-slate-800 {
+  border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+
+/* Scroll thumb — small but very visible when scanning long task lists. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+/* Markdown surfaces — `.task-md` is already wired to `--md-*` variables
+   in application.css; bridge them to the preset's palette so a code
+   block in a task description picks up the theme's accent / code color. */
+
+html[data-theme]:not([data-theme="dark"]):not([data-theme="light"]) {
+  --md-link:           var(--color-link, var(--color-accent));
+  --md-link-hover:     var(--color-accent-hover, var(--color-accent));
+  --md-code-text:      var(--color-code-text, var(--color-accent));
+  --md-code-bg:        var(--color-code-bg, color-mix(in srgb, var(--color-accent) 12%, transparent));
+}

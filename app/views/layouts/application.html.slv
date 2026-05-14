@@ -1,24 +1,25 @@
+<% let _theme       = theme ?? "dark" %>
+<% let _theme_vars  = locals["theme_css_vars"] ?? {} %>
+<% let _theme_class = locals["theme_class"] ?? (_theme == "light" ? "light" : "dark") %>
 <!DOCTYPE html>
-<html lang="en" class="h-full <%= (theme ?? "dark") == "dark" ? "dark" : "" %>">
+<html lang="en" class="h-full <%= _theme_class %>" data-theme="<%= h(_theme) %>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= title %> - Soli App</title>
 
-    <!-- Theme bootstrap (inline + sync) so the first paint already
-         matches the saved preference and we don't flash dark→light. -->
+    <!-- The active theme is decided server-side from Setting.current_theme()
+         so first paint already matches the saved preference. Mirror it
+         into localStorage so client-side helpers (theme.js toggle) stay
+         in sync across tabs — read the value from `data-theme` rather
+         than templating into a JS string literal, so a preset name with
+         a `"` in it can't break the script. -->
     <script>
       (function () {
         try {
-          var saved = localStorage.getItem("theme");
-          var theme = (saved === "light" || saved === "dark")
-            ? saved
-            : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-                ? "light" : "dark");
-          document.documentElement.classList.add(theme);
-        } catch (e) {
-          document.documentElement.classList.add("dark");
-        }
+          var t = document.documentElement.getAttribute("data-theme") || "dark";
+          localStorage.setItem("theme", t);
+        } catch (e) {}
       })();
     </script>
 
@@ -26,6 +27,21 @@
     <link rel="stylesheet" href="<%= public_path("css/application.css") %>">
     <!-- Light-theme overrides (no-op when <html> lacks `light` class) -->
     <link rel="stylesheet" href="<%= public_path("css/theme-light.css") %>">
+    <!-- Preset CSS variable overrides — utility classes opt into these
+         vars (see `theme-presets.css`) so picking Dracula / Tokyo Night
+         / etc. retints the body and cards without a full per-preset
+         stylesheet. Built-in dark/light leave the hash empty, falling
+         back to the defaults baked into application.css. -->
+    <link rel="stylesheet" href="<%= public_path("css/theme-presets.css") %>">
+    <% if _theme_vars.keys().length() > 0 %>
+      <style>
+        :root {
+          <% for k in _theme_vars.keys() %>
+            <%= k %>: <%= _theme_vars[k] %>;
+          <% end %>
+        }
+      </style>
+    <% end %>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

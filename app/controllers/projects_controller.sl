@@ -24,7 +24,9 @@ fn show(req)
     "agents": agents_for(columns),
     "statuses": Task.kanban_statuses() + ["archived"],
     "active_tab": active,
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 

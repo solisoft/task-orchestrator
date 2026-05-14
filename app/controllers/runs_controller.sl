@@ -23,7 +23,9 @@ fn show(req)
     "log_size": run_log_size(project["name"], slug),
     "todos": run_latest_todos(project["name"], slug),
     "branch_info": _branch_info_for(task, project),
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 

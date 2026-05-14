@@ -1,39 +1,46 @@
 (function () {
-  const STORAGE_KEY = "theme";
+  // The server is the source of truth for theme — `<html class>` and
+  // `<html data-theme>` are set from Setting.current_theme() on every
+  // render, and the inline head script mirrors the value to localStorage
+  // so this file just has to sync the toggle button and persist clicks.
 
-  function readPreferred() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "light" || saved === "dark" || saved.startsWith("custom:"))
-      return saved;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark";
+  function activeClass() {
+    return document.documentElement.classList.contains("light") ? "light" : "dark";
   }
 
-  function apply(theme) {
-    const root = document.documentElement;
-    root.classList.toggle("light", theme === "light");
-    root.classList.toggle("dark", theme !== "light");
+  function refreshButtons() {
+    const isLight = activeClass() === "light";
     document.querySelectorAll("[data-theme-toggle]").forEach(function (btn) {
-      btn.setAttribute("aria-pressed", theme === "light" ? "true" : "false");
+      btn.setAttribute("aria-pressed", isLight ? "true" : "false");
       btn.setAttribute(
         "aria-label",
-        theme === "light" ? "Switch to dark theme" : "Switch to light theme"
+        isLight ? "Switch to dark theme" : "Switch to light theme"
       );
     });
   }
 
-  window.__setTheme = function (theme) {
-    localStorage.setItem(STORAGE_KEY, theme);
-    apply(theme);
-  };
+  function persist(theme) {
+    try { localStorage.setItem("theme", theme); } catch (e) {}
+    // Persist server-side so the next render uses it. We reload on
+    // success so every CSS-variable / class swap lands cleanly — the
+    // dark↔light pair toggles a lot of utility-class colours, and
+    // re-rendering is simpler than hand-swapping every node.
+    const body = new FormData();
+    body.append("theme", theme);
+    fetch("/settings/theme", { method: "POST", body: body, credentials: "same-origin" })
+      .then(function (r) {
+        if (r.ok) {
+          window.location.reload();
+        }
+      })
+      .catch(function () {});
+  }
 
   window.__toggleTheme = function () {
-    const next = document.documentElement.classList.contains("light") ? "dark" : "light";
-    window.__setTheme(next);
+    persist(activeClass() === "light" ? "dark" : "light");
   };
 
-  apply(readPreferred());
+  refreshButtons();
 
   document.addEventListener("click", function (e) {
     const btn = e.target.closest && e.target.closest("[data-theme-toggle]");

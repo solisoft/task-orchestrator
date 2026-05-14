@@ -28,6 +28,8 @@ fn show(req)
     "allowed_set":          _settings_allowed_set(allowed),
     "allowed_orphans":      _settings_allowed_orphans(allowed, claude_ids, opencode_all),
     "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class(),
     "presets": ThemePreset.all_with_builtins()
   })
 end
@@ -99,6 +101,16 @@ fn update(req)
     Setting.set("limit_weekly_" + a, _settings_parse_limit(form["limit_weekly_" + a]))
   end
   redirect("/settings")
+end
+
+fn set_theme(req)
+  let form = _settings_form(req)
+  let theme = (form["theme"] ?? "").trim()
+  if theme == "" or not _settings_known_theme(theme)
+    return { "status": 422, "body": "Unknown theme" }
+  end
+  Setting.set("theme", theme)
+  return { "status": 204, "body": "" }
 end
 
 fn create_preset(req)
@@ -235,7 +247,17 @@ fn _settings_known_agent(name)
 end
 
 fn _settings_known_theme(name)
-  return name == "dark" or name == "light" or name.starts_with("custom:")
+  if name.starts_with("custom:")
+    return true
+  end
+  # Accept any built-in preset key (dark / light / dracula / nord / …).
+  # Custom user presets ride the `custom:` prefix.
+  for p in ThemePreset.built_in_presets()
+    if p["_key"] == name
+      return true
+    end
+  end
+  return false
 end
 
 # Walk the form looking for `allowed_<id>=1` checkboxes, keep only the

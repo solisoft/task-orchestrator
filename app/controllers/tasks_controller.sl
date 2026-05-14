@@ -46,7 +46,9 @@ fn new(req)
     "default_plan_model": default_model,
     "claude_options":     picker["claude_options"],
     "opencode_options":   picker["opencode_options"],
-    "theme":              Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -251,7 +253,9 @@ fn create(req)
       "title": "New task — " + project["name"],
       "project": project,
       "task": task,
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class()
     })
   end
   # Tasks created from a plan carry the originating plan_id in a hidden
@@ -331,7 +335,9 @@ fn show(req)
     "opencode_options":   picker["opencode_options"],
     "code_reviews":       code_reviews,
     "flash_error":        nil,
-    "theme": Setting.current_theme()
+    "theme": Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class": Setting.current_theme_class()
   })
 end
 
@@ -568,7 +574,9 @@ fn commit_push(req)
       "opencode_options":   picker["opencode_options"],
       "code_reviews":       code_reviews,
       "flash_error":        err,
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class()
     })
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
@@ -779,7 +787,9 @@ fn save(req)
       "title": task.slug,
       "project": project,
       "task": task,
-      "theme": Setting.current_theme()
+      "theme": Setting.current_theme(),
+      "theme_css_vars": Setting.current_theme_css_vars(),
+      "theme_class": Setting.current_theme_class()
     })
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)

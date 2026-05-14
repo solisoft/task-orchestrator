@@ -25,6 +25,9 @@ get("/docs", "docs#index")
 
 get("/settings", "settings#show")
 post("/settings", "settings#update")
+# Lightweight theme-only endpoint — used by the header toggle to flip
+# dark↔light without round-tripping the full settings form.
+post("/settings/theme", "settings#set_theme")
 post("/settings/presets", "settings#create_preset")
 put("/settings/presets/:name", "settings#update_preset")
 delete("/settings/presets/:name", "settings#delete_preset")
