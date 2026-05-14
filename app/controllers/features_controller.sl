@@ -439,7 +439,8 @@ fn generate_tasks(req)
     "status": 200,
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": _render_generate_card(feature, plan.plan_id,
-              _render_generate_log("", "spawning planner", false, feature))
+              _render_generate_log("", "spawning planner", false, feature),
+              plan.stream_token ?? "")
   }
 end
 
@@ -570,7 +571,8 @@ fn generate_tasks_log(req)
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": _render_generate_progress(feature, plan_id,
               _render_generate_log(state["log"] ?? "", state["status"], failed, feature),
-              state["log"] ?? "")
+              state["log"] ?? "",
+              state["stream_token"] ?? "")
   }
 end
 
@@ -613,7 +615,8 @@ fn plan_answer(req)
     "headers": {"Content-Type": "text/html; charset=utf-8"},
     "body": _render_generate_progress(feature, plan_id,
               _render_generate_log(state["log"] ?? "", state["status"], failed, feature),
-              state["log"] ?? "")
+              state["log"] ?? "",
+              state["stream_token"] ?? "")
   }
 end
 
@@ -900,6 +903,10 @@ end
 # (`generate_tasks_log`) so `question_html` is omitted. On a done
 # status we set `reload: true` so the client navigates to the feature
 # page, where `_import_tasks_once` will have synced the proposed tasks.
+#
+# Access is gated by the `stream_token` nonce minted in `spawn_plan_agent`
+# and rendered into the auth-gated show page. The client echoes it back
+# on every tick; we reject the stream if it doesn't match.
 fn generate_stream(event)
   let event_type = event["type"]
   if event_type != "message"
@@ -918,6 +925,15 @@ fn generate_stream(event)
   let plan_id = (parsed["plan_id"] ?? "").trim()
   let offset = parsed["offset"] ?? 0
   let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
+  # Validate stream_token so anonymous callers cannot subscribe.
+  let client_token = (parsed["stream_token"] ?? "").trim()
+  let state = read_plan_state(plan_id)
+  if state["status"] == "unknown"
+    return { "send": JSON.stringify({ "event": "error", "message": "unknown plan", "terminal": true }) }
+  end
+  if client_token != state["stream_token"]
+    return { "send": JSON.stringify({ "event": "error", "message": "access denied", "terminal": true }) }
+  end
   let data = plan_stream_payload(plan_id, frame_kind, offset)
   if data["event"] == "error"
     return { "send": JSON.stringify(data) }
@@ -938,7 +954,7 @@ end
 # running badge and the polling div seeded inside. Used as the body of
 # the initial generate_tasks response so the click visibly replaces
 # the Generate Tasks button with a running progress panel.
-fn _render_generate_card(feature, plan_id, inner)
+fn _render_generate_card(feature, plan_id, inner, stream_token)
   "<div class=\"mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in card-glow\">" +
   "<div class=\"absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 " +
   "blur-3xl pointer-events-none\"></div>" +
@@ -953,11 +969,11 @@ fn _render_generate_card(feature, plan_id, inner)
   "</div>" +
   "<p class=\"text-xs text-slate-500 mb-3\">Streaming live &mdash; tasks will appear " +
   "here as the planner produces them.</p>" +
-  _render_generate_progress(feature, plan_id, inner, "") +
+  _render_generate_progress(feature, plan_id, inner, "", stream_token) +
   "</div></div>"
 end
 
-fn _render_generate_progress(feature, plan_id, inner, initial_log)
+fn _render_generate_progress(feature, plan_id, inner, initial_log, stream_token)
   # Streaming runs over a WebSocket: the data-stream-* attributes wire
   # the panel up to the global `run-stream.js` client, replacing the
   # `every 2s` htmx poller. The same panel is re-rendered server-side
@@ -965,11 +981,13 @@ fn _render_generate_progress(feature, plan_id, inner, initial_log)
   # The route URL is static (Soli 1.0.3's `router_websocket` doesn't
   # extract `:id`-style path params); the client echoes the identifiers
   # on every tick from the data-stream-* attrs.
+  # `stream_token` gates the WS route so anonymous callers cannot subscribe.
   let log_len = (initial_log ?? "").length()
   "<div id=\"generate-progress\"" +
   " data-stream-url=\"/ws/feature-generate-stream\"" +
   " data-stream-feature-id=\"" + feature._key + "\"" +
   " data-stream-plan-id=\"" + plan_id + "\"" +
+  " data-stream-token=\"" + (stream_token ?? "") + "\"" +
   " data-stream-log=\"#generate-progress-log\"" +
   " data-stream-status=\"#generate-progress-status\"" +
   " data-stream-offset=\"" + str(log_len) + "\"" +

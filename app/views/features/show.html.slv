@@ -74,6 +74,7 @@
                  data-stream-url="/ws/feature-generate-stream"
                  data-stream-feature-id="<%= feature._key %>"
                  data-stream-plan-id="<%= active_plan.plan_id %>"
+                 data-stream-token="<%= active_plan.stream_token ?? "" %>"
                  data-stream-log="#generate-progress-log"
                  data-stream-status="#generate-progress-status"
                  data-stream-offset="<%= _ap_log.length %>"

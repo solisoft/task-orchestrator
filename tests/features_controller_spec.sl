@@ -697,3 +697,63 @@ describe("Plan model resolution", fn()
     assert_eq(Plan.allow_plan_model("claude-haiku-4-5-20251001"), "claude-haiku-4-5-20251001")
   end)
 end)
+
+describe("FeaturesController WS stream access control", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    User.delete_all()
+  end)
+
+  test("read_plan_state returns stream_token for a plan that has one", fn()
+    # Plan._key IS the plan_id (set to "plan-NNN" by spawn_plan_agent).
+    let plan = Plan.create({
+      "_key":         "plan-token-test",
+      "project":      "proj",
+      "plan_id":      "plan-token-test",
+      "status":       "running",
+      "stream_token": "secret-token-abc"
+    })
+    let state = read_plan_state("plan-token-test")
+    assert_eq(state["stream_token"], "secret-token-abc")
+  end)
+
+  test("read_plan_state returns empty stream_token for a plan without one", fn()
+    let plan = Plan.create({
+      "_key":    "plan-no-token",
+      "project": "proj",
+      "plan_id": "plan-no-token",
+      "status":  "running"
+    })
+    let state = read_plan_state("plan-no-token")
+    assert_eq(state["stream_token"], "")
+  end)
+
+  test("generate_tasks_log renders data-stream-token from the plan", fn()
+    let f = Feature.create({
+      "_key":    "proj--feat-log-token",
+      "project": "proj",
+      "slug":    "feat-log-token",
+      "title":   "Log Token Feature",
+      "status":  "ready"
+    })
+    # _key must match what spawn_plan_agent sets: just the plan_id.
+    let plan = Plan.create({
+      "_key":         "plan-log-token",
+      "project":      "proj",
+      "plan_id":      "plan-log-token",
+      "status":       "running",
+      "feature_slug": f._key,
+      "stream_token": "visible-token-xyz"
+    })
+    User.register("test@example.com", "password123", "Test User")
+    login("test@example.com", "password123")
+    let response = get("/features/proj--feat-log-token/generate_tasks_log/plan-log-token", {}, {
+      "headers": { "Origin": _publish_origin_for_worker() }
+    })
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "data-stream-token=\"visible-token-xyz\"")
+  end)
+end)

@@ -340,7 +340,7 @@ class Plan < Model
 end
 
 # Read the DB-backed state for a plan_id. Returns
-#   { status, log, body, pending_question, model, prompt }.
+#   { status, log, body, pending_question, model, prompt, stream_token }.
 # Lives in the model layer (not the controller) so the WS stream
 # handlers in tasks_controller / features_controller can both call it
 # AND the spec suite — which doesn't auto-load controller files — can
@@ -354,7 +354,8 @@ fn read_plan_state(plan_id)
       "body":             "",
       "pending_question": nil,
       "model":            "claude-sonnet-4-6",
-      "prompt":           "" }
+      "prompt":           "",
+      "stream_token":     "" }
   end
   {
     "status":           plan.effective_status,
@@ -362,7 +363,8 @@ fn read_plan_state(plan_id)
     "body":             plan.body ?? "",
     "pending_question": plan.pending_question,
     "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
-    "prompt":           plan.prompt ?? "" }
+    "prompt":           plan.prompt ?? "",
+    "stream_token":     plan.stream_token ?? "" }
 end
 
 # Plain-data payload for the WS plan/feature-generate stream handlers.

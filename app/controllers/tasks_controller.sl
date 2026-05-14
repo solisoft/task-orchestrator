@@ -1015,18 +1015,25 @@ fn spawn_plan_agent(notes, model, project_path)
       project = segs[segs.length() - 1]
     end
   end
+  # stream_token gates the /ws/feature-generate-stream WS route to prevent
+  # anonymous callers from reading a feature plan's transcript. The token is
+  # random and per-plan; it is rendered into the show page (server-rendered,
+  # auth-gated) and echoed back on every WS tick. plan-stream / run-stream
+  # do not use this field (their HTTP counterparts are already public).
+  let token_nonce = str(DateTime.now().to_unix_millis() rescue 0) + "-" + str(Math.random() * 1000000 rescue 0)
   let plan = Plan.create({
-    "_key":        plan_id,
-    "project":      project,
-    "plan_id":      plan_id,
-    "status":       "starting",
-    "model":        model,
-    "prompt":       notes,
-    "project_path": project_path,
-    "body":         "",
-    "log":          "",
+    "_key":          plan_id,
+    "project":       project,
+    "plan_id":       plan_id,
+    "status":        "starting",
+    "model":         model,
+    "prompt":        notes,
+    "project_path":  project_path,
+    "body":          "",
+    "log":           "",
     "pending_question": nil,
-    "zombie":       false
+    "zombie":        false,
+    "stream_token":  token_nonce
   })
   let line = "nohup ./bin/plan-run " + plan_id + " " + notes_path
             + " " + model + " " + project_path
