@@ -178,6 +178,45 @@ describe("run_log_delta — byte-cursor diffing for the WS stream", fn()
   end)
 end)
 
+describe("run_log_size — total byte count of the .log file", fn()
+  before_each(fn()
+    _rs_reset("rs_repo", "rs_slug")
+  end)
+
+  test("returns 0 when the .log doesn't exist", fn()
+    assert_eq(run_log_size("rs_repo", "rs_slug"), 0)
+  end)
+
+  test("returns the exact byte length of the .log", fn()
+    _rs_write_log("rs_repo", "rs_slug", "abc")
+    assert_eq(run_log_size("rs_repo", "rs_slug"), 3)
+  end)
+
+  test("returns full size even when log exceeds 16 KB (tail vs total)", fn()
+    let parts = []
+    for i in 0..20001
+      parts.push("x")
+    end
+    let big = parts.join("")
+    _rs_write_log("rs_repo", "rs_slug", big)
+    assert(run_log_size("rs_repo", "rs_slug") > 16384)
+    assert_eq(run_log_size("rs_repo", "rs_slug"), 20001)
+  end)
+
+  test("run_log_delta using the full size as offset returns chunk='' at EOF", fn()
+    let parts = []
+    for i in 0..20001
+      parts.push("x")
+    end
+    let big = parts.join("")
+    _rs_write_log("rs_repo", "rs_slug", big)
+    let full_size = run_log_size("rs_repo", "rs_slug")
+    let d = run_log_delta("rs_repo", "rs_slug", full_size)
+    assert_eq(d["chunk"], "")
+    assert_eq(d["offset"], full_size)
+  end)
+end)
+
 describe("run_stream_payload — model-layer builder for the WS frame", fn()
   before_each(fn()
     _rs_reset("rs_repo", "rs_slug")
