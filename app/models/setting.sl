@@ -57,6 +57,29 @@ class Setting < Model
     return Setting.get_or("theme", "dark")
   end
 
+  # Stored preset map: { "preset_name": { "css_vars": {...} }, ... }
+  static def theme_presets()
+    return Setting.get("theme_presets") ?? {}
+  end
+
+  # Persist a new preset or overwrite an existing one by name.
+  static def set_theme_preset(name, css_vars)
+    let presets = Setting.theme_presets()
+    presets[name] = { "css_vars": css_vars }
+    Setting.set("theme_presets", presets)
+  end
+
+  # Remove a preset by name. Returns true if it existed.
+  static def remove_theme_preset(name)
+    let presets = Setting.theme_presets()
+    if presets[name] == nil
+      return false
+    end
+    presets.delete(name)
+    Setting.set("theme_presets", presets)
+    return true
+  end
+
   # Upsert: creates the row if missing, otherwise overwrites `value`.
   # Returns the persisted instance (or nil when the underlying update
   # didn't return one — Model.update is a static that returns the raw

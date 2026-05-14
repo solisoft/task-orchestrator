@@ -25,6 +25,9 @@ get("/docs", "docs#index")
 
 get("/settings", "settings#show")
 post("/settings", "settings#update")
+post("/settings/presets", "settings#create_preset")
+put("/settings/presets/:name", "settings#update_preset")
+delete("/settings/presets/:name", "settings#delete_preset")
 
 # ── Projects ─────────────────────────
 
