@@ -4,6 +4,8 @@
 # Supports ?q= (fulltext search), ?page=, ?per_page= for pagination.
 
 fn index(req)
+    let _email = session_get("user_email") ?? ""
+    let _user = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
     let merged = req["params"] ?? req["query"] ?? {}
     let q = (merged["q"] ?? "").trim()
     let page = (merged["page"] ?? "1").to_i() rescue 1
@@ -42,6 +44,7 @@ fn index(req)
     let next_page = page + 1
 
     render("plans/index", {
+        "current_user": _user,
         "title": "Plans",
         "plans": plans,
         "total_count": total_count,

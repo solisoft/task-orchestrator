@@ -2,6 +2,8 @@
 # Backed by the `Setting` key/value model.
 
 fn show(req)
+  let _email = session_get("user_email") ?? ""
+  let _user = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
   let current_plan_model   = Setting.get_or("plan_model", "claude-sonnet-4-6")
   let current_review_model = Plan.default_review_model()
   let pmd                  = plan_model_picker_data(current_plan_model)
@@ -14,6 +16,7 @@ fn show(req)
   let claude_ids         = Plan.claude_model_ids()
   let claude_labels      = Plan.claude_model_labels()
   render("settings/show", {
+    "current_user": _user,
     "title": "Settings",
     "agent_type": Setting.get_or("agent_type", Task.known_agents()[0]),
     "agents": Task.known_agents(),
