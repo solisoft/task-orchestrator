@@ -29,6 +29,13 @@
           <% if _author != "" %>
             <span>by <span class="text-slate-400"><%= _author %></span></span>
           <% end %>
+          <% if task.feature_slug != nil and task.feature_slug != "" %>
+            <% let _feature = Feature.find_by("_key", task.feature_slug) %>
+            <% let _feature_label = (_feature != nil and _feature.title != nil and _feature.title != "") ? _feature.title : task.feature_slug %>
+            <a href="/features/<%= task.feature_slug %>" class="inline-flex items-center gap-1 rounded-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-200 border border-sky-400/30 px-2.5 py-0.5 text-xs font-medium transition-colors">
+              Feature: <%= _feature_label %>
+            </a>
+          <% end %>
           <% if task.pr_url != nil and task.pr_url != "" %>
             <a href="<%= task.pr_url %>" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 hover:text-indigo-200 border border-indigo-400/30 px-2.5 py-0.5 text-xs font-medium transition-colors">
               Open PR
