@@ -2,11 +2,10 @@
   <div class="max-w-5xl mx-auto px-6 py-10">
 
     <header class="mb-8 animate-fade-in">
-      <nav class="text-sm text-slate-500 mb-3">
-        <a href="/" class="hover:text-slate-300 transition-colors">Home</a>
-        <span class="mx-2">/</span>
-        <span class="text-slate-300">Projects</span>
-      </nav>
+      <%- partial("shared/breadcrumbs", { "crumbs": [
+        { "label": "Home", "href": "/" },
+        { "label": "Projects", "href": "" }
+      ] }) %>
       <h1 class="text-3xl font-bold tracking-tight gradient-text">Projects</h1>
       <p class="mt-2 text-slate-400 text-sm max-w-2xl leading-relaxed">
         Each project is a repo under your workspace root with a <code class="text-slate-300">tasks/</code> folder.
@@ -32,9 +31,9 @@
             </div>
             <p class="text-xs text-slate-500 font-mono truncate mb-4" title="<%= h(p["path"]) %>"><%= h(p["path"]) %></p>
             <div class="flex items-center gap-2 text-xs">
-              <a href="/projects/<%= h(p["name"]) %>?tab=roadmap"
+              <a href="/projects/<%= h(p["name"]) %>?tab=cycles"
                  class="inline-flex items-center gap-1 rounded-md bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-200 px-2.5 py-1 transition-colors">
-                Roadmap
+                Cycles
                 <% if _vc["total"] > 0 %>
                   <span class="font-mono text-fuchsia-300/80">
                     <%= _vc["total"] %><% if _vc["active"] > 0 %><span class="text-fuchsia-400">·<%= _vc["active"] %> active</span><% end %>

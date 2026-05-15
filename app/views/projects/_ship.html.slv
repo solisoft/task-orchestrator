@@ -1,0 +1,70 @@
+<div class="animate-fade-in">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100 tracking-tight">Ship</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Features whose tasks are in review or done &mdash; merge PRs to wrap up</p>
+    </div>
+  </div>
+
+  <% if ship_rows.length() == 0 %>
+    <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
+      <p class="text-slate-300 font-medium mb-1">Nothing to ship yet</p>
+      <p class="text-slate-500 text-sm">Tasks in <span class="font-mono text-slate-300">review</span> or <span class="font-mono text-slate-300">done</span> show up here with their PR links.</p>
+    </div>
+  <% else %>
+    <div class="space-y-3 animate-fade-in-1">
+      <% for row in ship_rows %>
+        <% let _f       = row["feature"] %>
+        <% let _prs     = row["pr_tasks"] ?? [] %>
+        <% let _pending = row["pending"] ?? [] %>
+        <% let _fdone   = (_f.status ?? "") == "done" %>
+
+        <article class="rounded-2xl glass-card border <%= _fdone ? "border-emerald-500/25" : "border-amber-500/20" %> overflow-hidden">
+          <header class="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/5">
+            <div class="min-w-0 flex items-center gap-3 flex-wrap">
+              <% if _fdone %>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Shipped
+                </span>
+              <% else %>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 border border-amber-500/25 text-amber-300 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>Awaiting merge
+                </span>
+              <% end %>
+              <a href="/features/<%= h(_f._key) %>" class="text-sm font-semibold text-slate-100 hover:text-white truncate"><%= h(_f.title) %></a>
+              <%- partial("shared/feature_stage_dots", { "stage": "ship" }) %>
+            </div>
+          </header>
+
+          <div class="px-5 py-3 space-y-2">
+            <% for entry in _prs %>
+              <% let _t  = entry["task"] %>
+              <% let _pr = entry["pr_url"] %>
+              <div class="flex items-center gap-3 text-sm">
+                <span class="inline-block rounded-full bg-<%= _t.status == "done" ? "emerald" : "blue" %>-500/15 border border-<%= _t.status == "done" ? "emerald" : "blue" %>-500/25 text-<%= _t.status == "done" ? "emerald" : "blue" %>-300 text-[10px] uppercase tracking-wider px-2 py-0.5"><%= h(_t.status) %></span>
+                <a href="/projects/<%= h(project["name"]) %>/tasks/<%= h(_t.slug) %>" class="flex-1 min-w-0 truncate text-slate-200 hover:text-white transition-colors"><%= h(_t.title) %></a>
+                <a href="<%= h(_pr) %>" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 rounded-md bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-medium px-2.5 py-1 transition-colors">
+                  PR ↗
+                </a>
+              </div>
+            <% end %>
+            <% if _pending.length() > 0 %>
+              <div class="pt-2 border-t border-white/5">
+                <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Pending PR link</p>
+                <% for t in _pending %>
+                  <div class="flex items-center gap-3 text-sm">
+                    <span class="inline-block rounded-full bg-slate-500/15 border border-slate-500/20 text-slate-400 text-[10px] uppercase tracking-wider px-2 py-0.5"><%= h(t.status) %></span>
+                    <a href="/projects/<%= h(project["name"]) %>/tasks/<%= h(t.slug) %>" class="flex-1 min-w-0 truncate text-slate-300 hover:text-white"><%= h(t.title) %></a>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </article>
+      <% end %>
+    </div>
+  <% end %>
+
+</div>

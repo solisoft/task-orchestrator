@@ -1,0 +1,53 @@
+<div class="min-h-screen text-white">
+  <div class="max-w-5xl mx-auto px-6 py-10">
+
+    <header class="mb-10 animate-fade-in">
+      <h1 class="text-3xl font-bold tracking-tight gradient-text">Workspace</h1>
+      <p class="mt-2 text-slate-400 text-sm max-w-2xl leading-relaxed">
+        What needs your attention across every project &mdash; pending reviews,
+        recent failures, long-running agents, and the latest shipped work.
+      </p>
+    </header>
+
+    <div class="grid gap-4 grid-cols-1 lg:grid-cols-2 animate-fade-in animate-fade-in-1">
+
+      <%- partial("home/workspace_section", {
+        "title":     "Awaiting your review",
+        "accent":    "blue",
+        "empty":     "No tasks waiting on review.",
+        "tasks":     review,
+        "show_pr":   true,
+        "verb":      "Review"
+      }) %>
+
+      <%- partial("home/workspace_section", {
+        "title":     "Recently failed",
+        "accent":    "rose",
+        "empty":     "Nothing failing in the last 24 hours.",
+        "tasks":     failed_recent,
+        "show_pr":   false,
+        "verb":      "Investigate"
+      }) %>
+
+      <%- partial("home/workspace_section", {
+        "title":     "Long-running",
+        "accent":    "amber",
+        "empty":     "No agents stuck longer than 30 minutes.",
+        "tasks":     long_running,
+        "show_pr":   false,
+        "verb":      "Open"
+      }) %>
+
+      <%- partial("home/workspace_section", {
+        "title":     "Recently shipped",
+        "accent":    "emerald",
+        "empty":     "Nothing shipped in the last 24 hours.",
+        "tasks":     shipped_recent,
+        "show_pr":   true,
+        "verb":      "Open"
+      }) %>
+
+    </div>
+
+  </div>
+</div>

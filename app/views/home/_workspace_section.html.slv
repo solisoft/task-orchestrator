@@ -1,0 +1,36 @@
+<% let _accent = accent ?? "indigo" %>
+<% let _border_class = "border-" + _accent + "-500/20" %>
+<% let _badge_bg    = "bg-" + _accent + "-500/15" %>
+<% let _badge_text  = "text-" + _accent + "-300" %>
+
+<section class="rounded-2xl glass-card border <%= _border_class %> overflow-hidden">
+  <header class="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/5">
+    <h2 class="text-sm font-semibold tracking-tight text-slate-100"><%= h(title) %></h2>
+    <span class="text-[10px] font-mono rounded-full <%= _badge_bg %> <%= _badge_text %> px-2 py-0.5 uppercase tracking-wider">
+      <%= tasks.length() %>
+    </span>
+  </header>
+
+  <% if tasks.length() == 0 %>
+    <p class="px-5 py-6 text-xs text-slate-500 italic"><%= h(empty) %></p>
+  <% else %>
+    <ul class="divide-y divide-white/[0.04]">
+      <% for t in tasks %>
+        <li class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+          <div class="min-w-0 flex-1">
+            <a href="/projects/<%= h(t.project) %>/tasks/<%= h(t.slug) %>" class="text-sm text-slate-200 hover:text-white transition-colors truncate block"><%= h(t.title ?? t.slug) %></a>
+            <div class="text-[10px] font-mono text-slate-500 truncate"><%= h(t.project) %>&middot;<%= h(t.slug) %></div>
+          </div>
+          <% if show_pr and (t.pr_url ?? "") != "" %>
+            <a href="<%= h(t.pr_url) %>" target="_blank" rel="noopener"
+               class="shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-200 text-xs font-medium px-2.5 py-1 transition-colors">
+              PR ↗
+            </a>
+          <% end %>
+          <a href="/projects/<%= h(t.project) %>/tasks/<%= h(t.slug) %>"
+             class="shrink-0 text-xs text-slate-400 hover:text-white transition-colors px-2 py-1"><%= h(verb ?? "Open") %></a>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</section>

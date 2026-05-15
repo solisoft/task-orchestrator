@@ -1,0 +1,62 @@
+<div class="animate-fade-in">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100 tracking-tight">Bet</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Shaped briefs awaiting commitment — assign to a cycle, then generate tasks</p>
+    </div>
+    <a href="/projects/<%= h(project["name"]) %>/versions/new"
+       class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1.5 transition-all">
+      + New cycle
+    </a>
+  </div>
+
+  <% let _bets = features_by_stage["bet"] ?? [] %>
+  <% if _bets.length() == 0 %>
+    <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
+      <p class="text-slate-300 font-medium mb-1">No bets on the table</p>
+      <p class="text-slate-500 text-sm">Promote a draft from the Shape tab to start.</p>
+    </div>
+  <% else %>
+    <div class="rounded-2xl glass-card border border-white/5 overflow-hidden animate-fade-in-1">
+      <div class="grid items-center bg-slate-900/80 border-b border-white/5 px-5 py-2.5 text-xs text-slate-400 uppercase tracking-wider" style="grid-template-columns: 1fr 14rem 9rem">
+        <span>Feature</span>
+        <span>Cycle</span>
+        <span class="text-right">Action</span>
+      </div>
+      <ul class="divide-y divide-white/[0.04]">
+        <% for f in _bets %>
+          <% let _vid = f.version_id ?? "" %>
+          <li class="grid items-center px-5 py-3 hover:bg-white/[0.02] transition-colors" style="grid-template-columns: 1fr 14rem 9rem">
+            <div class="min-w-0 pr-3">
+              <a href="/features/<%= h(f._key) %>" class="text-sm font-medium text-slate-100 hover:text-white truncate block"><%= h(f.title) %></a>
+              <div class="mt-1"><%- partial("shared/feature_stage_dots", { "stage": "bet" }) %></div>
+            </div>
+
+            <form method="post" action="/features/<%= h(f._key) %>/assign-cycle" class="pr-3">
+              <select name="version_id"
+                      onchange="this.form.submit()"
+                      class="w-full rounded-md bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-2 py-1 text-xs text-slate-200">
+                <option value="" <%= _vid == "" ? "selected" : "" %>>Unscheduled</option>
+                <% for v in versions %>
+                  <option value="<%= h(v._key) %>" <%= _vid == v._key ? "selected" : "" %>>
+                    <%= h(v.name) %><% if (v.status ?? "") != "" %> &middot; <%= h(v.status) %><% end %>
+                  </option>
+                <% end %>
+              </select>
+              <noscript><button type="submit" class="rounded-md bg-white/5 hover:bg-white/10 text-slate-300 text-xs px-2 py-1 mt-1 transition-colors">Save</button></noscript>
+            </form>
+
+            <div class="text-right">
+              <a href="/features/<%= h(f._key) %>#generate"
+                 class="inline-flex items-center gap-1 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 text-xs font-medium px-2.5 py-1 transition-colors">
+                Generate tasks →
+              </a>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+</div>

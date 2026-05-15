@@ -7,6 +7,11 @@ describe("DocsController", fn() {
   });
 
   describe("GET /docs", fn() {
+    # Soli's before_each doesn't cascade into nested describes — re-assert
+    # guest so the test above this block can't leak its login into the
+    # next "header shows Sign in" assertion.
+    before_each(fn() { as_guest(); });
+
     test("returns 200", fn() {
       let response = get("/docs");
       assert_eq(res_status(response), 200);
@@ -65,7 +70,12 @@ describe("DocsController", fn() {
     });
   });
 
-  describe("GET /", fn() {
+  describe("GET / (anonymous landing)", fn() {
+    # Outer before_each does not cascade into nested describes in Soli —
+    # re-assert guest so a logged-in test above doesn't leak its session
+    # into this one (would route us to the Workspace inbox instead).
+    before_each(fn() { as_guest(); });
+
     test("links to the docs page", fn() {
       let response = get("/");
       let body = res_body(response);

@@ -2,83 +2,6 @@
 # the generate-tasks pipeline that turns a feature brief into linked
 # Task rows via the plan-run agent.
 
-# GET /features
-# Supports ?q= (search), ?project= + ?offset= (HTMX load-more), ?per_page=
-fn index(req)
-  let merged = req["params"] ?? req["query"] ?? {}
-  let q = (merged["q"] ?? "").trim()
-  let project_param = (merged["project"] ?? "").trim()
-  let offset = (merged["offset"] ?? "0").to_i() rescue 0
-  let per_page = (merged["per_page"] ?? "10").to_i() rescue 10
-  if offset < 0 then offset = 0 end
-  if per_page < 1 then per_page = 10 end
-
-  respond_to(req, fn(format) {
-    format.html(fn()
-      let projs = list_projects() rescue []
-      let groups = []
-      for proj in projs
-        let pname = proj["name"]
-        let result = Feature.search(pname, q, 0, per_page)
-        if result["total"] > 0
-          groups.push({
-            "project": pname,
-            "features": result["results"],
-            "total": result["total"],
-            "has_more": result["total"] > per_page
-          })
-        end
-      end
-      render("features/index", {
-        "current_user": req["current_user"],
-        "title": "Features",
-        "groups": groups,
-        "q": q,
-        "projects": projs,
-        "theme": Setting.current_theme(),
-        "theme_css_vars": Setting.current_theme_css_vars(),
-        "theme_class": Setting.current_theme_class()
-      })
-    end)
-
-    format.htmx(fn()
-      if project_param != ""
-        let result = Feature.search(project_param, q, offset, per_page)
-        let fetched = result["results"].length()
-        let new_offset = offset + fetched
-        let has_more = new_offset < result["total"]
-        render("features/_feature_cards", {
-          "features": result["results"],
-          "project": project_param,
-          "new_offset": new_offset,
-          "has_more": has_more,
-          "total": result["total"],
-          "q": q
-        }, { "layout": false })
-      else
-        let projs = list_projects() rescue []
-        let groups = []
-        for proj in projs
-          let pname = proj["name"]
-          let result = Feature.search(pname, q, 0, per_page)
-          if result["total"] > 0
-            groups.push({
-              "project": pname,
-              "features": result["results"],
-              "total": result["total"],
-              "has_more": result["total"] > per_page
-            })
-          end
-        end
-        render("features/_groups", {
-          "groups": groups,
-          "q": q
-        }, { "layout": false })
-      end
-    end)
-  })
-end
-
 # Build the locals the plan-model picker partial needs for a given
 # feature (or `nil` for the new-feature form, which has no saved value
 # yet). Single call site for the picker data so every render() that
@@ -335,6 +258,31 @@ fn update(req)
     })
   end
   redirect("/features/" + feature._key)
+end
+
+# POST /features/:id/promote
+# Move a draft brief onto the betting table — flips status from
+# `draft` to `ready`. No-op if already `ready` (or further). Used by
+# the Shape tab's "Promote to bet" button. Optionally accepts
+# `version_id` so the user can promote-and-bet in one action.
+fn promote(req)
+  let feature = _find_feature(req)
+  if feature == nil
+    return {"status": 404, "body": "Feature not found"}
+  end
+  let cur = feature.status ?? "draft"
+  if cur == "draft"
+    feature.status = "ready"
+  end
+  let form = req["all"] ?? {}
+  if form["version_id"] != nil
+    feature.version_id = (form["version_id"] ?? "").trim()
+  end
+  feature.save()
+  if feature._errors
+    return {"status": 422, "body": "Could not promote: " + str(feature._errors)}
+  end
+  redirect("/projects/" + feature.project + "?tab=bet")
 end
 
 # POST /features/:id/assign-cycle

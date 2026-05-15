@@ -1,111 +1,20 @@
-# HomeController — /agents-dashboard carries the agent-usage dashboard
-# tile (today / this-week run counts vs. the per-agent caps configured
-# in /settings). Specs verify:
-#   - the page still renders 200
-#   - the tile lists every known agent (zero-fill behaviour)
-#   - real run counts surface in the rendered body
-#   - configured limits surface as `<used> / <cap>` in the body
-#
-# `assigns()` is unavailable in this framework build, so we assert
-# against the rendered HTML body directly.
+# HomeController — post-redesign:
+#   GET /  → marketing landing (guest), Workspace inbox (auth'd)
+# Workspace sections: Awaiting review, Recently failed, Long-running,
+# Recently shipped — all driven by Task rows. One Task.all() scan.
 
-# Helper: drop the fixtures the dashboard reads from. Called in
-# before_each so each test starts from a known state.
 def _home_reset_state()
   Task.delete_all()
   Setting.delete_all()
 end
 
-# Helper: ISO timestamp `seconds_ago` seconds before now. Used to seed
-# tasks at known offsets inside the rolling 24h day window.
 def _home_iso_seconds_ago(seconds_ago)
   let unix = DateTime.now().to_unix() - seconds_ago
   return DateTime.from_unix(unix).to_iso()
 end
 
 describe("HomeController", fn()
-  describe("GET /agents-dashboard", fn()
-    before_each(fn()
-      assert_test_db()
-      _home_reset_state()
-      User.delete_all()
-      User.register("dash@test.com", "password", "Dashboard Tester")
-      login("dash@test.com", "password")
-    end)
-
-    test("returns 200", fn()
-      let response = get("/agents-dashboard")
-      assert_eq(res_status(response), 200)
-    end)
-
-    test("redirects to /login for unauthenticated requests", fn()
-      as_guest()
-      let response = get("/agents-dashboard")
-      assert_eq(res_status(response), 302)
-    end)
-
-    test("renders the agent-usage tile", fn()
-      let response = get("/agents-dashboard")
-      assert_contains(res_body(response), "Usage")
-    end)
-
-    test("lists every known agent in the tile, even with zero usage", fn()
-      let response = get("/agents-dashboard")
-      let body = res_body(response)
-      for a in Task.known_agents()
-        assert_contains(body, a)
-      end
-    end)
-
-    test("shows today's count for an agent that ran in-window", fn()
-      Task.create({
-        "_key":       "home--recent",
-        "project":    "home",
-        "slug":       "recent",
-        "title":      "recent run",
-        "status":     "inprogress",
-        "started_at": _home_iso_seconds_ago(60),
-        "agent_type": "claude"
-      })
-      let response = get("/agents-dashboard")
-      let body = res_body(response)
-      assert_match(body, "claude")
-    end)
-
-    test("renders `used / cap` when a daily cap is configured", fn()
-      Setting.set("limit_daily_claude", 10)
-      let response = get("/agents-dashboard")
-      let body = res_body(response)
-      assert_contains(body, "10")
-    end)
-
-    test("hides the cap when the limit is the unlimited sentinel (0)", fn()
-      let response = get("/agents-dashboard")
-      let body = res_body(response)
-      assert_contains(body, "Usage")
-    end)
-
-    test("links to /settings from the header", fn()
-      let response = get("/agents-dashboard")
-      assert_contains(res_body(response), "/settings")
-    end)
-
-    test("renders the shared header", fn()
-      let response = get("/agents-dashboard")
-      assert_contains(res_body(response), "data-shared-header")
-    end)
-
-    test("renders 200 for a project that exists on disk with no tasks", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
-      System.run_sync(["mkdir", "-p", root + "/empty_proj/tasks/todo"])
-      let response = get("/agents-dashboard")
-      assert_eq(res_status(response), 200)
-      let body = res_body(response)
-      assert_contains(body, "empty_proj")
-    end)
-  end)
-
-  describe("GET / (landing page)", fn()
+  describe("GET / (anonymous landing)", fn()
     before_each(fn()
       assert_test_db()
       _home_reset_state()
@@ -122,4 +31,115 @@ describe("HomeController", fn()
       assert_contains(res_body(response), "Task Orchestrator")
     end)
   end)
+
+  describe("GET / (authenticated workspace)", fn()
+    before_each(fn()
+      assert_test_db()
+      _home_reset_state()
+      User.delete_all()
+      User.register("wkspc@test.com", "password", "Workspace Tester")
+      login("wkspc@test.com", "password")
+    end)
+
+    test("returns 200 with the Workspace heading", fn()
+      let response = get("/")
+      assert_eq(res_status(response), 200)
+      assert_contains(res_body(response), "Workspace")
+    end)
+
+    test("renders every section header even when empty", fn()
+      let response = get("/")
+      let body = res_body(response)
+      assert_contains(body, "Awaiting your review")
+      assert_contains(body, "Recently failed")
+      assert_contains(body, "Long-running")
+      assert_contains(body, "Recently shipped")
+    end)
+
+    test("surfaces a task in review with a link to its task page", fn()
+      Task.create({
+        "_key":       "wkspc--rev",
+        "project":    "wkspc",
+        "slug":       "rev",
+        "title":      "Needs review",
+        "status":     "review",
+        "updated_at": _home_iso_seconds_ago(60)
+      })
+      let response = get("/")
+      let body = res_body(response)
+      assert_contains(body, "Needs review")
+      assert_contains(body, "/projects/wkspc/tasks/rev")
+    end)
+
+    test("shows a recently failed task and skips one outside the 24h window", fn()
+      Task.create({
+        "_key":         "wkspc--fail-recent",
+        "project":      "wkspc",
+        "slug":         "fail-recent",
+        "title":        "Just failed",
+        "status":       "failed",
+        "finished_at":  _home_iso_seconds_ago(300),
+        "updated_at":   _home_iso_seconds_ago(300)
+      })
+      Task.create({
+        "_key":         "wkspc--fail-old",
+        "project":      "wkspc",
+        "slug":         "fail-old",
+        "title":        "Old failure",
+        "status":       "failed",
+        "finished_at":  _home_iso_seconds_ago(200000),
+        "updated_at":   _home_iso_seconds_ago(200000)
+      })
+      let response = get("/")
+      let body = res_body(response)
+      assert_contains(body, "Just failed")
+    end)
+
+    test("flags an in-progress task running longer than 30 minutes", fn()
+      Task.create({
+        "_key":       "wkspc--long",
+        "project":    "wkspc",
+        "slug":       "long",
+        "title":      "Long agent",
+        "status":     "inprogress",
+        "started_at": _home_iso_seconds_ago(2400),
+        "updated_at": _home_iso_seconds_ago(2400)
+      })
+      Task.create({
+        "_key":       "wkspc--short",
+        "project":    "wkspc",
+        "slug":       "short",
+        "title":      "Short agent",
+        "status":     "inprogress",
+        "started_at": _home_iso_seconds_ago(120),
+        "updated_at": _home_iso_seconds_ago(120)
+      })
+      let response = get("/")
+      let body = res_body(response)
+      assert_contains(body, "Long agent")
+    end)
+
+    test("renders a PR link on a shipped task with pr_url", fn()
+      Task.create({
+        "_key":        "wkspc--shipped",
+        "project":     "wkspc",
+        "slug":        "shipped",
+        "title":       "Shipped one",
+        "status":      "done",
+        "finished_at": _home_iso_seconds_ago(120),
+        "updated_at":  _home_iso_seconds_ago(120),
+        "pr_url":      "https://github.com/acme/repo/pull/9"
+      })
+      let response = get("/")
+      let body = res_body(response)
+      assert_contains(body, "Shipped one")
+      assert_contains(body, "github.com/acme/repo/pull/9")
+    end)
+
+    test("renders the shared header", fn()
+      let response = get("/")
+      assert_contains(res_body(response), "data-shared-header")
+    end)
+  end)
+
 end)

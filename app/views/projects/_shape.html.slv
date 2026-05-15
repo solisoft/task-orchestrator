@@ -1,0 +1,51 @@
+<div class="animate-fade-in">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100 tracking-tight">Shape</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Draft briefs — refine the problem, then promote to the betting table</p>
+    </div>
+    <a href="/features/new?project=<%= h(project["name"]) %>"
+       class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1.5 transition-all">
+      + New feature
+    </a>
+  </div>
+
+  <% let _drafts = features_by_stage["shape"] ?? [] %>
+  <% if _drafts.length() == 0 %>
+    <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
+      <p class="text-slate-300 font-medium mb-1">No drafts</p>
+      <p class="text-slate-500 text-sm mb-5">Capture an idea as a feature brief to start shaping the work.</p>
+      <a href="/features/new?project=<%= h(project["name"]) %>"
+         class="inline-flex items-center gap-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">
+        Capture an idea
+      </a>
+    </div>
+  <% else %>
+    <ul class="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fade-in-1">
+      <% for f in _drafts %>
+        <li class="glass-card rounded-xl p-4 border border-white/5 hover:border-indigo-400/30 transition-colors">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <a href="/features/<%= h(f._key) %>" class="text-sm font-semibold text-slate-100 hover:text-white truncate"><%= h(f.title) %></a>
+            <%- partial("shared/feature_stage_dots", { "stage": "shape" }) %>
+          </div>
+          <% let _desc = (f.description ?? "").trim() %>
+          <% if _desc != "" %>
+            <p class="text-xs text-slate-500 line-clamp-2 mb-3"><%= h(_desc.substring(0, _desc.length() > 160 ? 160 : _desc.length())) %><% if _desc.length() > 160 %>&hellip;<% end %></p>
+          <% end %>
+          <div class="flex items-center gap-2">
+            <form method="post" action="/features/<%= h(f._key) %>/promote">
+              <button type="submit"
+                      class="rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 text-xs font-medium px-2.5 py-1 transition-colors"
+                      title="Move this brief to the betting table">
+                Promote to bet →
+              </button>
+            </form>
+            <a href="/features/<%= h(f._key) %>/edit" class="text-xs text-slate-400 hover:text-slate-200 transition-colors px-2 py-1">Edit</a>
+          </div>
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+
+</div>

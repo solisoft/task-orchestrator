@@ -62,6 +62,14 @@ describe("RunsController", fn()
   end)
 
   describe("POST /projects/:name/tasks/:slug/run/resume", fn()
+    # Soli's before_each does not cascade into nested describes — re-run
+    # the cleanup here so prior tests can't leak a resumable-status row.
+    before_each(fn()
+      assert_test_db()
+      Task.delete_all()
+      as_guest()
+    end)
+
     test("returns 422 for non-resumable task", fn()
       let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_resume/tasks/todo"])

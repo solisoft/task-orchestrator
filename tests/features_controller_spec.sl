@@ -13,6 +13,75 @@ describe("Feature model", fn()
     assert_eq(Feature.key_for("myapp", "feat1"), "myapp--feat1")
   end)
 
+  describe("Feature#stage", fn()
+    test("draft brief with no tasks is in shape", fn()
+      let f = Feature.create({
+        "_key": "myapp--idea", "project": "myapp", "slug": "idea",
+        "title": "Idea", "status": "draft"
+      })
+      assert_eq(f.stage({}), "shape")
+    end)
+
+    test("ready brief with no tasks is on the betting table", fn()
+      let f = Feature.create({
+        "_key": "myapp--ready1", "project": "myapp", "slug": "ready1",
+        "title": "Ready", "status": "ready"
+      })
+      assert_eq(f.stage({}), "bet")
+    end)
+
+    test("feature with todo/queued/inprogress tasks moves to build", fn()
+      let f = Feature.create({
+        "_key": "myapp--build1", "project": "myapp", "slug": "build1",
+        "title": "Build", "status": "ready"
+      })
+      assert_eq(f.stage({ "todo": 1 }), "build")
+      assert_eq(f.stage({ "queued": 2 }), "build")
+      assert_eq(f.stage({ "inprogress": 1 }), "build")
+      assert_eq(f.stage({ "failed": 1 }), "build")
+    end)
+
+    test("feature with tasks in review moves to ship", fn()
+      let f = Feature.create({
+        "_key": "myapp--ship1", "project": "myapp", "slug": "ship1",
+        "title": "Ship", "status": "in-progress"
+      })
+      assert_eq(f.stage({ "review": 1 }), "ship")
+      assert_eq(f.stage({ "done": 1 }), "ship")
+      assert_eq(f.stage({ "review": 1, "todo": 3 }), "ship")
+    end)
+
+    test("done feature is always ship", fn()
+      let f = Feature.create({
+        "_key": "myapp--done1", "project": "myapp", "slug": "done1",
+        "title": "Done", "status": "done"
+      })
+      assert_eq(f.stage({}), "ship")
+      assert_eq(f.stage({ "todo": 99 }), "ship")
+    end)
+
+    test("in-progress feature with no live tasks still reports build", fn()
+      let f = Feature.create({
+        "_key": "myapp--ip1", "project": "myapp", "slug": "ip1",
+        "title": "InP", "status": "in-progress"
+      })
+      assert_eq(f.stage({}), "build")
+    end)
+
+    test("stage with no arg counts the feature's own tasks", fn()
+      Task.delete_all()
+      let f = Feature.create({
+        "_key": "myapp--auto1", "project": "myapp", "slug": "auto1",
+        "title": "Auto", "status": "ready"
+      })
+      Task.create({
+        "_key": "myapp--at1", "project": "myapp", "slug": "at1",
+        "title": "T1", "status": "todo", "feature_slug": "myapp--auto1"
+      })
+      assert_eq(f.stage(), "build")
+    end)
+  end)
+
   test("statuses returns all valid statuses", fn()
     let s = Feature.statuses()
     assert_eq(s.length(), 4)
@@ -925,6 +994,54 @@ describe("FeaturesController CRUD", fn()
     assert_eq(res_status(response), 422)
   end)
 
+  test("POST /features/:id/promote flips draft to ready", fn()
+    Feature.create({
+      "_key": "proj--prom", "project": "proj", "slug": "prom",
+      "title": "Prom", "status": "draft"
+    })
+    let response = post("/features/proj--prom/promote", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "prom")
+    assert_eq(f.status, "ready")
+  end)
+
+  test("POST /features/:id/promote is a no-op when already ready", fn()
+    Feature.create({
+      "_key": "proj--prom-r", "project": "proj", "slug": "prom-r",
+      "title": "PromR", "status": "ready"
+    })
+    let response = post("/features/proj--prom-r/promote", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "prom-r")
+    assert_eq(f.status, "ready")
+  end)
+
+  test("POST /features/:id/promote can also set the cycle in one step", fn()
+    Version.delete_all()
+    let v = Version.create({
+      "project": "proj", "name": "Promote Cycle", "status": "planned"
+    })
+    Feature.create({
+      "_key": "proj--prom-c", "project": "proj", "slug": "prom-c",
+      "title": "PromC", "status": "draft"
+    })
+    let response = post("/features/proj--prom-c/promote", {
+      "version_id": v._key
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "prom-c")
+    assert_eq(f.status, "ready")
+    assert_eq(f.version_id, v._key)
+  end)
+
+  test("POST /features/:id/promote returns 404 for unknown feature", fn()
+    let response = post("/features/nope--feat/promote", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
   test("POST /features/:id/assign-cycle returns 404 for unknown feature", fn()
     let response = post("/features/no-such--feature/assign-cycle", {
       "version_id": ""
@@ -1018,20 +1135,6 @@ describe("FeaturesController GET routes", fn()
     login("get@test.com", "password")
   end)
 
-  test("GET /features returns 200", fn()
-    let response = get("/features")
-    assert_eq(res_status(response), 200)
-  end)
-
-  test("GET /features header shows logged-in user, not Sign in", fn()
-    let response = get("/features")
-    let body = res_body(response)
-    assert_eq(res_status(response), 200)
-    # Header partial should render the user's avatar/logout, not the Sign in CTA
-    assert(!body.contains(">Sign in<"))
-    assert(body.contains("/logout"))
-  end)
-
   test("GET /features/:id shows a feature", fn()
     Feature.create({
       "_key": "proj--show-me", "project": "proj", "slug": "show-me",
@@ -1061,31 +1164,6 @@ describe("FeaturesController GET routes", fn()
     let response = get("/features/proj--edit-me/edit")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Edit Me")
-  end)
-
-  test("GET /features with HX-Request and project returns cards", fn()
-    Feature.create({
-      "_key": "proj--f1", "project": "proj", "slug": "f1",
-      "title": "Feature 1", "status": "draft"
-    })
-    let response = get("/features?project=proj&per_page=10",
-      { "headers": { "HX-Request": "true" } })
-    assert_eq(res_status(response), 200)
-    assert_contains(res_body(response), "Feature 1")
-  end)
-
-  test("GET /features with ?q= searches features", fn()
-    Feature.create({
-      "_key": "proj--search-me", "project": "proj", "slug": "search-me",
-      "title": "Search Target", "status": "draft"
-    })
-    Feature.create({
-      "_key": "proj--other", "project": "proj", "slug": "other",
-      "title": "Other Feature", "status": "draft"
-    })
-    let response = get("/features?q=Search")
-    assert_eq(res_status(response), 200)
-    assert_contains(res_body(response), "Search Target")
   end)
 
   test("POST /features/:id/cancel_plan cancels active plan", fn()
@@ -1598,62 +1676,6 @@ describe("FeaturesController#show wider state", fn()
     assert_eq(res_status(response), 200)
     let plan = Plan.find_by_plan_id("plan-prefix")
     assert(plan.tasks_imported == true)
-  end)
-end)
-
-describe("FeaturesController#index htmx + project_param", fn()
-  before_each(fn()
-    assert_test_db()
-    Feature.delete_all()
-    User.delete_all()
-    User.register("idx@test.com", "password", "Idx")
-    login("idx@test.com", "password")
-  end)
-
-  test("returns project-scoped cards via the htmx load-more branch", fn()
-    Feature.create({
-      "_key": "proj--card-1", "project": "proj", "slug": "card-1",
-      "title": "Card One", "status": "draft"
-    })
-    Feature.create({
-      "_key": "proj--card-2", "project": "proj", "slug": "card-2",
-      "title": "Card Two", "status": "draft"
-    })
-    let response = get("/features?project=proj&offset=0&per_page=1",
-      { "headers": { "HX-Request": "true" } })
-    assert_eq(res_status(response), 200)
-    let body = res_body(response)
-    assert(body.contains("Card One") or body.contains("Card Two"))
-  end)
-
-  test("returns grouped htmx response when no project param is supplied", fn()
-    Feature.create({
-      "_key": "proj--group-1", "project": "proj", "slug": "group-1",
-      "title": "Group Feature", "status": "draft"
-    })
-    let response = get("/features",
-      { "headers": { "HX-Request": "true" } })
-    assert_eq(res_status(response), 200)
-  end)
-
-  test("clamps negative offset to zero", fn()
-    Feature.create({
-      "_key": "proj--neg", "project": "proj", "slug": "neg",
-      "title": "Neg", "status": "draft"
-    })
-    let response = get("/features?project=proj&offset=-5&per_page=1",
-      { "headers": { "HX-Request": "true" } })
-    assert_eq(res_status(response), 200)
-  end)
-
-  test("clamps zero per_page to default", fn()
-    Feature.create({
-      "_key": "proj--zero-pp", "project": "proj", "slug": "zero-pp",
-      "title": "Zero PP", "status": "draft"
-    })
-    let response = get("/features?project=proj&offset=0&per_page=0",
-      { "headers": { "HX-Request": "true" } })
-    assert_eq(res_status(response), 200)
   end)
 end)
 

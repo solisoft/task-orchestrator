@@ -1,0 +1,40 @@
+# Tripwire: the external dispatcher (bin/task-dispatch / bin/task-run)
+# polls solidb for rows where status == "queued". If anyone renames
+# a Task status value, the dispatcher silently stops dispatching.
+# Same goes for Feature.status — `recompute_status!` and the validator
+# both hardcode the string set. Pin both here so a rename trips CI.
+
+describe("dispatcher contract", fn()
+  test("Task.statuses() is the exact set the dispatcher depends on", fn()
+    let s = Task.statuses()
+    assert_eq(s.length(), 8)
+    assert_eq(s[0], "proposed")
+    assert_eq(s[1], "todo")
+    assert_eq(s[2], "queued")
+    assert_eq(s[3], "inprogress")
+    assert_eq(s[4], "review")
+    assert_eq(s[5], "done")
+    assert_eq(s[6], "failed")
+    assert_eq(s[7], "archived")
+  end)
+
+  test("Task.kanban_statuses() exposes the canonical board columns", fn()
+    let s = Task.kanban_statuses()
+    assert_eq(s.length(), 6)
+    assert_eq(s[0], "todo")
+    assert_eq(s[1], "queued")
+    assert_eq(s[2], "inprogress")
+    assert_eq(s[3], "review")
+    assert_eq(s[4], "done")
+    assert_eq(s[5], "failed")
+  end)
+
+  test("Feature.statuses() contract is unchanged", fn()
+    let s = Feature.statuses()
+    assert_eq(s.length(), 4)
+    assert_eq(s[0], "draft")
+    assert_eq(s[1], "ready")
+    assert_eq(s[2], "in-progress")
+    assert_eq(s[3], "done")
+  end)
+end)

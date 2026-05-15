@@ -134,13 +134,13 @@ describe("Auth middleware", fn()
     User.delete_all()
   end)
 
-  test("unauthenticated access to /features redirects to /login", fn()
-    let response = get("/features")
+  test("unauthenticated access to /features/new redirects to /login", fn()
+    let response = get("/features/new")
     assert_eq(res_status(response), 302)
   end)
 
   test("unauthenticated redirect stamps return_to on the Location header", fn()
-    let response = get("/features")
+    let response = get("/features/new")
     let location = response["headers"]["Location"] ?? ""
     assert(location.starts_with("/login?return_to="))
     assert(location.contains("%2Ffeatures") or location.contains("/features"))

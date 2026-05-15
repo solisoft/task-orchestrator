@@ -35,7 +35,7 @@ def _psn_count_my_lines()
     end
     let payload = entry["payload"] ?? {}
     let url = (payload["url"] ?? "")
-    if url.starts_with("/projects/psn/")
+    if url.starts_with("/projects/psn/") or url == "/projects/psn"
       n = n + 1
     end
   end
@@ -61,7 +61,7 @@ def _psn_my_payloads()
     end
     let payload = entry["payload"] ?? {}
     let url = (payload["url"] ?? "")
-    if url.starts_with("/projects/psn/")
+    if url.starts_with("/projects/psn/") or url == "/projects/psn"
       out.push(payload)
     end
   end
@@ -116,7 +116,7 @@ describe("Plan status-change notification", fn()
     assert_eq(payloads.length(), 1)
     let payload = payloads[0]
     assert_eq(payload["status"], "done")
-    assert_eq(payload["url"], "/projects/psn/plans")
+    assert_eq(payload["url"], "/projects/psn")
     assert_eq(payload["title"], "prompt for payload")
   end)
 

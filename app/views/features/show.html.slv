@@ -1,14 +1,10 @@
 <div class="min-h-screen text-white">
   <div class="max-w-4xl mx-auto px-6 py-8">
-    <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
-      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
-      <span class="mx-2">/</span>
-      <a href="/features" class="hover:text-slate-300">Features</a>
-      <span class="mx-2">/</span>
-      <a href="/features?project=<%= feature.project %>" class="hover:text-slate-300 font-mono"><%= feature.project %></a>
-      <span class="mx-2">/</span>
-      <span class="text-slate-300 truncate"><%= feature.title %></span>
-    </nav>
+    <%- partial("shared/breadcrumbs", { "crumbs": [
+      { "label": "Projects", "href": "/projects" },
+      { "label": feature.project, "href": "/projects/" + feature.project },
+      { "label": feature.title,   "href": "" }
+    ] }) %>
 
     <header class="mb-8 animate-fade-in">
       <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -98,7 +94,6 @@
                 <h2 class="text-sm font-semibold uppercase tracking-wider text-fuchsia-300">Plan Agent</h2>
                 <span class="text-xs text-slate-500 font-mono truncate"><%= latest_plan.plan_id %></span>
               </div>
-              <a href="/plans" target="_blank" class="text-xs text-slate-500 hover:text-slate-300 underline underline-offset-2">view in plans</a>
             </div>
             <% if _plan_failed %>
               <p class="text-xs text-amber-300 mb-3">This run was cancelled or failed: <span class="font-mono"><%= _plan_status %></span></p>

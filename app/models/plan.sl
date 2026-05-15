@@ -295,7 +295,7 @@ class Plan < Model
     elsif fs != ""
       url = "/projects/" + (self.project ?? "") + "/features/" + fs
     else
-      url = "/projects/" + (self.project ?? "") + "/plans"
+      url = "/projects/" + (self.project ?? "")
     end
     let title = self.prompt_preview(80)
     if title == nil or title == ""

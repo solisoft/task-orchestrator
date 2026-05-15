@@ -144,6 +144,52 @@ class Feature < Model
     Task.where({ "feature_slug": self._key }).order("created_at", "asc").all()
   end
 
+  # Pipeline stage for the Shape Up project hub:
+  #   shape — still a draft brief, no tasks yet
+  #   bet   — brief is ready (and ideally assigned to a cycle), but no
+  #           non-proposed task has been published yet
+  #   build — at least one task is being worked on (todo/queued/inprogress)
+  #           or the feature itself is in-progress
+  #   ship  — feature is done OR at least one task is in review/done
+  #
+  # Pre-computed task buckets (`status_counts`) avoid an N+1 from the
+  # hub view; callers can pass `{ "review": N, "done": N, ... }`. Falls
+  # back to a single `self.tasks()` scan when not provided.
+  def stage(status_counts = nil)
+    let fs = self.status ?? "draft"
+    if fs == "done"
+      return "ship"
+    end
+    let counts = status_counts ?? Feature._stage_count_tasks(self._key)
+    let in_review = (counts["review"] ?? 0) + (counts["done"] ?? 0)
+    if in_review > 0
+      return "ship"
+    end
+    let building = (counts["todo"] ?? 0) +
+                   (counts["queued"] ?? 0) +
+                   (counts["inprogress"] ?? 0) +
+                   (counts["failed"] ?? 0)
+    if fs == "in-progress" or building > 0
+      return "build"
+    end
+    if fs == "ready"
+      return "bet"
+    end
+    "shape"
+  end
+
+  # Bucket a single feature's tasks into `{status: count}`. Used by `stage`
+  # when the caller doesn't already have the data in hand.
+  static def _stage_count_tasks(feature_key)
+    let h = {}
+    let rows = Task.where({ "feature_slug": feature_key }).all() rescue []
+    for t in rows
+      let s = t.status ?? ""
+      h[s] = (h[s] ?? 0) + 1
+    end
+    h
+  end
+
   # Comments associated with this feature.
   def comments()
     Comment.where({ "feature_slug": self._key }).order("created_at", "asc").all()

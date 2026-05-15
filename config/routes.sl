@@ -47,14 +47,11 @@ post("/projects/:name/tasks/:slug/code-review", "tasks#code_review")
 post("/projects/:name/tasks/:slug/archive", "tasks#archive")
 post("/projects/:name/tasks/:slug/unarchive", "tasks#unarchive")
 
-# ── Plans (per-project) ──────────────
+# ── Streams ──────────────────────────
+# Phase 5 retired the standalone task planner (/projects/:name/tasks/plan*
+# + /ws/plan-stream). Feature briefs are the only planning surface now —
+# their plan-runs stream over /ws/feature-generate-stream below.
 
-post("/projects/:name/tasks/plan", "tasks#plan")
-get("/projects/:name/tasks/plan-log/:plan_id", "tasks#plan_log")
-post("/projects/:name/tasks/plan-answer/:plan_id", "tasks#plan_answer")
-post("/projects/:name/tasks/plan-refine/:plan_id", "tasks#plan_refine")
-post("/projects/:name/tasks/plan-retry/:plan_id",  "tasks#plan_retry")
-router_websocket("/ws/plan-stream", "tasks#plan_stream")
 router_websocket("/ws/code-review-stream", "tasks#code_review_stream")
 # Sits outside the `authenticate` block: the WS handler is event-driven, so
 # cookie-based session lookup isn't reliably available here. The plan_id
@@ -98,14 +95,6 @@ middleware("authenticate", -> {
   post("/projects/:name/versions/:id/update",  "versions#update")
   post("/projects/:name/versions/:id/destroy", "versions#destroy")
 
-  # ── Dashboard ─────────────────────────
-
-  get("/agents-dashboard", "home#index")
-
-  # ── Plans ────────────────────────────
-
-  get("/plans", "plans#index")
-
   # ── Settings ─────────────────────────
 
   get("/settings", "settings#show")
@@ -118,12 +107,15 @@ middleware("authenticate", -> {
   delete("/settings/presets/:name", "settings#delete_preset")
 
   # ── Features ─────────────────────────
-
-  resources("features")
-  # Browsers only emit GET/POST from forms, and Soli's router doesn't
-  # honor a `?_method=put|delete` override — so the resources() PUT/DELETE
-  # endpoints aren't reachable from the edit/delete forms. Expose POST
-  # aliases that route to the same actions.
+  # Explicit (no `resources` index) — the cross-project /features list
+  # was retired in Phase 5; features live inside their project hub now.
+  # Browsers only emit GET/POST, and Soli's router doesn't honor a
+  # `?_method=put|delete` override, so we map the destructive verbs to
+  # POST aliases below.
+  get("/features/new",      "features#new")
+  post("/features",         "features#create")
+  get("/features/:id",      "features#show")
+  get("/features/:id/edit", "features#edit")
   post("/features/:id/update", "features#update")
   post("/features/:id/destroy", "features#destroy")
   post("/features/:id/generate_tasks", "features#generate_tasks")
@@ -135,6 +127,7 @@ middleware("authenticate", -> {
   post("/features/:id/publish", "features#publish")
   post("/features/:id/tasks/:slug/remove", "features#remove_task")
   post("/features/:id/assign-cycle", "features#assign_cycle")
+  post("/features/:id/promote", "features#promote")
 
   # ── Comments (nested under features) ─
 

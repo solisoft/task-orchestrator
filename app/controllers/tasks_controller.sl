@@ -7,48 +7,21 @@ fn new(req)
   if project == nil
     return {"status": 404, "body": "Unknown project: " + req["params"]["name"]}
   end
-  # If the URL carries ?plan_id=…, hydrate the right stage of the form
-  # server-side so a reload during planning doesn't drop the user back
-  # to Stage 1 with an empty notes textarea — the runner is still alive
-  # in the background; we just lost the DOM state.
-  let plan_id = ((req["params"]["plan_id"]
-                 ?? (req["query"] == nil ? nil : req["query"]["plan_id"]))
-                 ?? "").trim()
-  let plan_state = nil
-  let plan_title = ""
-  if plan_id != ""
-    let probe = Plan.find_by_plan_id(plan_id)
-    if probe != nil
-      plan_state = read_plan_state(plan_id)
-      if plan_state["status"] == "done"
-        plan_title = parse_title_from_body(plan_state["body"])
-      end
-    end
-  end
-  # `current` for the picker depends on which stage the view renders:
-  #   - plan_state done → planned_body partial preselects state["model"]
-  #   - otherwise        → fresh form preselects the global default
-  # `Plan.filter_allowed` always keeps `current` in the option list, so a
-  # previously persisted choice never silently disappears even if it's
-  # no longer on the allowlist.
+  # Phase 5: the standalone planner is gone — `/projects/:name/tasks/new`
+  # is now a plain title+body form. Feature briefs are the planning
+  # surface (see /features/<id>/generate_tasks).
   let default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
-  let picker_current = (plan_state != nil and plan_state["status"] == "done")
-                       ? (plan_state["model"] ?? default_model)
-                       : default_model
-  let picker = plan_model_picker_data(picker_current)
+  let picker = plan_model_picker_data(default_model)
   render("tasks/new", {
     "title":              "New task — " + project["name"],
     "project":            project,
     "task":               null,
-    "plan_id":            plan_id == "" ? nil : plan_id,
-    "plan_state":         plan_state,
-    "plan_title":         plan_title,
     "default_plan_model": default_model,
     "claude_options":     picker["claude_options"],
     "opencode_options":   picker["opencode_options"],
-    "theme": Setting.current_theme(),
-    "theme_css_vars": Setting.current_theme_css_vars(),
-    "theme_class": Setting.current_theme_class()
+    "theme":              Setting.current_theme(),
+    "theme_css_vars":     Setting.current_theme_css_vars(),
+    "theme_class":        Setting.current_theme_class()
   })
 end
 
@@ -276,26 +249,18 @@ fn create(req)
     "status":  "todo"
   })
   if task._errors
+    let _picker = plan_model_picker_data(model == "" ? Setting.get_or("plan_model", "claude-sonnet-4-6") : model)
     return render("tasks/new", {
-      "title": "New task — " + project["name"],
-      "project": project,
-      "task": task,
-      "theme": Setting.current_theme(),
-      "theme_css_vars": Setting.current_theme_css_vars(),
-      "theme_class": Setting.current_theme_class()
+      "title":              "New task — " + project["name"],
+      "project":            project,
+      "task":               task,
+      "default_plan_model": model,
+      "claude_options":     _picker["claude_options"],
+      "opencode_options":   _picker["opencode_options"],
+      "theme":              Setting.current_theme(),
+      "theme_css_vars":     Setting.current_theme_css_vars(),
+      "theme_class":        Setting.current_theme_class()
     })
-  end
-  # Tasks created from a plan carry the originating plan_id in a hidden
-  # form input — stamp it onto the Plan so /plans can surface a "linked
-  # task" badge. A missing plan_id (manual create) or unknown plan_id
-  # (stale form) is silently ignored: the task creation itself succeeded.
-  let plan_id = (form["plan_id"] ?? "").trim()
-  if plan_id != ""
-    let plan = Plan.find_by_plan_id(plan_id)
-    if plan != nil
-      plan.task_slug = task.slug
-      plan.save()
-    end
   end
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
@@ -882,322 +847,6 @@ end
 # fragment (so the kanban swaps in place); plain form posts get the full
 # redirect to the project page.
 
-# Take the user's rough notes, spawn bin/plan-run in the background, and
-# return the Stage-2 progress partial. The runner drives the /plan-task
-# skill through the Claude Agent SDK so canUseTool can intercept
-# AskUserQuestion / ExitPlanMode and surface them as a question card —
-# the user clicks an option to answer.
-fn plan(req)
-  let project = find_project(req["params"]["name"])
-  if project == nil
-    return {"status": 404, "body": "Unknown project"}
-  end
-  let notes = (req["form"]["body_md"] ?? "").trim()
-  if notes == ""
-    return {"status": 422, "body": "Notes required — type a few lines first"}
-  end
-  let model = _stitched_plan_model(req["form"])
-  let plan_id = spawn_plan_agent(notes, model, project["path"])
-  if plan_id == nil
-    return {
-      "status": 500,
-      "headers": {"Content-Type": "text/html; charset=utf-8"},
-      "body": "<div class=\"text-red-300 text-sm p-3\">failed to spawn plan-run; check the server log</div>"
-    }
-  end
-  # HX-Push-Url puts the plan_id in the address bar so a reload during
-  # planning lands back on the same in-flight stage instead of an empty
-  # Stage 1 form (see `new` action for the rehydration logic).
-  {
-    "status": 200,
-    "headers": {
-      "Content-Type": "text/html; charset=utf-8",
-      "HX-Push-Url":  "/projects/" + project["name"] + "/tasks/new?plan_id=" + plan_id
-    },
-    "body": render_partial("tasks/plan_progress", {
-      "project":          project,
-      "plan_id":          plan_id,
-      "log":              "",
-      "status":           "starting",
-      "pending_question": nil,
-      "prompt":           notes
-    })
-  }
-end
-
-# WebSocket handler for the live plan-task agent transcript.
-#
-# Mirrors `runs#stream`: client opens the socket, sends `tick` frames
-# with its byte cursor, server replies with `delta` frames carrying the
-# new bytes since that cursor plus a re-rendered status + question
-# fragment. On a terminal status (done / failed) we set `reload: true`
-# so the client re-fetches `/tasks/new?plan_id=...`, letting the
-# controller render the planned-body view in place of #form-stage.
-#
-# Suppression around the awaiting_question state is enforced on the
-# client side (it stops sending ticks while the question card is up,
-# so the agent's pollAnswer loop never races the user's click) — but
-# we also defensively don't push log bytes when `has_question` is true.
-fn plan_stream(event)
-  let event_type = event["type"]
-  if event_type != "message"
-    return {}
-  end
-  let raw = (event["message"] ?? "").trim()
-  let parsed = JSON.parse(raw) rescue nil
-  if parsed == nil
-    return { "send": JSON.stringify({ "event": "error", "message": "bad message", "terminal": true }) }
-  end
-  let plan_id = (parsed["plan_id"] ?? "").trim()
-  let project_name = (parsed["project"] ?? "").trim()
-  let project = find_project(project_name) rescue nil
-  if project == nil
-    return { "send": JSON.stringify({ "event": "error", "message": "unknown project", "terminal": true }) }
-  end
-  let offset = parsed["offset"] ?? 0
-  let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
-  let data = plan_stream_payload(plan_id, frame_kind, offset)
-  if data["event"] == "error"
-    return { "send": JSON.stringify(data) }
-  end
-  let pq = data["pending_question"]
-  data["status_html"] = render_partial("tasks/plan_status", {
-    "plan_id":          plan_id,
-    "status":           data["status"],
-    "pending_question": pq
-  })
-  data["question_html"] = render_partial("tasks/plan_question", {
-    "project":          project,
-    "plan_id":          plan_id,
-    "pending_question": pq
-  })
-  { "send": JSON.stringify(data) }
-end
-
-# HTMX poll endpoint for the in-flight plan agent. Returns ONLY the
-# right-panel `_plan_stream` partial (root id `plan-stream`), so the
-# 2-second poll never re-renders the static prompt aside on the left.
-# When the runner has flagged status=done, returns the full planned-body
-# replacement and uses HX-Retarget/HX-Reswap so htmx swaps the whole
-# `#form-stage` instead of just `#plan-stream`. Polling stops automatically
-# because the planned-body partial doesn't carry hx-* attrs.
-fn plan_log(req)
-  let project = find_project(req["params"]["name"])
-  if project == nil
-    return {"status": 404, "body": "Unknown project"}
-  end
-  let plan_id = req["params"]["plan_id"]
-  let state = read_plan_state(plan_id)
-  if state["status"] == "done"
-    let title  = parse_title_from_body(state["body"])
-    let picker = plan_model_picker_data(state["model"] ?? "")
-    return {
-      "status": 200,
-      "headers": {
-        "Content-Type": "text/html; charset=utf-8",
-        "HX-Retarget":  "#form-stage",
-        "HX-Reswap":    "innerHTML"
-      },
-      "body": render_partial("tasks/planned_body", {
-        "project":          project,
-        "plan_id":          plan_id,
-        "body":             state["body"],
-        "title":            title,
-        "model":            state["model"],
-        "claude_options":   picker["claude_options"],
-        "opencode_options": picker["opencode_options"]
-      })
-    }
-  end
-  {
-    "status": 200,
-    "headers": {"Content-Type": "text/html; charset=utf-8"},
-    "body": render_partial("tasks/plan_stream", {
-      "project":          project,
-      "plan_id":          plan_id,
-      "log":              state["log"],
-      "status":           state["status"],
-      "pending_question": state["pending_question"]
-    })
-  }
-end
-
-# Refine the current draft. Spawns a NEW plan_id (so the prior log /
-# transcript is preserved) seeded with the previous spec plus the
-# user's revision note, framed so /plan-task treats it as a revision
-# rather than starting from scratch. Defaults the model to whatever
-# was used the first time, but accepts an override from the form.
-fn plan_refine(req)
-  let project = find_project(req["params"]["name"])
-  if project == nil
-    return {"status": 404, "body": "Unknown project"}
-  end
-  let prev_plan_id = req["params"]["plan_id"]
-  let prev_body = (req["form"]["body_md"] ?? "").trim()
-  let note = (req["form"]["refine_note"] ?? "").trim()
-  if note == ""
-    return {"status": 422, "body": "Refinement note is empty — type what you want changed"}
-  end
-  if prev_body == ""
-    return {"status": 422, "body": "Cannot refine an empty draft"}
-  end
-  # On refine, fall back to the previous plan's stored model when the
-  # form didn't resubmit one (rare — the dropdown is always in the DOM).
-  let prev_model = _read_plan_model(prev_plan_id)
-  let form = req["form"]
-  let submitted_model = form["plan_model"] ?? ""
-  if submitted_model == ""
-    form["plan_model"] = prev_model
-  end
-  let model = _stitched_plan_model(form)
-  let seeded = "Previous draft of the task spec:\n\n"
-              + prev_body
-              + "\n\n---\n\n"
-              + "Revise the spec per this note from the user:\n\n"
-              + note
-              + "\n\nProduce the FULL updated spec in the same shape "
-              + "(no explanation, no diff — just the new spec)."
-  let plan_id = spawn_plan_agent(seeded, model, project["path"])
-  if plan_id == nil
-    return {
-      "status": 500,
-      "headers": {"Content-Type": "text/html; charset=utf-8"},
-      "body": "<div class=\"text-red-300 text-sm p-3\">failed to spawn plan-run</div>"
-    }
-  end
-  {
-    "status": 200,
-    "headers": {
-      "Content-Type": "text/html; charset=utf-8",
-      "HX-Push-Url":  "/projects/" + project["name"] + "/tasks/new?plan_id=" + plan_id
-    },
-    "body": render_partial("tasks/plan_progress", {
-      "project":          project,
-      "plan_id":          plan_id,
-      "log":              "",
-      "status":           "starting",
-      "pending_question": nil,
-      "prompt":           "Refining draft from " + prev_plan_id + ":\n\n" + note
-    })
-  }
-end
-
-# Re-spawn a failed plan using the original prompt + model. Issued by
-# the "Try again" button on the failed _plan_stream panel. Allocates a
-# NEW plan_id so the failed plan stays in the index for diagnosis.
-fn plan_retry(req)
-  let project = find_project(req["params"]["name"])
-  if project == nil
-    return {"status": 404, "body": "Unknown project"}
-  end
-  let prev_plan_id = req["params"]["plan_id"]
-  let prev = Plan.find_by_plan_id(prev_plan_id)
-  if prev == nil
-    return {"status": 404, "body": "Unknown plan"}
-  end
-  let notes = (prev.prompt ?? "").trim()
-  if notes == ""
-    return {"status": 422, "body": "Original prompt missing — cannot retry"}
-  end
-  let model = _allow_plan_model(prev.model ?? "")
-  let plan_id = spawn_plan_agent(notes, model, project["path"])
-  if plan_id == nil
-    return {
-      "status": 500,
-      "headers": {"Content-Type": "text/html; charset=utf-8"},
-      "body": "<div class=\"text-red-300 text-sm p-3\">failed to spawn plan-run</div>"
-    }
-  end
-  {
-    "status": 200,
-    "headers": {
-      "Content-Type": "text/html; charset=utf-8",
-      "HX-Push-Url":  "/projects/" + project["name"] + "/tasks/new?plan_id=" + plan_id
-    },
-    "body": render_partial("tasks/plan_progress", {
-      "project":          project,
-      "plan_id":          plan_id,
-      "log":              "",
-      "status":           "starting",
-      "pending_question": nil,
-      "prompt":           notes
-    })
-  }
-end
-
-# Read the model the user picked when this plan was first spawned.
-# Falls back to the canonical default so a missing/corrupt file never
-# raises into the refine flow.
-fn _read_plan_model(plan_id)
-  let plan = Plan.find_by_plan_id(plan_id)
-  if plan == nil
-    return "claude-sonnet-4-6"
-  end
-  let v = (plan.model ?? "").trim()
-  if v == ""
-    return "claude-sonnet-4-6"
-  end
-  v
-end
-
-fn plan_answer(req)
-  let project = find_project(req["params"]["name"])
-  if project == nil
-    return {"status": 404, "body": "Unknown project"}
-  end
-  let plan_id = req["params"]["plan_id"]
-  # Read via `req["all"]` (route + query + form + JSON merged) so the
-  # same code path works for both production htmx form posts and the
-  # test client, which sends JSON. `req["form"]` alone would miss tests;
-  # `req["json"]` alone would miss prod.
-  let body_params = req["all"] ?? {}
-  let qid = (body_params["qid"] ?? "").trim()
-  let value = (body_params["value"] ?? "").trim()
-  if qid == "" or value == ""
-    return {"status": 422, "body": "qid and value required"}
-  end
-  let plan = Plan.find_by_plan_id(plan_id)
-  if plan != nil
-    plan.write_pending_answer(qid, value)
-  end
-  let state = read_plan_state(plan_id)
-  # Mirror plan_log: while running, return only the right panel so the
-  # left prompt aside is preserved across answer round-trips. If the
-  # answer raced the agent finishing, retarget to #form-stage so the
-  # planned-body view replaces the whole stage.
-  if state["status"] == "done"
-    let title  = parse_title_from_body(state["body"])
-    let picker = plan_model_picker_data(state["model"] ?? "")
-    return {
-      "status": 200,
-      "headers": {
-        "Content-Type": "text/html; charset=utf-8",
-        "HX-Retarget":  "#form-stage",
-        "HX-Reswap":    "innerHTML"
-      },
-      "body": render_partial("tasks/planned_body", {
-        "project":          project,
-        "plan_id":          plan_id,
-        "body":             state["body"],
-        "title":            title,
-        "model":            state["model"],
-        "claude_options":   picker["claude_options"],
-        "opencode_options": picker["opencode_options"]
-      })
-    }
-  end
-  {
-    "status": 200,
-    "headers": {"Content-Type": "text/html; charset=utf-8"},
-    "body": render_partial("tasks/plan_stream", {
-      "project":          project,
-      "plan_id":          plan_id,
-      "log":              state["log"],
-      "status":           state["status"],
-      "pending_question": state["pending_question"]
-    })
-  }
-end
 
 # Spawn bin/plan-run in the background and return its plan_id. The
 # runner detaches via `nohup … &`, so System.run_sync returns

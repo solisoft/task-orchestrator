@@ -1,0 +1,45 @@
+<% let _vp        = version_progress ?? [] %>
+<% if _vp.length() > 0 %>
+  <% let _total_bets = 0 %>
+  <% let _done_bets  = 0 %>
+  <% let _active     = [] %>
+  <% for v in _vp %>
+    <% _total_bets = _total_bets + (v["total"] ?? 0) %>
+    <% _done_bets  = _done_bets  + (v["done"]  ?? 0) %>
+    <% if (v["status"] ?? "") == "active" %>
+      <% _active.push(v) %>
+    <% end %>
+  <% end %>
+  <% let _overall_pct = _total_bets > 0 ? (_done_bets * 100 / _total_bets) : 0 %>
+
+  <section class="rounded-2xl glass-card border border-white/5 px-5 py-4 mb-6 animate-fade-in">
+    <header class="flex items-baseline justify-between gap-3 mb-3">
+      <h2 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Burndown</h2>
+      <span class="text-[10px] font-mono text-slate-500"><%= _done_bets %> / <%= _total_bets %> bets shipped</span>
+    </header>
+
+    <div class="h-2 rounded-full bg-white/5 overflow-hidden mb-4">
+      <div class="h-full rounded-full bg-gradient-to-r from-indigo-400 to-fuchsia-400 transition-all" style="width: <%= _overall_pct %>%"></div>
+    </div>
+
+    <% if _active.length() == 0 %>
+      <p class="text-xs text-slate-500">No active cycle right now — promote a planned one in the list below to start a build.</p>
+    <% else %>
+      <div class="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <% for v in _active %>
+          <% let _pct = v["pct"] ?? 0 %>
+          <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+            <div class="flex items-baseline justify-between gap-2 mb-1.5">
+              <span class="text-sm font-medium text-slate-100 truncate"><%= h(v["version_name"] ?? "") %></span>
+              <span class="text-[10px] font-mono text-emerald-300/80"><%= v["done"] ?? 0 %>/<%= v["total"] ?? 0 %></span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full rounded-full bg-emerald-400 transition-all" style="width: <%= _pct %>%"></div>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono"><%= _pct %>%</span>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+<% end %>
