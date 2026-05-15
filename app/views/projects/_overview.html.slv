@@ -1,0 +1,120 @@
+<div class="animate-fade-in">
+
+  <div class="mb-6">
+    <h2 class="text-lg font-semibold text-slate-100 tracking-tight">Overview</h2>
+    <p class="text-xs text-slate-500 mt-0.5">Aggregate metrics &amp; delivery progress</p>
+  </div>
+
+  <% let _total_features  = all_features.length() %>
+  <% let _done_features   = feature_counts["done"]        ?? 0 %>
+  <% let _active_features = feature_counts["in-progress"] ?? 0 %>
+  <% let _ready_features  = feature_counts["ready"]       ?? 0 %>
+  <% let _draft_features  = feature_counts["draft"]       ?? 0 %>
+  <% let _completion_pct  = _total_features > 0 ? (_done_features * 100 / _total_features) : 0 %>
+
+  <!-- feature status tiles -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+    <div class="rounded-xl glass-card border border-white/5 p-4 animate-fade-in">
+      <div class="text-2xl font-bold text-slate-100 mb-0.5"><%= _total_features %></div>
+      <div class="text-xs text-slate-500 uppercase tracking-wider font-medium">Total bets</div>
+    </div>
+    <div class="rounded-xl glass-card border border-emerald-500/15 p-4 animate-fade-in animate-fade-in-1">
+      <div class="text-2xl font-bold text-emerald-300 mb-0.5"><%= _done_features %></div>
+      <div class="text-xs text-slate-500 uppercase tracking-wider font-medium">Delivered</div>
+    </div>
+    <div class="rounded-xl glass-card border border-amber-500/15 p-4 animate-fade-in animate-fade-in-1">
+      <div class="text-2xl font-bold text-amber-300 mb-0.5"><%= _active_features %></div>
+      <div class="text-xs text-slate-500 uppercase tracking-wider font-medium">In progress</div>
+    </div>
+    <div class="rounded-xl glass-card border border-indigo-500/15 p-4 animate-fade-in animate-fade-in-1">
+      <div class="text-2xl font-bold gradient-text mb-0.5"><%= _completion_pct %>%</div>
+      <div class="text-xs text-slate-500 uppercase tracking-wider font-medium">Completion</div>
+    </div>
+  </div>
+
+  <!-- overall feature progress bar -->
+  <% if _total_features > 0 %>
+    <div class="rounded-xl glass-card border border-white/5 p-5 mb-6 animate-fade-in">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium text-slate-300">Overall delivery</span>
+        <span class="text-sm font-mono text-slate-400"><%= _done_features %>/<%= _total_features %> features done</span>
+      </div>
+      <div class="h-2 w-full rounded-full bg-white/5 overflow-hidden">
+        <div class="h-full rounded-full bg-gradient-to-r from-indigo-400 to-emerald-400 transition-all" style="width: <%= _completion_pct %>%"></div>
+      </div>
+      <div class="flex justify-between mt-2 text-[11px] text-slate-600">
+        <span><%= _draft_features %> draft</span>
+        <span><%= _ready_features %> ready</span>
+        <span><%= _active_features %> active</span>
+        <span><%= _done_features %> done</span>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- task status breakdown — task_total is pre-computed in the controller -->
+  <% if task_total > 0 %>
+    <div class="rounded-xl glass-card border border-white/5 p-5 mb-6 animate-fade-in">
+      <h3 class="text-sm font-medium text-slate-300 mb-4">Task pipeline</h3>
+      <div class="space-y-2.5">
+        <% for _ts in ["todo", "queued", "inprogress", "review", "done", "failed"] %>
+          <% let _tcol   = columns[_ts] ?? [] %>
+          <% let _tcount = _tcol.length() %>
+          <% let _tpct   = task_total > 0 ? (_tcount * 100 / task_total) : 0 %>
+          <div class="flex items-center gap-3">
+            <span class="w-20 text-xs text-slate-500 font-mono text-right flex-shrink-0"><%= _ts %></span>
+            <div class="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full rounded-full transition-all
+                <%= _ts == "done"       ? "bg-emerald-400"  :
+                   (_ts == "inprogress" ? "bg-amber-400"    :
+                   (_ts == "review"     ? "bg-blue-400"     :
+                   (_ts == "failed"     ? "bg-rose-400"     :
+                   (_ts == "queued"     ? "bg-indigo-400"   : "bg-slate-500")))) %>"
+                   style="width: <%= _tpct %>%"></div>
+            </div>
+            <span class="w-6 text-xs font-mono text-slate-500 flex-shrink-0"><%= _tcount %></span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- per-version burndown -->
+  <% if version_progress.length() > 0 %>
+    <div class="rounded-xl glass-card border border-white/5 p-5 animate-fade-in">
+      <h3 class="text-sm font-medium text-slate-300 mb-4">Cycle progress</h3>
+      <div class="space-y-4">
+        <% for vp in version_progress %>
+          <% let _vpstatus = vp["status"] ?? "planned" %>
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2">
+                <% if _vpstatus == "active" %>
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0 animate-pulse"></span>
+                <% elsif _vpstatus == "shipped" %>
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-400 flex-shrink-0"></span>
+                <% else %>
+                  <span class="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0"></span>
+                <% end %>
+                <span class="text-sm text-slate-300 font-medium"><%= h(vp["version_name"]) %></span>
+              </div>
+              <span class="text-xs font-mono text-slate-500"><%= vp["done"] %>/<%= vp["total"] %> &bull; <%= vp["pct"] %>%</span>
+            </div>
+            <div class="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+              <div class="h-full rounded-full transition-all
+                <%= _vpstatus == "shipped" ? "bg-slate-400" : (_vpstatus == "active" ? "bg-emerald-400" : "bg-indigo-400") %>"
+                   style="width: <%= vp["pct"] %>%"></div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- empty state -->
+  <% if _total_features == 0 and task_total == 0 and version_progress.length() == 0 %>
+    <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
+      <p class="text-slate-500 text-sm">No data yet. Create features and tasks to see progress metrics here.</p>
+    </div>
+  <% end %>
+
+</div>

@@ -1,0 +1,52 @@
+<% let _vkey = version == nil ? "" : (version._key ?? "") %>
+<form method="post"
+      action="<%= _vkey == "" ? "/projects/" + h(project["name"]) + "/versions" : "/projects/" + h(project["name"]) + "/versions/" + h(_vkey) + "/update" %>"
+      class="rounded-xl glass-card p-6 space-y-4">
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Name <span class="text-rose-400">*</span></label>
+    <input type="text" name="name" required
+           value="<%= version == nil ? "" : h(version.name ?? "") %>"
+           placeholder="e.g. v1.0, Q3 Cycle"
+           class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Code name</label>
+    <input type="text" name="code_name"
+           value="<%= version == nil ? "" : h(version.code_name ?? "") %>"
+           placeholder="e.g. Nighthawk, Ember"
+           class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Status <span class="text-rose-400">*</span></label>
+    <select name="status" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+      <option value="planned"  <%= version != nil and version.status == "planned"  ? "selected" : "" %>>Planned</option>
+      <option value="active"   <%= version != nil and version.status == "active"   ? "selected" : "" %>>Active</option>
+      <option value="shipped"  <%= version != nil and version.status == "shipped"  ? "selected" : "" %>>Shipped</option>
+    </select>
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Due date</label>
+    <input type="date" name="due_date"
+           value="<%= version == nil ? "" : h(version.due_date ?? "") %>"
+           class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-slate-300 mb-1">Description</label>
+    <textarea name="description" rows="4"
+              placeholder="Goals, scope, what ships in this cycle&hellip;"
+              class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 text-sm text-slate-100 resize-y"><%= version == nil ? "" : h(version.description ?? "") %></textarea>
+  </div>
+
+  <div class="flex justify-end gap-2 pt-2">
+    <a href="/projects/<%= h(project["name"]) %>?tab=roadmap"
+       class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</a>
+    <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors">
+      <%= version == nil ? "Create cycle" : "Save changes" %>
+    </button>
+  </div>
+</form>
