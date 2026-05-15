@@ -80,7 +80,6 @@ is no per-project copy to keep in sync.
                   pr_url stored            close)                  for inspection)
 ```
 
-One dispatcher process for the whole workspace — no per-repo watcher.
 The DB row is the single source of truth for status; the on-disk
 `.log` / `.status` files are journals for the run viewer.
 
