@@ -298,9 +298,9 @@ if [[ -f "$project_path/.env.test" ]]; then
 fi
 
 # 4. Run /do-task and /review-task headlessly.
-# A `task_model` of "<provider>/<model>" routes through opencode CLI; a
-# bare claude-* id pins claude --model; an empty value uses claude with
-# whatever default the binary picks.
+# A `task_model` of "codex/<model>" routes through OpenAI's codex CLI;
+# a "<provider>/<model>" format routes through opencode CLI; a bare
+# claude-* id pins claude --model; an empty value uses claude default.
 #
 # An opencode model may carry a ":variant" suffix
 # (e.g. "deepseek/deepseek-v4-pro:low") to pick a provider-specific
@@ -316,7 +316,12 @@ if [[ "$task_model" == */*:* ]]; then
   log "model variant=$task_variant"
 fi
 
-if [[ "$task_model" == */* ]]; then
+if [[ "$task_model" == codex/* ]]; then
+  agent_kind="codex"
+  if ! command -v codex >/dev/null 2>&1; then
+    fail "task picked $task_model but 'codex' is not on PATH"
+  fi
+elif [[ "$task_model" == */* ]]; then
   agent_kind="opencode"
   if ! command -v opencode >/dev/null 2>&1; then
     fail "task picked $task_model but 'opencode' is not on PATH"
@@ -332,6 +337,18 @@ run_agent() {
   log "running $agent_kind $prompt"
   set +e
   case "$agent_kind" in
+    codex)
+      local codex_cmd=(codex --format json)
+      if [[ -n "$task_model" ]]; then
+        codex_cmd+=(--model "${task_model#codex/}")
+      fi
+      (
+        cd "$worktree_dir"
+        "${codex_cmd[@]}" < /dev/null "$prompt"
+      ) 2>> "$log_file.stderr" \
+        | tee -a "$log_file.jsonl" \
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
+      ;;
     opencode)
       local opencode_cmd=(opencode run --format json --dangerously-skip-permissions -m "$task_model")
       if [[ -n "$task_variant" ]]; then
@@ -339,8 +356,9 @@ run_agent() {
       fi
       (
         cd "$worktree_dir"
-        "${opencode_cmd[@]}" < /dev/null "$prompt" 2> >(stdbuf -oL tr -d '\r' >> "$log_file")
-      ) | tee -a "$log_file.jsonl" \
+        "${opencode_cmd[@]}" < /dev/null "$prompt"
+      ) 2>> "$log_file.stderr" \
+        | tee -a "$log_file.jsonl" \
         | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
       ;;
     *)
@@ -350,8 +368,9 @@ run_agent() {
       fi
       (
         cd "$worktree_dir"
-        claude "${claude_args[@]}" < /dev/null "$prompt" 2> >(stdbuf -oL tr -d '\r' >> "$log_file")
-      ) | tee -a "$log_file.jsonl" \
+        claude "${claude_args[@]}" < /dev/null "$prompt"
+      ) 2>> "$log_file.stderr" \
+        | tee -a "$log_file.jsonl" \
         | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
       ;;
   esac
