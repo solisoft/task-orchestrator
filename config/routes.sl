@@ -9,7 +9,6 @@ get("/logout", "auth#logout")
 # ── Root & Utility ──────────────────
 
 get("/", "home#landing")
-get("/agents-dashboard", "home#index")
 get("/plans", "plans#index")
 get("/health", "home#health")
 get("/debug", "debug#show")
@@ -99,6 +98,10 @@ get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
 # ── Auth-gated routes ─────────────────
 
 middleware("authenticate", -> {
+
+  # ── Dashboard ─────────────────────────
+
+  get("/agents-dashboard", "home#index")
 
   # ── Features ─────────────────────────
 

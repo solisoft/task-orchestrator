@@ -11,11 +11,24 @@
       <span class="text-base font-semibold tracking-tight">Task Orchestrator</span>
     </a>
     <div class="flex items-center gap-1.5">
-      <a href="/features" class="hidden sm:inline-block rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Features</a>
-      <a href="/agents-dashboard" class="hidden sm:inline-block rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Dashboard</a>
-      <a href="/docs" class="hidden sm:inline-block rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Docs</a>
+      <a href="/features" class="rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Features</a>
+      <a href="/agents-dashboard" class="rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Dashboard</a>
+      <a href="/docs" class="rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Docs</a>
       <% if current_user != nil %>
-        <a href="/agents-dashboard" class="rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-4 py-2 transition-all btn-glow shadow-lg shadow-indigo-500/25">Open dashboard &rarr;</a>
+        <% let _name = (current_user.display_name ?? current_user.email ?? "").trim() %>
+        <% if _name == "" %><% _name = "User" %><% end %>
+        <% let _initials = "" %>
+        <% for _part in _name.split(" ") %>
+          <% if _part.length() > 0 and _initials.length() < 2 %>
+            <% _initials = _initials + _part.substring(0, 1).upcase() %>
+          <% end %>
+        <% end %>
+        <% if _initials == "" %><% _initials = "?" %><% end %>
+        <div class="flex items-center gap-2 ml-2" title="<%= h(current_user.email ?? "") %>">
+          <span class="avatar-bubble" style="background: linear-gradient(135deg, rgb(99,102,241), rgb(192,132,252)); color: #fff;"><%= h(_initials) %></span>
+          <span class="text-sm text-slate-300 hidden sm:inline"><%= h(_name) %></span>
+        </div>
+        <a href="/logout" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-medium px-3 py-2 transition-colors">Sign out</a>
       <% else %>
         <a href="/login" class="rounded-lg bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white text-sm font-semibold px-4 py-2 transition-all btn-glow shadow-lg shadow-indigo-500/25">Sign in &rarr;</a>
       <% end %>
