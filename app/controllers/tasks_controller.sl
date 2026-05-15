@@ -350,10 +350,12 @@ fn show(req)
   if task.status == "review"
     code_reviews = CodeReview.for_task(project["name"], task.slug)
   end
+  let feature = _feature_for_task(task)
   render("tasks/show", {
     "title": task.slug,
     "project": project,
     "task": task,
+    "feature": feature,
     "branch_info": _branch_info_for(task, project),
     "can_commit_push": _can_commit_push(task, project),
     "default_plan_model":   default_model,
@@ -446,6 +448,17 @@ fn _branch_info_for(task, project)
     "worktree_path": exists_in_worktree ? wt_path : nil,
     "is_local_branch": task.outcome == "local-branch"
   }
+end
+
+# View scope can't resolve `Feature.X`, so callers that render tasks/show
+# pre-load the Feature row here. Returns nil when the task has no
+# feature_slug or the slug points at a deleted feature.
+fn _feature_for_task(task)
+  let fslug = (task.feature_slug ?? "").trim()
+  if fslug == ""
+    return nil
+  end
+  Feature.find_by("_key", fslug)
 end
 
 fn _can_commit_push(task, project)
@@ -593,6 +606,7 @@ fn commit_push(req)
       "title": task.slug,
       "project": project,
       "task": task,
+      "feature": _feature_for_task(task),
       "branch_info": _branch_info_for(task, project),
       "can_commit_push": _can_commit_push(task, project),
       "default_plan_model":   Setting.get_or("plan_model", "claude-sonnet-4-6"),
@@ -814,6 +828,7 @@ fn save(req)
       "title": task.slug,
       "project": project,
       "task": task,
+      "feature": _feature_for_task(task),
       "theme": Setting.current_theme(),
       "theme_css_vars": Setting.current_theme_css_vars(),
       "theme_class": Setting.current_theme_class()

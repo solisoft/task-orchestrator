@@ -242,6 +242,31 @@ describe("TasksController#show with local-branch outcome", fn()
     let body = res_body(response)
     assert_not(body.contains("Merge into main"))
   end)
+
+  # Regression: model classes aren't reachable from view scope, so the
+  # feature link in the header has to be pre-loaded by the controller.
+  test("renders the feature chip for tasks linked to a feature", fn()
+    Feature.delete_all()
+    _tq_setup_git_proj("with-feature")
+    Feature.create({
+      "_key":    "proj--my-brief",
+      "project": "proj",
+      "slug":    "my-brief",
+      "title":   "My Brief Title",
+      "status":  "ready"
+    })
+    Task.create({
+      "_key":         "proj--with-feature",
+      "project":      "proj",
+      "slug":         "with-feature",
+      "title":        "Linked task",
+      "status":       "todo",
+      "feature_slug": "proj--my-brief"
+    })
+    let response = get("/projects/proj/tasks/with-feature")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), "My Brief Title")
+  end)
 end)
 
 describe("TasksController#merge_branch", fn()
