@@ -58,6 +58,7 @@
                 "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
                 "claude_options":   claude_options,
                 "opencode_options": opencode_options,
+                "codex_options":    codex_options,
                 "include_blank":    false,
                 "blank_label":      ""
               }) %>
@@ -133,6 +134,7 @@
         "default_review_model": default_review_model,
         "claude_options":       claude_options,
         "opencode_options":     opencode_options,
+        "codex_options":        codex_options,
         "reviews":              code_reviews
       }) %>
     <% end %>
@@ -225,6 +227,7 @@
               "current":          (task.model ?? "") == "" ? default_plan_model : task.model,
               "claude_options":   claude_options,
               "opencode_options": opencode_options,
+              "codex_options":    codex_options,
               "include_blank":    false,
               "blank_label":      ""
             }) %>

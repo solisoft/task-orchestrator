@@ -9,8 +9,8 @@
   # Locals:
   #   - project, task                     — current row context
   #   - default_review_model              — fallback when task.model is unset
-  #   - claude_options / opencode_options — already filtered by the
-  #                                         user's allowlist
+  #   - claude_options / opencode_options / codex_options — already
+  #                                         filtered by the user's allowlist
   #   - reviews                           — [CodeReview, ...] newest first
 %>
 <%
@@ -62,6 +62,7 @@
             "current":          (task.model ?? "") == "" ? default_review_model : task.model,
             "claude_options":   claude_options,
             "opencode_options": opencode_options,
+            "codex_options":    codex_options,
             "include_blank":    false,
             "blank_label":      ""
           }) %>

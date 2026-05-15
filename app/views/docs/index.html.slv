@@ -14,43 +14,50 @@
     <article class="task-md text-sm">
       <h2>Overview</h2>
       <p>
-        <strong>task-orchestrator</strong> is a per-repo task queue plus a
-        Claude Code dispatcher. You drop a markdown task spec into a
-        project's <code>tasks/todo/</code>, flip it to <code>queued</code>
-        from this UI (or with <code>bin/task-queue</code>), and a watcher
-        fires a headless Claude Code agent that runs <code>/do-task</code>
-        and <code>/review-task</code> end-to-end inside a fresh git
-        worktree, then opens a PR with <code>gh</code>.
+        <strong>task-orchestrator</strong> is a task queue plus agent
+        dispatcher. You draft a spec in the kanban editor, pick the agent
+        + model, and click <strong>Queue → agent</strong>. A global
+        dispatcher (Bun, one process for the whole workspace) picks the
+        row up via a solidb live-query, spins a fresh git worktree, runs
+        <code>/do-task</code> then <code>/review-task</code>, and either
+        opens a PR or marks the task done.
       </p>
       <p>
-        The web UI in front of you (the project list, kanban, and
-        task editor) drives the same loop: every task row lives in
-        solidb, and the watcher reacts to status changes there as well
-        as to plain <code>mv</code> operations against the filesystem.
+        Every task row lives in solidb. The web UI (kanban, task editor,
+        run viewer) drives the same loop — no filesystem watchers, no
+        per-repo daemons.
       </p>
 
       <h2>Setup</h2>
-      <p>You need three system-level dependencies on the host running the watcher:</p>
-      <pre><code>sudo apt install inotify-tools                # provides inotifywait
-gh auth login                                 # gh CLI authenticated against your fork
-claude --version                              # Claude Code CLI in PATH</code></pre>
+      <p>The dispatcher and the web UI need these on the host:</p>
+      <pre><code>gh auth login                                 # gh CLI authenticated against your fork
+claude --version                              # Claude Code CLI in PATH
+bun --version                                 # Bun runtime for the dispatcher
+jq --version                                  # JSON stream formatter</code></pre>
       <p>
-        Then enable a watcher per repo. Re-running is safe — the script
-        is idempotent and only refreshes the systemd-user unit:
+        Configure solidb credentials, run migrations, then install and
+        start the global systemd-user dispatcher:
       </p>
-      <pre><code>~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/lang
-~/workspace/soli/task-orchestrator/bin/install-watcher ~/workspace/soli/db
-# ... one per repo ...</code></pre>
-      <p>Inspect the running watchers and tail their journal:</p>
-      <pre><code>systemctl --user list-units 'task-watch@*'
-journalctl --user -u 'task-watch@*' -f</code></pre>
+      <pre><code># Configure (one-time)
+cp .env.example .env                      # or write SOLIDB_* vars manually
+soli db:migrate up                        # create collections
+
+# Install + start the global dispatcher
+~/workspace/soli/task-orchestrator/bin/install-dispatcher
+
+# Run the web UI
+soli serve . --dev                        # http://localhost:5011</code></pre>
+      <p>Inspect the dispatcher:</p>
+      <pre><code>systemctl --user status task-dispatch.service
+journalctl --user -u task-dispatch.service -f
+tail -f ~/.local/state/task-orchestrator/dispatcher.log</code></pre>
 
       <h2>Daily use</h2>
       <p>The browser flow:</p>
       <ol>
         <li>From <a href="/">the project list</a>, pick a project. The kanban shows <code>todo / queued / in-progress / review / done</code>.</li>
         <li>Click <strong>+ New task</strong>, type a title and a markdown body (or paste rough notes and let <em>Plan with agent</em> structure them).</li>
-        <li>Hit <strong>Queue → agent</strong> on the task page. The watcher picks the row up immediately; the kanban swaps it into <code>queued</code> in place via HTMX.</li>
+        <li>Hit <strong>Queue → agent</strong> on the task page. The dispatcher picks the row up within a frame; the kanban swaps it into <code>queued</code> in place via HTMX.</li>
         <li>Open <strong>View run log</strong> to follow the live tail. The page polls every second until the agent settles.</li>
       </ol>
       <p>The CLI flow (equivalent, useful for keybindings):</p>
