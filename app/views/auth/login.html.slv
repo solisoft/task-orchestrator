@@ -72,6 +72,9 @@
           <% end %>
 
           <form method="post" action="/login" class="space-y-4">
+            <% if (return_to ?? "") != "" %>
+              <input type="hidden" name="return_to" value="<%= h(return_to) %>">
+            <% end %>
             <div>
               <label class="block text-xs font-medium uppercase tracking-wider text-slate-400 mb-2">Email</label>
               <div class="relative">

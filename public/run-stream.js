@@ -50,6 +50,34 @@
     return "text-slate-300";
   }
 
+  // Prepend a one-shot prefix chunk above whatever SSR painted. Used on
+  // the run viewer when the server's snapshot carries `prefix_chunk` —
+  // bytes the SSR `run_log_tail` cap left out. Preserves the user's
+  // distance-from-bottom across the insert so the live tail doesn't
+  // scroll away when the backfill arrives.
+  function prependLogChunk(logEl, chunk) {
+    if (!logEl || !chunk) return;
+    var pre = logEl.querySelector("pre");
+    if (!pre) {
+      logEl.innerHTML =
+        '<pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"></pre>';
+      pre = logEl.querySelector("pre");
+    }
+    var distFromBottom = logEl.scrollHeight - logEl.scrollTop;
+    var frag = document.createDocumentFragment();
+    var lines = chunk.split("\n");
+    var trailingNewline = chunk.charCodeAt(chunk.length - 1) === 10;
+    var last = trailingNewline ? lines.length - 1 : lines.length;
+    for (var i = 0; i < last; i++) {
+      var span = document.createElement("span");
+      span.className = "block " + lineClass(lines[i]);
+      span.textContent = lines[i];
+      frag.appendChild(span);
+    }
+    pre.insertBefore(frag, pre.firstChild);
+    logEl.scrollTop = logEl.scrollHeight - distFromBottom;
+  }
+
   function appendLogChunk(logEl, chunk, isSnapshot) {
     if (!logEl || !chunk) return;
     var pre = logEl.querySelector("pre");
@@ -117,6 +145,10 @@
     // Server-rendered initial byte length tells the server which bytes
     // we already painted, so the first delta starts from there.
     this.offset = parseInt(root.getAttribute("data-stream-offset") || "0", 10) || 0;
+    // Byte where the SSR-painted tail begins in the file. Sent once at
+    // subscribe so the server includes the missing prefix bytes in the
+    // snapshot. Zero means SSR painted the whole log — no backfill.
+    this.prefixEnd = parseInt(root.getAttribute("data-stream-prefix-end") || "0", 10) || 0;
     this.tickMs = parseInt(root.getAttribute("data-stream-tick-ms") || "300", 10) || 300;
     // Identifiers echoed on every tick. Soli's `router_websocket` routes
     // are static, so the URL alone can't tell the handler which resource
@@ -133,6 +165,8 @@
       var v = root.getAttribute("data-stream-" + keys[i].replace("_", "-"));
       if (v != null && v !== "") this.identifiers[keys[i]] = v;
     }
+    var token = root.getAttribute("data-stream-token");
+    if (token != null && token !== "") this.identifiers.stream_token = token;
     this.backoffMs = 500;
     this.maxBackoffMs = 8000;
     this.closed = false;
@@ -192,6 +226,12 @@
     if (!this.ws || this.ws.readyState !== 1) return;
     var msg = { type: this.firstMessageSent ? "tick" : "subscribe",
                 offset: this.offset };
+    // `prefix_end` is a one-shot field on the subscribe message — the
+    // server only emits a `prefix_chunk` on the connect frame, so there's
+    // no point re-sending it on every tick.
+    if (!this.firstMessageSent && this.prefixEnd > 0) {
+      msg.prefix_end = this.prefixEnd;
+    }
     for (var k in this.identifiers) {
       if (Object.prototype.hasOwnProperty.call(this.identifiers, k)) {
         msg[k] = this.identifiers[k];
@@ -234,6 +274,9 @@
     try { msg = JSON.parse(raw); } catch (e) { return; }
     var ev = msg.event || msg.type;
     if (ev === "delta" || ev === "snapshot") {
+      if (ev === "snapshot" && typeof msg.prefix_chunk === "string" && msg.prefix_chunk.length) {
+        prependLogChunk(this.find(this.logSel), msg.prefix_chunk);
+      }
       if (typeof msg.log_chunk === "string" && msg.log_chunk.length) {
         appendLogChunk(this.find(this.logSel), msg.log_chunk, ev === "snapshot");
       }

@@ -923,6 +923,15 @@ describe("FeaturesController GET routes", fn()
     assert_eq(res_status(response), 200)
   end)
 
+  test("GET /features header shows logged-in user, not Sign in", fn()
+    let response = get("/features")
+    let body = res_body(response)
+    assert_eq(res_status(response), 200)
+    # Header partial should render the user's avatar/logout, not the Sign in CTA
+    assert(!body.contains(">Sign in<"))
+    assert(body.contains("/logout"))
+  end)
+
   test("GET /features/:id shows a feature", fn()
     Feature.create({
       "_key": "proj--show-me", "project": "proj", "slug": "show-me",
@@ -1075,5 +1084,794 @@ describe("FeaturesController WS stream access control", fn()
     assert_eq(res_status(response), 200)
     let body = res_body(response)
     assert_contains(body, "data-stream-token=\"visible-token-xyz\"")
+  end)
+end)
+
+describe("FeaturesController#update edge cases", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("upd@test.com", "password", "Upd")
+    login("upd@test.com", "password")
+  end)
+
+  test("POST /features/:id/update returns 404 for unknown feature", fn()
+    let response = post("/features/no-such/update", { "title": "x" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("POST /features/:id/update returns 422 when title is empty", fn()
+    Feature.create({
+      "_key": "proj--blank-title", "project": "proj", "slug": "blank-title",
+      "title": "Original", "status": "draft"
+    })
+    let response = post("/features/proj--blank-title/update", { "title": "" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("GET /features/:id/edit returns 404 for unknown feature", fn()
+    let response = get("/features/no-such/edit")
+    assert_eq(res_status(response), 404)
+  end)
+end)
+
+describe("FeaturesController#generate_tasks 404 + 422", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("gen@test.com", "password", "Gen")
+    login("gen@test.com", "password")
+  end)
+
+  test("returns 404 for unknown feature", fn()
+    let response = post("/features/no-such-feature/generate_tasks", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("returns 422 when the feature has no description", fn()
+    Feature.create({
+      "_key": "proj--no-desc", "project": "proj", "slug": "no-desc",
+      "title": "No Desc", "status": "draft"
+    })
+    let response = post("/features/proj--no-desc/generate_tasks", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+end)
+
+describe("FeaturesController#regenerate_tasks + refine_tasks 404", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("regen@test.com", "password", "Regen")
+    login("regen@test.com", "password")
+  end)
+
+  test("regenerate_tasks returns 404 for unknown feature", fn()
+    let response = post("/features/no-such/regenerate_tasks", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("refine_tasks returns 404 for unknown feature", fn()
+    let response = post("/features/no-such/refine_tasks", { "refinement": "more" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+end)
+
+describe("FeaturesController#cancel_plan edges", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    User.delete_all()
+    User.register("cancel@test.com", "password", "Cancel")
+    login("cancel@test.com", "password")
+  end)
+
+  test("returns 404 for unknown feature", fn()
+    let response = post("/features/no-such/cancel_plan", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("redirects without changes when no plan exists for the feature", fn()
+    Feature.create({
+      "_key": "proj--no-plan", "project": "proj", "slug": "no-plan",
+      "title": "No Plan", "status": "draft"
+    })
+    let response = post("/features/proj--no-plan/cancel_plan", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+  end)
+
+  test("leaves a done plan's status alone but stamps tasks_imported", fn()
+    Feature.create({
+      "_key": "proj--done-plan", "project": "proj", "slug": "done-plan",
+      "title": "Done Plan", "status": "draft"
+    })
+    Plan.create({
+      "_key": "plan-cancel-done", "project": "proj", "plan_id": "plan-cancel-done",
+      "status": "done", "feature_slug": "proj--done-plan", "tasks_imported": false
+    })
+    let response = post("/features/proj--done-plan/cancel_plan", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let plan = Plan.find_by_plan_id("plan-cancel-done")
+    assert_eq(plan.status, "done")
+    assert(plan.tasks_imported == true)
+  end)
+end)
+
+describe("FeaturesController#generate_tasks_log", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("log@test.com", "password", "Log")
+    login("log@test.com", "password")
+  end)
+
+  test("returns 404 for unknown feature", fn()
+    let response = get("/features/no-such/generate_tasks_log/plan-x")
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("renders streaming progress for a running plan", fn()
+    Feature.create({
+      "_key": "proj--polling", "project": "proj", "slug": "polling",
+      "title": "Polling", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-poll", "project": "proj", "plan_id": "plan-poll",
+      "status": "running", "feature_slug": "proj--polling",
+      "pid": 1, "log": "doing work", "stream_token": "tk"
+    })
+    let response = get("/features/proj--polling/generate_tasks_log/plan-poll")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "generate-progress")
+    assert_contains(body, "doing work")
+  end)
+
+  test("renders failed state when the plan has failed", fn()
+    Feature.create({
+      "_key": "proj--boom-f", "project": "proj", "slug": "boom-f",
+      "title": "Boom", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-boom", "project": "proj", "plan_id": "plan-boom",
+      "status": "failed:exit-1", "feature_slug": "proj--boom-f", "log": "broke"
+    })
+    let response = get("/features/proj--boom-f/generate_tasks_log/plan-boom")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), "Plan failed")
+  end)
+
+  test("imports proposed tasks and signals reload when the plan is done", fn()
+    Feature.create({
+      "_key": "proj--done-import", "project": "proj", "slug": "done-import",
+      "title": "Done Import", "description": "yes", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-done-import", "project": "proj", "plan_id": "plan-done-import",
+      "status": "done", "feature_slug": "proj--done-import",
+      "body": "## Task 1: First import\n\nDo this.\n\n## Task 2: Second import\n\nAnd this.",
+      "tasks_imported": false
+    })
+    let response = get("/features/proj--done-import/generate_tasks_log/plan-done-import")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--done-import", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 2)
+    let plan = Plan.find_by_plan_id("plan-done-import")
+    assert(plan.tasks_imported == true)
+  end)
+
+  test("renders single-select pending question form", fn()
+    Feature.create({
+      "_key": "proj--qs", "project": "proj", "slug": "qs",
+      "title": "Q Single", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-q-single", "project": "proj", "plan_id": "plan-q-single",
+      "status": "awaiting", "feature_slug": "proj--qs",
+      "pending_question": {
+        "id":   "qid-1",
+        "tool": "AskUserQuestion",
+        "input": { "questions": [{
+          "question":    "Pick one?",
+          "multiSelect": false,
+          "options": [
+            { "label": "Alpha", "description": "First" },
+            { "label": "Beta",  "description": "Second" }
+          ]
+        }]}
+      },
+      "pid": 1
+    })
+    let response = get("/features/proj--qs/generate_tasks_log/plan-q-single")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "Pick one?")
+    assert_contains(body, "Alpha")
+    assert_contains(body, "Beta")
+  end)
+
+  test("renders multi-select pending question form", fn()
+    Feature.create({
+      "_key": "proj--qm", "project": "proj", "slug": "qm",
+      "title": "Q Multi", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-q-multi", "project": "proj", "plan_id": "plan-q-multi",
+      "status": "awaiting", "feature_slug": "proj--qm",
+      "pending_question": {
+        "id":   "qid-2",
+        "tool": "AskUserQuestion",
+        "input": { "questions": [{
+          "question":    "Pick many?",
+          "multiSelect": true,
+          "options": [
+            { "label": "Red",   "description": "" },
+            { "label": "Green", "description": "" }
+          ]
+        }]}
+      },
+      "pid": 1
+    })
+    let response = get("/features/proj--qm/generate_tasks_log/plan-q-multi")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "Pick many?")
+    assert_contains(body, "Submit selection")
+  end)
+
+  test("imports a single-section plan body via the fallback heading parser", fn()
+    Feature.create({
+      "_key": "proj--solo-import", "project": "proj", "slug": "solo-import",
+      "title": "Solo", "description": "x", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-solo", "project": "proj", "plan_id": "plan-solo",
+      "status": "done", "feature_slug": "proj--solo-import",
+      "body": "# Just one heading\n\nbody content here", "tasks_imported": false
+    })
+    let response = get("/features/proj--solo-import/generate_tasks_log/plan-solo")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--solo-import", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 1)
+  end)
+end)
+
+describe("FeaturesController#plan_answer", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("ans@test.com", "password", "Ans")
+    login("ans@test.com", "password")
+  end)
+
+  test("returns 404 for unknown feature", fn()
+    let response = post("/features/no-such/plan-answer/plan-x",
+      { "qid": "q", "value": "yes" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
+  test("returns 422 when qid is empty", fn()
+    Feature.create({
+      "_key": "proj--ans-empty", "project": "proj", "slug": "ans-empty",
+      "title": "Ans Empty", "status": "ready"
+    })
+    let response = post("/features/proj--ans-empty/plan-answer/plan-x",
+      { "qid": "", "value": "ok" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("returns 422 when value is empty", fn()
+    Feature.create({
+      "_key": "proj--ans-value-empty", "project": "proj", "slug": "ans-value-empty",
+      "title": "Ans Value Empty", "status": "ready"
+    })
+    let response = post("/features/proj--ans-value-empty/plan-answer/plan-x",
+      { "qid": "q", "value": "" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("writes the answer onto a running plan and renders progress", fn()
+    Feature.create({
+      "_key": "proj--ans-running", "project": "proj", "slug": "ans-running",
+      "title": "Ans Running", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-ans-running", "project": "proj", "plan_id": "plan-ans-running",
+      "status": "running", "feature_slug": "proj--ans-running",
+      "pid": 1, "stream_token": "tk"
+    })
+    let response = post("/features/proj--ans-running/plan-answer/plan-ans-running",
+      { "qid": "q1", "value": "yes" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 200)
+    let plan = Plan.find_by_plan_id("plan-ans-running")
+    assert_eq(plan.pending_question["id"], "q1")
+    assert_eq(plan.pending_question["value"], "yes")
+  end)
+
+  test("imports tasks and redirects when the answer arrives after the plan finishes", fn()
+    Feature.create({
+      "_key": "proj--ans-done", "project": "proj", "slug": "ans-done",
+      "title": "Ans Done", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-ans-done", "project": "proj", "plan_id": "plan-ans-done",
+      "status": "done", "feature_slug": "proj--ans-done",
+      "body": "## Task 1: Late\n\nAfter the fact.", "tasks_imported": false
+    })
+    let response = post("/features/proj--ans-done/plan-answer/plan-ans-done",
+      { "qid": "q1", "value": "yes" },
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 200)
+    let imported = Task.where({ "feature_slug": "proj--ans-done", "status": "proposed" }).all()
+    assert_eq(imported.length(), 1)
+  end)
+end)
+
+describe("FeaturesController#show wider state", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    Comment.delete_all()
+    User.delete_all()
+    User.register("show@test.com", "password", "Show")
+    login("show@test.com", "password")
+  end)
+
+  test("splits tasks into proposed and linked buckets in the show page", fn()
+    Feature.create({
+      "_key": "proj--mix", "project": "proj", "slug": "mix",
+      "title": "Mix", "description": "x", "status": "ready"
+    })
+    Task.create({
+      "_key": "proj--mix-prop", "project": "proj", "slug": "mix-prop",
+      "title": "Proposed One", "status": "proposed", "feature_slug": "proj--mix"
+    })
+    Task.create({
+      "_key": "proj--mix-todo", "project": "proj", "slug": "mix-todo",
+      "title": "Linked One", "status": "todo", "feature_slug": "proj--mix"
+    })
+    Comment.create_comment("proj--mix", "show@test.com", "Looks nice")
+    let response = get("/features/proj--mix")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "Proposed One")
+    assert_contains(body, "Linked One")
+    assert_contains(body, "Looks nice")
+  end)
+
+  test("finalizes a done-but-unimported plan when the feature page is rendered", fn()
+    Feature.create({
+      "_key": "proj--finalize", "project": "proj", "slug": "finalize",
+      "title": "Finalize Plan", "description": "yep", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-finalize", "project": "proj", "plan_id": "plan-finalize",
+      "status": "done", "feature_slug": "proj--finalize",
+      "body": "## Task 1: From plan\n\nDetails.", "tasks_imported": false
+    })
+    let response = get("/features/proj--finalize")
+    assert_eq(res_status(response), 200)
+    let plan = Plan.find_by_plan_id("plan-finalize")
+    assert(plan.tasks_imported == true)
+    let imported = Task.where({ "feature_slug": "proj--finalize", "status": "proposed" }).all()
+    assert_eq(imported.length(), 1)
+  end)
+
+  test("finalizes a done plan matched by prompt prefix when feature_slug is unset", fn()
+    Feature.create({
+      "_key": "proj--prefix-match", "project": "proj", "slug": "prefix-match",
+      "title": "Prefix Match", "description": "yes", "status": "ready"
+    })
+    # Older plans don't carry feature_slug — they match by the
+    # "Feature brief: <title>" prompt prefix instead.
+    Plan.create({
+      "_key": "plan-prefix", "project": "proj", "plan_id": "plan-prefix",
+      "status": "done", "prompt": "Feature brief: Prefix Match\n\nyes",
+      "body":  "## Task 1: Prefix Imported\n\nbody.", "tasks_imported": false
+    })
+    let response = get("/features/proj--prefix-match")
+    assert_eq(res_status(response), 200)
+    let plan = Plan.find_by_plan_id("plan-prefix")
+    assert(plan.tasks_imported == true)
+  end)
+end)
+
+describe("FeaturesController#index htmx + project_param", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("idx@test.com", "password", "Idx")
+    login("idx@test.com", "password")
+  end)
+
+  test("returns project-scoped cards via the htmx load-more branch", fn()
+    Feature.create({
+      "_key": "proj--card-1", "project": "proj", "slug": "card-1",
+      "title": "Card One", "status": "draft"
+    })
+    Feature.create({
+      "_key": "proj--card-2", "project": "proj", "slug": "card-2",
+      "title": "Card Two", "status": "draft"
+    })
+    let response = get("/features?project=proj&offset=0&per_page=1",
+      { "headers": { "HX-Request": "true" } })
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert(body.contains("Card One") or body.contains("Card Two"))
+  end)
+
+  test("returns grouped htmx response when no project param is supplied", fn()
+    Feature.create({
+      "_key": "proj--group-1", "project": "proj", "slug": "group-1",
+      "title": "Group Feature", "status": "draft"
+    })
+    let response = get("/features",
+      { "headers": { "HX-Request": "true" } })
+    assert_eq(res_status(response), 200)
+  end)
+
+  test("clamps negative offset to zero", fn()
+    Feature.create({
+      "_key": "proj--neg", "project": "proj", "slug": "neg",
+      "title": "Neg", "status": "draft"
+    })
+    let response = get("/features?project=proj&offset=-5&per_page=1",
+      { "headers": { "HX-Request": "true" } })
+    assert_eq(res_status(response), 200)
+  end)
+
+  test("clamps zero per_page to default", fn()
+    Feature.create({
+      "_key": "proj--zero-pp", "project": "proj", "slug": "zero-pp",
+      "title": "Zero PP", "status": "draft"
+    })
+    let response = get("/features?project=proj&offset=0&per_page=0",
+      { "headers": { "HX-Request": "true" } })
+    assert_eq(res_status(response), 200)
+  end)
+end)
+
+describe("FeaturesController#new with project param", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("new@test.com", "password", "New")
+    login("new@test.com", "password")
+  end)
+
+  test("GET /features/new with ?project= renders without crashing on a missing project", fn()
+    let response = get("/features/new?project=nonexistent")
+    assert_eq(res_status(response), 200)
+  end)
+end)
+
+describe("FeaturesController#create + update error paths", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    User.delete_all()
+    User.register("err@test.com", "password", "Err")
+    login("err@test.com", "password")
+  end)
+
+  test("POST /features stores plan_model when supplied via the form", fn()
+    let response = post("/features", {
+      "title":      "With Model",
+      "project":    "projmodel",
+      "status":     "draft",
+      "plan_model": "claude-opus-4-7"
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("projmodel", "with-model")
+    assert_not_null(f)
+    assert_eq(f.plan_model, "claude-opus-4-7")
+  end)
+
+  test("POST /features/:id/update accepts a plan_model field", fn()
+    Feature.create({
+      "_key": "proj--upd-model", "project": "proj", "slug": "upd-model",
+      "title": "Upd Model", "status": "draft"
+    })
+    let response = post("/features/proj--upd-model/update", {
+      "title": "Upd Model", "plan_model": "claude-haiku-4-5-20251001"
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "upd-model")
+    assert_eq(f.plan_model, "claude-haiku-4-5-20251001")
+  end)
+end)
+
+describe("FeaturesController#publish with description", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("desc@test.com", "password", "Desc")
+    login("desc@test.com", "password")
+  end)
+
+  test("renders the feature description as a header in the combined task body", fn()
+    Feature.create({
+      "_key": "proj--with-desc", "project": "proj", "slug": "with-desc",
+      "title": "Featured", "description": "Why we want it.", "status": "ready"
+    })
+    Task.create({
+      "_key": "proj--prop-desc-1", "project": "proj", "slug": "prop-desc-1",
+      "title": "Build it", "body_md": "details", "status": "proposed",
+      "feature_slug": "proj--with-desc"
+    })
+    let response = post("/features/proj--with-desc/publish", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let parent = Task.find_by_slug("proj", "featured")
+    assert_not_null(parent)
+    # The combined body starts with the feature title + description block.
+    assert_contains(parent.body_md, "# Featured")
+    assert_contains(parent.body_md, "Why we want it.")
+    assert_contains(parent.body_md, "## Task 1: Build it")
+  end)
+end)
+
+describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("idem@test.com", "password", "Idem")
+    login("idem@test.com", "password")
+  end)
+
+  test("re-polling a done + already-imported plan is a no-op (no duplicate tasks)", fn()
+    Feature.create({
+      "_key": "proj--idem", "project": "proj", "slug": "idem",
+      "title": "Idem", "description": "x", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-idem", "project": "proj", "plan_id": "plan-idem",
+      "status": "done", "feature_slug": "proj--idem",
+      "body":  "## Task 1: Once\n\nonly.",
+      "tasks_imported":      true,
+      "imported_task_count": 1
+    })
+    Task.create({
+      "_key": "proj--once", "project": "proj", "slug": "once",
+      "title": "Once", "status": "proposed", "feature_slug": "proj--idem"
+    })
+    let response = get("/features/proj--idem/generate_tasks_log/plan-idem")
+    assert_eq(res_status(response), 200)
+    # Already-imported plan must not re-import: still exactly one task.
+    let tasks = Task.where({ "feature_slug": "proj--idem", "status": "proposed" }).all()
+    assert_eq(tasks.length(), 1)
+  end)
+
+  test("uses a level-2 heading as the fallback title when the body has no '## Task' marker", fn()
+    Feature.create({
+      "_key": "proj--h2", "project": "proj", "slug": "h2",
+      "title": "H2 Fallback", "description": "x", "status": "draft"
+    })
+    Plan.create({
+      "_key": "plan-h2", "project": "proj", "plan_id": "plan-h2",
+      "status": "done", "feature_slug": "proj--h2",
+      "body": "## Some subheading\n\nbody.", "tasks_imported": false
+    })
+    let response = get("/features/proj--h2/generate_tasks_log/plan-h2")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--h2", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 1)
+    assert_eq(proposed[0].title, "Some subheading")
+    # A draft feature flips to "ready" once tasks are imported.
+    let f = Feature.find_by_slug("proj", "h2")
+    assert_eq(f.status, "ready")
+  end)
+
+  test("uses the first non-blank line as a fallback title when no heading is present", fn()
+    Feature.create({
+      "_key": "proj--noheading", "project": "proj", "slug": "noheading",
+      "title": "No Heading", "description": "x", "status": "draft"
+    })
+    Plan.create({
+      "_key": "plan-nh", "project": "proj", "plan_id": "plan-nh",
+      "status": "done", "feature_slug": "proj--noheading",
+      "body": "just one short paragraph", "tasks_imported": false
+    })
+    let response = get("/features/proj--noheading/generate_tasks_log/plan-nh")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--noheading", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 1)
+    assert_eq(proposed[0].title, "just one short paragraph")
+  end)
+
+  test("truncates an over-long first line in the fallback title", fn()
+    Feature.create({
+      "_key": "proj--long", "project": "proj", "slug": "long",
+      "title": "Long Line", "description": "x", "status": "draft"
+    })
+    let long = "this is a deliberately very long single line that " +
+               "should be truncated by the fallback title helper " +
+               "because it exceeds sixty characters"
+    Plan.create({
+      "_key": "plan-long", "project": "proj", "plan_id": "plan-long",
+      "status": "done", "feature_slug": "proj--long",
+      "body": long, "tasks_imported": false
+    })
+    let response = get("/features/proj--long/generate_tasks_log/plan-long")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--long", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 1)
+    # Title is truncated with an ellipsis suffix.
+    assert(proposed[0].title.ends_with("..."))
+    assert(proposed[0].title.length() <= 65)
+  end)
+
+  test("renders option descriptions when the multi-select question carries them", fn()
+    Feature.create({
+      "_key": "proj--qm-desc", "project": "proj", "slug": "qm-desc",
+      "title": "Q Multi w/ desc", "status": "ready"
+    })
+    Plan.create({
+      "_key": "plan-qm-desc", "project": "proj", "plan_id": "plan-qm-desc",
+      "status": "awaiting", "feature_slug": "proj--qm-desc",
+      "pending_question": {
+        "id":   "qm-desc",
+        "tool": "AskUserQuestion",
+        "input": { "questions": [{
+          "question":    "Pick many with desc?",
+          "multiSelect": true,
+          "options": [
+            { "label": "Apple", "description": "the fruit" },
+            { "label": "Pear",  "description": "also a fruit" }
+          ]
+        }]}
+      },
+      "pid": 1
+    })
+    let response = get("/features/proj--qm-desc/generate_tasks_log/plan-qm-desc")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "the fruit")
+    assert_contains(body, "also a fruit")
+  end)
+end)
+
+describe("FeaturesController#show with active plan", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("active@test.com", "password", "Active")
+    login("active@test.com", "password")
+  end)
+
+  test("surfaces an in-flight plan tied by feature_slug as the active plan", fn()
+    Feature.create({
+      "_key": "proj--with-active", "project": "proj", "slug": "with-active",
+      "title": "Has Active", "description": "x", "status": "ready"
+    })
+    # `pid: 1` (init) reliably reports alive on Linux test hosts, so
+    # `effective_status` returns "running" instead of synthesizing a zombie.
+    Plan.create({
+      "_key": "plan-active", "project": "proj", "plan_id": "plan-active",
+      "status": "running", "feature_slug": "proj--with-active",
+      "pid": 1, "stream_token": "tk"
+    })
+    let response = get("/features/proj--with-active")
+    assert_eq(res_status(response), 200)
+  end)
+
+  test("falls back to prompt-prefix matching when an in-flight plan lacks feature_slug", fn()
+    Feature.create({
+      "_key": "proj--prefix-active", "project": "proj", "slug": "prefix-active",
+      "title": "Prefix Active", "description": "x", "status": "ready"
+    })
+    # No feature_slug — must be matched via the "Feature brief: <title>"
+    # prompt prefix instead. Plan is still running so _finalize_done_plans
+    # leaves it alone and _latest_plan_for / _active_plan_for traverse
+    # the second (prompt-based) lookup loop.
+    Plan.create({
+      "_key": "plan-prefix-active", "project": "proj", "plan_id": "plan-prefix-active",
+      "status": "running",
+      "prompt": "Feature brief: Prefix Active\n\nx",
+      "pid": 1, "stream_token": "tk"
+    })
+    let response = get("/features/proj--prefix-active")
+    assert_eq(res_status(response), 200)
+  end)
+end)
+
+describe("FeaturesController#generate_tasks_log slug collision", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Plan.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("slug@test.com", "password", "Slug")
+    login("slug@test.com", "password")
+  end)
+
+  test("import picks a numbered slug when the derived base collides", fn()
+    Feature.create({
+      "_key": "proj--collide-f", "project": "proj", "slug": "collide-f",
+      "title": "Collide F", "description": "x", "status": "draft"
+    })
+    # Pre-seed a task whose slug matches what the parser would derive
+    # from the plan section title — forces _unique_slug_local to bump.
+    Task.create({
+      "_key": "proj--collide-task", "project": "proj", "slug": "collide-task",
+      "title": "Existing", "status": "todo"
+    })
+    Plan.create({
+      "_key": "plan-collide", "project": "proj", "plan_id": "plan-collide",
+      "status": "done", "feature_slug": "proj--collide-f",
+      "body": "## Task 1: Collide task\n\nbody.", "tasks_imported": false
+    })
+    let response = get("/features/proj--collide-f/generate_tasks_log/plan-collide")
+    assert_eq(res_status(response), 200)
+    let proposed = Task.where({ "feature_slug": "proj--collide-f", "status": "proposed" }).all()
+    assert_eq(proposed.length(), 1)
+    # New task takes the "collide-task-2" slug to avoid colliding with the seeded one.
+    assert_eq(proposed[0].slug, "collide-task-2")
+  end)
+end)
+
+describe("FeaturesController#remove_task wrong feature link", fn()
+  before_each(fn()
+    assert_test_db()
+    Feature.delete_all()
+    Task.delete_all()
+    User.delete_all()
+    User.register("link@test.com", "password", "Link")
+    login("link@test.com", "password")
+  end)
+
+  test("POST /features/:id/tasks/:slug/remove returns 422 when the task belongs to a different feature", fn()
+    Feature.create({
+      "_key": "proj--alpha", "project": "proj", "slug": "alpha",
+      "title": "Alpha", "status": "draft"
+    })
+    Feature.create({
+      "_key": "proj--beta", "project": "proj", "slug": "beta",
+      "title": "Beta", "status": "draft"
+    })
+    # Task is linked to alpha but the request targets beta.
+    Task.create({
+      "_key": "proj--alpha-task", "project": "proj", "slug": "alpha-task",
+      "title": "Alpha Task", "status": "proposed", "feature_slug": "proj--alpha"
+    })
+    let response = post("/features/proj--beta/tasks/alpha-task/remove", {},
+      { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
   end)
 end)

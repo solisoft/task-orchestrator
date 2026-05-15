@@ -87,6 +87,32 @@ class CodeReview < Model
     DateTime.now().to_unix() - prior
   end
 
+  def _notify_if_status_changed()
+    if self._key == nil or self._key == ""
+      return nil
+    end
+    let new_status = self.status ?? ""
+    if self.last_notified_status == new_status
+      return nil
+    end
+    let prev = CodeReview.find_by("_key", self._key) rescue nil
+    if prev == nil
+      return nil
+    end
+    let prev_status = prev.status ?? ""
+    if prev_status == new_status
+      return nil
+    end
+    self.last_notified_status = new_status
+    let title = "Code Review: " + (self.slug ?? "")
+    let url = "/projects/" + (self.project ?? "") + "/tasks/" + (self.slug ?? "")
+    web_push_send_to_all({
+      "title":  title,
+      "status": new_status,
+      "url":    url
+    }) rescue null
+  end
+
   def verdict()
     let b = self.body ?? ""
     if b == ""
@@ -120,6 +146,7 @@ class CodeReview < Model
       self.created_at = now
     end
     self.updated_at = now
+    self._notify_if_status_changed()
   end
 end
 

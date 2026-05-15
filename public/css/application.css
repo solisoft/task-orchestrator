@@ -3550,10 +3550,6 @@ body.confirm-open {
     grid-column: span 2 / span 2;
   }
 
-  .sm\:inline-block {
-    display: inline-block;
-  }
-
   .sm\:inline {
     display: inline;
   }

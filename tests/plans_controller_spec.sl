@@ -7,10 +7,12 @@ describe("PlansController", fn() {
         # so seating it at the outer level would leave the DB polluted
         # between cases and make absence-assertions racy.
         before_each(fn() {
-            as_guest()
             assert_test_db()
             Plan.delete_all()
             Task.delete_all()
+            User.delete_all()
+            User.register("plans@test.com", "password", "Plans User")
+            login("plans@test.com", "password")
         })
 
         test("returns 200 with no plans", fn() {

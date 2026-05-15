@@ -30,6 +30,7 @@ fn index(req)
         end
       end
       render("features/index", {
+        "current_user": req["current_user"],
         "title": "Features",
         "groups": groups,
         "q": q,

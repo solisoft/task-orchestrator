@@ -48,11 +48,13 @@ end
 fn landing(req)
   let project_count = list_projects() rescue []
   let feature_total = (Feature.count() rescue 0)
+  let _email = session_get("user_email") ?? ""
+  let _user = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
   render("home/landing", {
     "title":          "Task Orchestrator — product briefs that ship",
     "project_count":  project_count.length(),
     "feature_total":  feature_total,
-    "current_user":   req["current_user"],
+    "current_user":   _user,
     "hide_header":    true,
     "theme": Setting.current_theme(),
     "theme_css_vars": Setting.current_theme_css_vars(),
