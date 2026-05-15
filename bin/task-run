@@ -182,6 +182,7 @@ db_update_failed() {
 }
 
 fail() {
+  kill_worktree_soli
   log "FAIL: $*"
   write_status "failed:$*"
   db_update_failed "$*"
@@ -419,7 +420,34 @@ sync_new_todos() {
   done < <(find "$worktree_dir/tasks/todo" -maxdepth 1 -type f -name '*.md' -print0)
 }
 
+# Kill any orphaned `soli serve` processes whose cwd or command line
+# references the worktree. Agents spawn them for smoke tests (per
+# CLAUDE.md) but often fail to tear them down, leaking processes that
+# accumulate across runs and waste memory.
+kill_worktree_soli() {
+  local killed=0
+  for pid in $(pgrep -x soli 2>/dev/null || true); do
+    local cwd
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null) || continue
+    if [[ "$cwd" == "$worktree_dir"* ]]; then
+      log "killing orphaned soli serve (pid=$pid cwd matches worktree)"
+      kill "$pid" 2>/dev/null && killed=$((killed + 1)) || true
+      continue
+    fi
+    local args
+    args=$(ps -p "$pid" -o args= 2>/dev/null) || continue
+    if [[ "$args" == *"$worktree_dir"* ]]; then
+      log "killing orphaned soli serve (pid=$pid args contain worktree)"
+      kill "$pid" 2>/dev/null && killed=$((killed + 1)) || true
+    fi
+  done
+  if [[ $killed -gt 0 ]]; then
+    log "killed $killed orphaned soli serve process(es)"
+  fi
+}
+
 cleanup_worktree() {
+  kill_worktree_soli
   log "cleaning up worktree $worktree_dir"
   git -C "$project_path" worktree remove --force "$worktree_dir" >> "$log_file" 2>&1 \
     || rm -rf "$worktree_dir"
@@ -436,6 +464,7 @@ if [[ "$head_sha" == "$base_sha" ]]; then
     db_update "$(jq -n --arg iso "$iso" \
       '{status: "review", finished_at: $iso, outcome: "rejected-review"}')"
     write_status "review:rejected"
+    kill_worktree_soli
     log "DONE — rejected (review-task declined to commit; worktree preserved at $worktree_dir)"
     exit 0
   fi

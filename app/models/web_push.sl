@@ -18,6 +18,14 @@
 # this hook from that contention.
 
 const _web_push_vapid_subject = "mailto:noreply@task-orchestrator.local"
+const _web_push_log_path = "/tmp/task-orch-push.log"
+
+def _web_push_log(msg)
+  let ts = DateTime.now().to_iso() rescue ""
+  let line = "[" + ts + "] " + msg + "\n"
+  let prev = (Trusted.read(_web_push_log_path) rescue "")
+  Trusted.write(_web_push_log_path, prev + line)
+end
 
 # Send `payload` (a hash; serialised to JSON for the SW to parse) to
 # every active subscription. Returns:
@@ -35,20 +43,27 @@ def web_push_send_to_all(payload)
   end
   let keys = web_push_ensure_keys()
   if keys == nil
+    _web_push_log("web_push_send_to_all: no VAPID keys — skipping send")
     return { "sent": 0, "pruned": 0, "mocked": false }
   end
   let body = JSON.stringify(payload)
   let sent = 0
   let pruned = 0
+  let count = 0
   for sub in PushSubscription.all()
+    count = count + 1
     let res = _web_push_send_one(sub, body, keys)
     if res["pruned"]
+      _web_push_log("web_push_send_to_all: pruned endpoint " + (sub.endpoint ?? "?"))
       PushSubscription.remove_by_endpoint(sub.endpoint) rescue null
       pruned = pruned + 1
     elsif res["ok"]
       sent = sent + 1
+    else
+      _web_push_log("web_push_send_to_all: send failed for " + (sub.endpoint ?? "?")[0:60] + "...")
     end
   end
+  _web_push_log("web_push_send_to_all: sent=" + str(sent) + " pruned=" + str(pruned) + " total=" + str(count))
   { "sent": sent, "pruned": pruned, "mocked": false }
 end
 
@@ -131,9 +146,15 @@ def _web_push_send_one(sub, body, keys)
       keys["public"],
       _web_push_vapid_subject
     )
-    return _web_push_outcome_from_status(res["status"] ?? 0)
+    let status = res["status"] ?? 0
+    if status < 200 or status >= 300
+      _web_push_log("_web_push_send_one: vapid_send returned status " + str(status) +
+                    " for " + (sub.endpoint ?? "?")[0:60] + "...")
+    end
+    return _web_push_outcome_from_status(status)
   catch e
-    print("[web_push] vapid_send failed for " + sub.endpoint + ": " + str(e))
+    _web_push_log("_web_push_send_one: vapid_send threw for " + (sub.endpoint ?? "?")[0:60] +
+                  "...: " + str(e))
     return { "ok": false, "pruned": false }
   end
 end
