@@ -12,15 +12,22 @@ def strip_title_heading(body: String) -> String
             let s = line.trim()
             if s.starts_with("# ") and not s.starts_with("## ")
                 dropped = true
-                next
+            else
+                out.push(line)
             end
+        else
+            out.push(line)
         end
-        out.push(line)
     end
-    if out.length > 0 and out[0].trim() == ""
+    if out.length > 0
         let res = []
-        for i in 1..out.length
+        let i = 0
+        while i < out.length and out[i].trim() == ""
+            i = i + 1
+        end
+        while i < out.length
             res.push(out[i])
+            i = i + 1
         end
         out = res
     end
@@ -32,7 +39,15 @@ def truncate_text(text: String, length: Int, suffix: String) -> String
     if len(text) <= length
         return text
     end
-    return text.substring(0, length - len(suffix)) + suffix
+    let suffix_len = len(suffix)
+    let prefix_len = length - suffix_len
+    let i = 0
+    let result = ""
+    while i < prefix_len and i < len(text)
+        result = result + text[i]
+        i = i + 1
+    end
+    return result + suffix
 end
 
 # Capitalize first letter of a string
@@ -67,11 +82,17 @@ def _is_safe_link_url(url)
     if q != -1 and q < cut
         cut = q
     end
-    h = lower.index_of("#")
-    if h != -1 and h < cut
-        cut = h
+    h_idx = lower.index_of("#")
+    if h_idx != -1 and h_idx < cut
+        cut = h_idx
     end
-    return !lower.substring(0, cut).contains(":")
+    let has_colon = false
+    for i in 0..cut
+        if lower[i] == ":"
+            has_colon = true
+        end
+    end
+    return !has_colon
 end
 
 def _safe_link_url(url)
@@ -79,6 +100,10 @@ def _safe_link_url(url)
         return url
     end
     return "#"
+end
+
+def h(text: String) -> String
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 end
 
 # Generate an HTML link
