@@ -45,6 +45,24 @@ describe("DocsController", fn() {
       let body = res_body(response);
       assert(body.contains("href=\"/\""));
     });
+
+    test("header shows Sign in for guests", fn() {
+      let response = get("/docs");
+      let body = res_body(response);
+      assert_eq(res_status(response), 200);
+      assert(body.contains(">Sign in<"));
+    });
+
+    test("header shows user avatar when logged in", fn() {
+      User.delete_all();
+      User.register("docs@test.com", "password", "Docs User");
+      login("docs@test.com", "password");
+      let response = get("/docs");
+      let body = res_body(response);
+      assert_eq(res_status(response), 200);
+      assert(!body.contains(">Sign in<"));
+      assert(body.contains("/logout"));
+    });
   });
 
   describe("GET /", fn() {

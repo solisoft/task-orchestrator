@@ -218,6 +218,10 @@ end
 #   { "event": String,             # "snapshot" | "delta"
 #     "log_chunk": String,         # bytes appended past `offset`
 #     "log_offset": Int,           # new client cursor
+#     "prefix_chunk": String,      # only on "connect" when prefix_end>0:
+#                                  # bytes 0..prefix_end that the SSR tail
+#                                  # cap omitted from the initial paint.
+#                                  # Client prepends these above SSR.
 #     "status": Hash | nil,        # latest status row, same shape as run_current_status
 #     "pr_url": String | nil,
 #     "todos": Array,              # latest TodoWrite payload
@@ -226,7 +230,7 @@ end
 # partials on top, JSON-stringifies, and returns `{ "send": ... }`.
 # Splitting the data layer out keeps it testable without spinning up a
 # WS client or loading controllers into the spec harness.
-fn run_stream_payload(repo, slug, event_type, offset)
+fn run_stream_payload(repo, slug, event_type, offset, prefix_end)
   let cursor = offset
   if cursor == nil or cursor < 0
     cursor = 0
@@ -235,7 +239,7 @@ fn run_stream_payload(repo, slug, event_type, offset)
   let token = status == nil ? nil : status["status"]
   let terminal = token != nil and (token.starts_with("done:") or token.starts_with("failed:"))
   let delta = run_log_delta(repo, slug, cursor)
-  {
+  let frame = {
     "event":      event_type == "connect" ? "snapshot" : "delta",
     "log_chunk":  delta["chunk"],
     "log_offset": delta["offset"],
@@ -244,6 +248,29 @@ fn run_stream_payload(repo, slug, event_type, offset)
     "todos":      run_latest_todos(repo, slug),
     "terminal":   terminal
   }
+  if event_type == "connect" and prefix_end != nil and prefix_end > 0
+    frame["prefix_chunk"] = run_log_prefix(repo, slug, prefix_end)
+  end
+  frame
+end
+
+# Bytes 0..end_offset of the .log, capped at the file's actual length so
+# a stale client cursor can't ask for bytes past EOF. Returns "" when the
+# log is missing or `end_offset <= 0`. Used by `run_stream_payload` to
+# backfill the prefix the SSR `run_log_tail` cap left out.
+fn run_log_prefix(repo, slug, end_offset)
+  if end_offset == nil or end_offset <= 0
+    return ""
+  end
+  let path = run_log_path(repo, slug)
+  if not Trusted.exists(path)
+    return ""
+  end
+  let body = Trusted.read(path) rescue ""
+  if end_offset >= body.length
+    return body
+  end
+  body.substring(0, end_offset)
 end
 
 # Path to the per-task raw JSON-lines transcript. The .log next to it is
@@ -292,7 +319,52 @@ fn run_latest_todos(repo, slug)
     end
     i = i - 1
   end
+  if latest.length == 0
+    return _synthesize_todos_from_spec(repo, slug)
+  end
   latest
+end
+
+# Fallback plan when the agent hasn't called TodoWrite yet (common on
+# short tasks). Parses `## Acceptance Criteria` bullets out of the spec
+# md the orchestrator seeded into the worktree and returns them as
+# pending todos so the Run page panel is never empty. Each entry is
+# marked `"source": "spec"` so the view can label it as derived rather
+# than from the agent's own plan. Returns [] when the spec or the
+# section is missing.
+fn _synthesize_todos_from_spec(repo, slug)
+  let spec_path = run_worktree_path(repo, slug) + "/tasks/todo/" + slug + ".md"
+  if not Trusted.exists(spec_path)
+    return []
+  end
+  let body = Trusted.read(spec_path) rescue ""
+  if body == ""
+    return []
+  end
+  _parse_acceptance_criteria(body)
+end
+
+# Extract bullets from a markdown body's `## Acceptance Criteria`
+# section. Stops at the next `##`-or-deeper heading. Each bullet
+# (lines starting with `- ` or `* ` after trim) becomes a todo entry.
+fn _parse_acceptance_criteria(body)
+  let lines = body.split("\n")
+  let items = []
+  let inside = false
+  let i = 0
+  while i < lines.length
+    let trimmed = lines[i].trim()
+    if trimmed.starts_with("##")
+      inside = trimmed.downcase().contains("acceptance criteria")
+    elsif inside and (trimmed.starts_with("- ") or trimmed.starts_with("* "))
+      let content = trimmed.substring(2, trimmed.length).trim()
+      if content != ""
+        items.push({ "content": content, "status": "pending", "source": "spec" })
+      end
+    end
+    i = i + 1
+  end
+  items
 end
 
 # Pull a todos array out of a single stream event, recognising both the

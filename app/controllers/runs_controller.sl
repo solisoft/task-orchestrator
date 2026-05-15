@@ -107,6 +107,8 @@ end
 #
 # Protocol — server -> client (all JSON):
 #   { "event": "snapshot", "log_chunk": "...", "log_offset": N,
+#     "prefix_chunk": "...",          # only when client sent prefix_end>0;
+#                                     # bytes 0..prefix_end that SSR omitted
 #     "status_html": "...", "todos_html": "...",
 #     "terminal": false }
 #   { "event": "delta",    "log_chunk": "...", "log_offset": N,
@@ -115,7 +117,10 @@ end
 #   On terminal status, the same delta shape with `"terminal": true`.
 #
 # Protocol — client -> server:
-#   { "type": "tick", "offset": N }
+#   { "type": "subscribe", "offset": N, "prefix_end": M }
+#   { "type": "tick",      "offset": N }
+# `prefix_end` is sent once at subscribe to backfill the prefix the SSR
+# `run_log_tail` cap left off the initial paint.
 #
 # Why polling-over-WS instead of true push: Soli's WS handler is event
 # driven (no long-running loop) and there's no in-process publisher
@@ -147,8 +152,9 @@ fn stream(event)
     return { "send": JSON.stringify({ "event": "error", "message": "task not found", "terminal": true }) }
   end
   let offset = parsed["offset"] ?? 0
+  let prefix_end = parsed["prefix_end"] ?? 0
   let frame_kind = parsed["type"] == "subscribe" ? "connect" : "message"
-  let data = run_stream_payload(project["name"], slug, frame_kind, offset)
+  let data = run_stream_payload(project["name"], slug, frame_kind, offset, prefix_end)
   data["status_html"] = render_partial("runs/stream_status", {
     "project": project,
     "slug":    slug,

@@ -923,6 +923,15 @@ describe("FeaturesController GET routes", fn()
     assert_eq(res_status(response), 200)
   end)
 
+  test("GET /features header shows logged-in user, not Sign in", fn()
+    let response = get("/features")
+    let body = res_body(response)
+    assert_eq(res_status(response), 200)
+    # Header partial should render the user's avatar/logout, not the Sign in CTA
+    assert(!body.contains(">Sign in<"))
+    assert(body.contains("/logout"))
+  end)
+
   test("GET /features/:id shows a feature", fn()
     Feature.create({
       "_key": "proj--show-me", "project": "proj", "slug": "show-me",

@@ -2,6 +2,13 @@
 <% let polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
 <% let todo_list = todos ?? [] %>
 <% let initial_offset = log_size %>
+<%
+  # When the SSR `tail` was capped (log_size > tail.length), the bytes
+  # before the visible tail need to be backfilled on WS connect. The
+  # client sends this byte position so the server includes a one-shot
+  # `prefix_chunk` in the snapshot, which the client prepends above SSR.
+  let prefix_end = log_size - tail.length
+%>
 
 <div id="run-panel"
   <% if polling %>
@@ -12,6 +19,7 @@
     data-stream-todos="#run-plan-body"
     data-stream-status="#run-status-row"
     data-stream-offset="<%= initial_offset %>"
+    data-stream-prefix-end="<%= prefix_end %>"
     data-stream-tick-ms="300"
   <% end %>
 >

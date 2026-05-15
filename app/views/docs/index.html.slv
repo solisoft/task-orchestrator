@@ -7,7 +7,7 @@
     <header class="mb-10 animate-fade-in">
       <h1 class="text-4xl font-bold tracking-tight hero-shimmer">Getting Started</h1>
       <p class="mt-2 text-slate-400">
-        Drop a task spec, queue it, watch an opencode agent dispatch it end-to-end.
+        Drop a task spec, queue it, watch an agent dispatch it end-to-end.
       </p>
     </header>
 

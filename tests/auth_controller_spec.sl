@@ -138,4 +138,72 @@ describe("Auth middleware", fn()
     let response = get("/features")
     assert_eq(res_status(response), 302)
   end)
+
+  test("unauthenticated redirect stamps return_to on the Location header", fn()
+    let response = get("/features")
+    let location = response["headers"]["Location"] ?? ""
+    assert(location.starts_with("/login?return_to="))
+    assert(location.contains("%2Ffeatures") or location.contains("/features"))
+  end)
+
+  test("unauthenticated redirect to a nested path preserves the path in return_to", fn()
+    let response = get("/settings")
+    let location = response["headers"]["Location"] ?? ""
+    assert(location.starts_with("/login?return_to="))
+  end)
+end)
+
+describe("return_to round-trip", fn()
+  before_each(fn()
+    as_guest()
+    User.delete_all()
+    User.register("return@test.com", "password", "Return User")
+  end)
+
+  test("successful login with return_to redirects to that path", fn()
+    let response = post("/login", {
+      "email": "return@test.com",
+      "password": "password",
+      "return_to": "/settings"
+    })
+    assert_eq(res_status(response), 302)
+    assert_eq(response["headers"]["Location"] ?? "", "/settings")
+  end)
+
+  test("successful login without return_to redirects to /", fn()
+    let response = post("/login", {
+      "email": "return@test.com",
+      "password": "password"
+    })
+    assert_eq(res_status(response), 302)
+    assert_eq(response["headers"]["Location"] ?? "", "/")
+  end)
+
+  test("login rejects an external return_to (open-redirect guard)", fn()
+    let response = post("/login", {
+      "email": "return@test.com",
+      "password": "password",
+      "return_to": "https://evil.example.com/steal"
+    })
+    assert_eq(res_status(response), 302)
+    assert_eq(response["headers"]["Location"] ?? "", "/")
+  end)
+
+  test("login rejects a scheme-relative return_to", fn()
+    let response = post("/login", {
+      "email": "return@test.com",
+      "password": "password",
+      "return_to": "//evil.example.com/steal"
+    })
+    assert_eq(res_status(response), 302)
+    assert_eq(response["headers"]["Location"] ?? "", "/")
+  end)
+
+  test("GET /login surfaces return_to into a hidden form field", fn()
+    let response = get("/login?return_to=/plans")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert(body.contains("name=\"return_to\""))
+    assert(body.contains("value=\"/plans\""))
+  end)
 end)

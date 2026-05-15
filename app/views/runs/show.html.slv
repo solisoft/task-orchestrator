@@ -72,6 +72,7 @@
       "status": status,
       "pr_url": pr_url,
       "tail": tail,
+      "log_size": log_size,
       "todos": todos
     }) %>
   </div>

@@ -9,7 +9,6 @@ get("/logout", "auth#logout")
 # ── Root & Utility ──────────────────
 
 get("/", "home#landing")
-get("/plans", "plans#index")
 get("/health", "home#health")
 get("/debug", "debug#show")
 get("/debug/features", "debug#features_probe")
@@ -19,17 +18,6 @@ get("/debug/unstamp", "debug#unstamp_imported")
 get("/debug/try-import", "debug#try_import")
 get("/debug/comments", "debug#comments_probe")
 get("/docs", "docs#index")
-
-# ── Settings ─────────────────────────
-
-get("/settings", "settings#show")
-post("/settings", "settings#update")
-# Lightweight theme-only endpoint — used by the header toggle to flip
-# dark↔light without round-tripping the full settings form.
-post("/settings/theme", "settings#set_theme")
-post("/settings/presets", "settings#create_preset")
-put("/settings/presets/:name", "settings#update_preset")
-delete("/settings/presets/:name", "settings#delete_preset")
 
 # ── Projects ─────────────────────────
 
@@ -102,6 +90,21 @@ middleware("authenticate", -> {
   # ── Dashboard ─────────────────────────
 
   get("/agents-dashboard", "home#index")
+
+  # ── Plans ────────────────────────────
+
+  get("/plans", "plans#index")
+
+  # ── Settings ─────────────────────────
+
+  get("/settings", "settings#show")
+  post("/settings", "settings#update")
+  # Lightweight theme-only endpoint — used by the header toggle to flip
+  # dark↔light without round-tripping the full settings form.
+  post("/settings/theme", "settings#set_theme")
+  post("/settings/presets", "settings#create_preset")
+  put("/settings/presets/:name", "settings#update_preset")
+  delete("/settings/presets/:name", "settings#delete_preset")
 
   # ── Features ─────────────────────────
 

@@ -229,7 +229,7 @@ describe("run_stream_payload — model-layer builder for the WS frame", fn()
     # the zombie synthesis path and reports the journal token verbatim.
     let self_pid = (System.run_sync(["sh", "-c", "echo $PPID"])["stdout"] ?? "").trim()
     _rs_write_pid("rs_repo", "rs_slug", self_pid)
-    let p = run_stream_payload("rs_repo", "rs_slug", "connect", 0)
+    let p = run_stream_payload("rs_repo", "rs_slug", "connect", 0, 0)
     assert_eq(p["event"], "snapshot")
     assert_eq(p["log_chunk"], "boot...\nready\n")
     assert_eq(p["log_offset"], "boot...\nready\n".length)
@@ -239,7 +239,7 @@ describe("run_stream_payload — model-layer builder for the WS frame", fn()
 
   test("tick → delta with only the bytes appended past the cursor", fn()
     _rs_write_log("rs_repo", "rs_slug", "abcdefghij")
-    let p = run_stream_payload("rs_repo", "rs_slug", "message", 4)
+    let p = run_stream_payload("rs_repo", "rs_slug", "message", 4, 0)
     assert_eq(p["event"], "delta")
     assert_eq(p["log_chunk"], "efghij")
     assert_eq(p["log_offset"], 10)
@@ -248,30 +248,81 @@ describe("run_stream_payload — model-layer builder for the WS frame", fn()
   test("flips terminal=true once the journal reaches done:", fn()
     _rs_write_log("rs_repo", "rs_slug", "all green\n")
     _rs_write_status("rs_repo", "rs_slug", "done:https://example.invalid/pr/1")
-    let p = run_stream_payload("rs_repo", "rs_slug", "message", 0)
+    let p = run_stream_payload("rs_repo", "rs_slug", "message", 0, 0)
     assert_eq(p["terminal"], true)
   end)
 
   test("flips terminal=true once the journal reaches failed:", fn()
     _rs_write_log("rs_repo", "rs_slug", "oh no\n")
     _rs_write_status("rs_repo", "rs_slug", "failed:oom")
-    let p = run_stream_payload("rs_repo", "rs_slug", "message", 0)
+    let p = run_stream_payload("rs_repo", "rs_slug", "message", 0, 0)
     assert_eq(p["terminal"], true)
   end)
 
   test("a stale offset past EOF resends from byte 0", fn()
     _rs_write_log("rs_repo", "rs_slug", "rewound")
-    let p = run_stream_payload("rs_repo", "rs_slug", "message", 9999)
+    let p = run_stream_payload("rs_repo", "rs_slug", "message", 9999, 0)
     assert_eq(p["log_chunk"], "rewound")
     assert_eq(p["log_offset"], 7)
   end)
 
   test("normalises a negative or nil offset to 0", fn()
     _rs_write_log("rs_repo", "rs_slug", "xyz")
-    let a = run_stream_payload("rs_repo", "rs_slug", "message", -1)
+    let a = run_stream_payload("rs_repo", "rs_slug", "message", -1, 0)
     assert_eq(a["log_chunk"], "xyz")
-    let b = run_stream_payload("rs_repo", "rs_slug", "message", nil)
+    let b = run_stream_payload("rs_repo", "rs_slug", "message", nil, 0)
     assert_eq(b["log_chunk"], "xyz")
+  end)
+
+  test("connect with prefix_end>0 backfills bytes 0..prefix_end via prefix_chunk", fn()
+    _rs_write_log("rs_repo", "rs_slug", "early bytes\nlate bytes\n")
+    # SSR painted only the tail starting at byte 12 ("late bytes\n").
+    # Cursor is the full size, so log_chunk should be "" and the missing
+    # 12-byte prefix arrives as prefix_chunk.
+    let full = "early bytes\nlate bytes\n".length
+    let p = run_stream_payload("rs_repo", "rs_slug", "connect", full, 12)
+    assert_eq(p["event"], "snapshot")
+    assert_eq(p["log_chunk"], "")
+    assert_eq(p["prefix_chunk"], "early bytes\n")
+  end)
+
+  test("delta frame never carries prefix_chunk even when prefix_end>0", fn()
+    _rs_write_log("rs_repo", "rs_slug", "abcdef")
+    let p = run_stream_payload("rs_repo", "rs_slug", "message", 0, 3)
+    assert_null(p["prefix_chunk"])
+  end)
+
+  test("prefix_end=0 (no SSR cap) skips prefix_chunk on connect", fn()
+    _rs_write_log("rs_repo", "rs_slug", "small log\n")
+    let p = run_stream_payload("rs_repo", "rs_slug", "connect", 10, 0)
+    assert_null(p["prefix_chunk"])
+  end)
+end)
+
+describe("run_log_prefix — byte-range read for the snapshot backfill", fn()
+  before_each(fn()
+    _rs_reset("rs_repo", "rs_slug")
+  end)
+
+  test("returns the requested byte prefix when log is longer", fn()
+    _rs_write_log("rs_repo", "rs_slug", "abcdefghij")
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", 4), "abcd")
+  end)
+
+  test("caps at the log's actual length when end_offset overshoots", fn()
+    _rs_write_log("rs_repo", "rs_slug", "abc")
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", 99), "abc")
+  end)
+
+  test("returns '' when end_offset is 0, negative, or nil", fn()
+    _rs_write_log("rs_repo", "rs_slug", "abc")
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", 0), "")
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", -1), "")
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", nil), "")
+  end)
+
+  test("returns '' when the log file does not exist", fn()
+    assert_eq(run_log_prefix("rs_repo", "rs_slug", 10), "")
   end)
 end)
 
@@ -297,5 +348,113 @@ describe("run.sl utility functions", fn()
     Setting.set("_pr_merged_mock", nil)
     let result = pr_merged("https://github.com/owner/repo/pull/999999")
     assert_eq(result, false)
+  end)
+end)
+
+# `run_latest_todos` returns the agent's latest TodoWrite payload when
+# the .log.jsonl carries one, else falls back to the spec md's
+# `## Acceptance Criteria` bullets so the Run page panel is never empty
+# during long /do-task stretches where the agent skips TodoWrite.
+def _rs_worktree_dir(repo, slug)
+  let root = getenv("TASK_ORCH_WORKTREES") ?? ""
+  return root + "/" + repo + "/" + slug
+end
+
+def _rs_write_spec(repo, slug, body)
+  let dir = _rs_worktree_dir(repo, slug) + "/tasks/todo"
+  System.run_sync(["mkdir", "-p", dir])
+  Trusted.write(dir + "/" + slug + ".md", body)
+end
+
+def _rs_remove_worktree(repo, slug)
+  let dir = _rs_worktree_dir(repo, slug)
+  System.run_sync(["rm", "-rf", dir])
+end
+
+def _rs_write_jsonl(repo, slug, body)
+  let path = _rs_state_dir(repo) + "/" + slug + ".log.jsonl"
+  Trusted.write(path, body)
+end
+
+describe("run_latest_todos — spec-fallback when agent skips TodoWrite", fn()
+  before_each(fn()
+    _rs_reset("rs_repo", "rs_slug")
+    _rs_remove_worktree("rs_repo", "rs_slug")
+  end)
+
+  test("returns TodoWrite payload from the jsonl when present", fn()
+    let event = {
+      "type": "assistant",
+      "message": {
+        "content": [
+          { "type": "tool_use", "name": "TodoWrite",
+            "input": { "todos": [
+              { "content": "step one", "status": "in_progress" },
+              { "content": "step two", "status": "pending" }
+            ] } }
+        ]
+      }
+    }
+    _rs_write_jsonl("rs_repo", "rs_slug", JSON.stringify(event) + "\n")
+    let todos = run_latest_todos("rs_repo", "rs_slug")
+    assert_eq(todos.length, 2)
+    assert_eq(todos[0]["content"], "step one")
+    assert_eq(todos[0]["status"], "in_progress")
+  end)
+
+  test("falls back to spec's Acceptance Criteria bullets when no TodoWrite", fn()
+    _rs_write_jsonl("rs_repo", "rs_slug", "{\"type\":\"assistant\",\"message\":{\"content\":[]}}\n")
+    _rs_write_spec("rs_repo", "rs_slug",
+      "# Title\n" +
+      "\n" +
+      "## Issue\n" +
+      "- decoy bullet that must NOT appear\n" +
+      "\n" +
+      "## Acceptance Criteria\n" +
+      "- ship the synthesizer\n" +
+      "- cover it with tests\n" +
+      "* second-style bullet works too\n" +
+      "\n" +
+      "## Notes\n" +
+      "- not part of the plan\n")
+    let todos = run_latest_todos("rs_repo", "rs_slug")
+    assert_eq(todos.length, 3)
+    assert_eq(todos[0]["content"], "ship the synthesizer")
+    assert_eq(todos[0]["status"], "pending")
+    assert_eq(todos[0]["source"], "spec")
+    assert_eq(todos[1]["content"], "cover it with tests")
+    assert_eq(todos[2]["content"], "second-style bullet works too")
+  end)
+
+  test("TodoWrite takes precedence even when the spec also has criteria", fn()
+    let event = {
+      "type": "assistant",
+      "message": {
+        "content": [
+          { "type": "tool_use", "name": "TodoWrite",
+            "input": { "todos": [{ "content": "agent says go", "status": "pending" }] } }
+        ]
+      }
+    }
+    _rs_write_jsonl("rs_repo", "rs_slug", JSON.stringify(event) + "\n")
+    _rs_write_spec("rs_repo", "rs_slug",
+      "## Acceptance Criteria\n- stale fallback\n")
+    let todos = run_latest_todos("rs_repo", "rs_slug")
+    assert_eq(todos.length, 1)
+    assert_eq(todos[0]["content"], "agent says go")
+    assert_null(todos[0]["source"])
+  end)
+
+  test("returns [] when neither jsonl nor spec exist", fn()
+    let todos = run_latest_todos("rs_repo", "rs_slug")
+    assert_eq(todos.length, 0)
+  end)
+
+  test("returns [] when spec exists but has no Acceptance Criteria section", fn()
+    _rs_write_jsonl("rs_repo", "rs_slug", "{\"type\":\"assistant\",\"message\":{\"content\":[]}}\n")
+    _rs_write_spec("rs_repo", "rs_slug",
+      "# Title\n\n## Issue\n- only an issue here\n")
+    let todos = run_latest_todos("rs_repo", "rs_slug")
+    assert_eq(todos.length, 0)
   end)
 end)
