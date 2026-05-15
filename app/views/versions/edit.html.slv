@@ -1,0 +1,23 @@
+<div class="min-h-screen text-white">
+  <div class="max-w-2xl mx-auto px-6 py-8">
+    <nav class="text-sm text-slate-500 mb-6 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
+      <span class="mx-2">/</span>
+      <a href="/projects/<%= h(project["name"]) %>?tab=roadmap" class="hover:text-slate-300 transition-colors"><%= h(project["name"]) %></a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-300">Edit cycle</span>
+    </nav>
+
+    <h1 class="text-2xl font-bold mb-6 animate-fade-in">Edit &mdash; <%= h(version.name) %></h1>
+
+    <% if version._errors %>
+      <div class="rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3 mb-4">
+        <% for field, errs in version._errors %>
+          <div><strong><%= h(field) %>:</strong> <%= h(errs.join(", ")) %></div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%- partial("versions/form", { "version": version, "project": project }) %>
+  </div>
+</div>

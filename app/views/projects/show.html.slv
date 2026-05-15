@@ -1,22 +1,68 @@
 <div class="min-h-screen text-white">
-    <div class="max-w-4xl mx-auto px-6 py-10">
-        <header class="mb-8 flex items-baseline justify-between gap-4 flex-wrap animate-fade-in">
-            <div>
-                <a href="/" class="text-slate-500 hover:text-slate-300 text-sm transition-colors">&larr; All projects</a>
-                <h1 class="text-3xl font-bold tracking-tight mt-1 gradient-text"><%= project["name"] %></h1>
-                <p class="text-xs text-slate-500 font-mono mt-1"><%= project["path"] %></p>
-            </div>
-            <a href="/projects/<%= project["name"] %>/tasks/new" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">+ New task</a>
-        </header>
+  <div class="max-w-5xl mx-auto px-6 py-10">
 
-        <%- render_partial("projects/board", {
-            "project": project,
-            "columns": columns,
-            "indicators": indicators,
-            "totals": totals,
-            "agents": agents,
-            "statuses": statuses,
-            "active_tab": active_tab
-        }) %>
-    </div>
+    <header class="mb-8 flex items-baseline justify-between gap-4 flex-wrap animate-fade-in">
+      <div>
+        <a href="/" class="text-slate-500 hover:text-slate-300 text-sm transition-colors">&larr; All projects</a>
+        <h1 class="text-3xl font-bold tracking-tight mt-1 gradient-text"><%= project["name"] %></h1>
+        <p class="text-xs text-slate-500 font-mono mt-1"><%= project["path"] %></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/projects/<%= project["name"] %>/versions/new" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">+ New version</a>
+        <a href="/projects/<%= project["name"] %>/tasks/new" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">+ New task</a>
+      </div>
+    </header>
+
+    <!-- hub tab strip -->
+    <nav class="flex items-center gap-1 border-b border-white/10 mb-6 animate-fade-in">
+      <a href="/projects/<%= project["name"] %>?tab=board"
+         class="<%= hub_tab == "board" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
+        Board
+      </a>
+      <a href="/projects/<%= project["name"] %>?tab=roadmap"
+         class="<%= hub_tab == "roadmap" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
+        Roadmap
+      </a>
+      <a href="/projects/<%= project["name"] %>?tab=overview"
+         class="<%= hub_tab == "overview" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
+        Overview
+      </a>
+    </nav>
+
+    <!-- board panel -->
+    <% if hub_tab == "board" %>
+      <%- partial("projects/board", {
+          "project":    project,
+          "columns":    columns,
+          "indicators": indicators,
+          "totals":     totals,
+          "agents":     agents,
+          "statuses":   statuses,
+          "active_tab": active_tab
+      }) %>
+    <% end %>
+
+    <!-- roadmap panel -->
+    <% if hub_tab == "roadmap" %>
+      <%- partial("projects/roadmap", {
+          "project":              project,
+          "versions":             versions,
+          "features_by_version":  features_by_version,
+          "unscheduled_features": unscheduled_features
+      }) %>
+    <% end %>
+
+    <!-- overview panel -->
+    <% if hub_tab == "overview" %>
+      <%- partial("projects/overview", {
+          "project":          project,
+          "all_features":     all_features,
+          "feature_counts":   feature_counts,
+          "version_progress": version_progress,
+          "columns":          columns,
+          "task_total":       task_total
+      }) %>
+    <% end %>
+
+  </div>
 </div>
