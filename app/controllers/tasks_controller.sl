@@ -67,26 +67,21 @@ fn plan_model_picker_data(current)
   for c in claude_all
     claude_set[c] = true
   end
-  # Partition the allowlist into Claude vs opencode. Anything that isn't
-  # a known Claude id is treated as an opencode "provider/model[:variant]"
-  # entry — `Plan.is_allowed_model` already gates what reaches the DB.
   let claude_ids   = []
   let opencode_ids = []
+  let codex_ids    = []
   for id in allow
     if claude_set[id] == true
       claude_ids.push(id)
+    elsif id.starts_with("codex/")
+      codex_ids.push(id)
     else
       opencode_ids.push(id)
     end
   end
-  # Empty allowlist (= "no filter applied") falls back to the canonical
-  # Claude list so a fresh DB still has a usable picker. We deliberately
-  # don't seed opencode here — that's a settings-page-only path.
   if allow.length() == 0
     claude_ids = claude_all
   end
-  # Preserve a persisted `current` that's no longer on the allowlist so
-  # the existing choice stays visible in the dropdown.
   let cur = (current ?? "").trim()
   if cur != ""
     let seen = false
@@ -100,9 +95,16 @@ fn plan_model_picker_data(current)
         seen = true
       end
     end
+    for cx in codex_ids
+      if cx == cur
+        seen = true
+      end
+    end
     if not seen
       if claude_set[cur] == true
         claude_ids.push(cur)
+      elsif cur.starts_with("codex/")
+        codex_ids.push(cur)
       else
         opencode_ids.push(cur)
       end
@@ -114,7 +116,8 @@ fn plan_model_picker_data(current)
   end
   {
     "claude_options":   claude_opts,
-    "opencode_options": opencode_ids
+    "opencode_options": opencode_ids,
+    "codex_options":    codex_ids
   }
 end
 
@@ -144,6 +147,30 @@ fn list_opencode_models()
     end
   end
   Setting.set("opencode_models_cache", { "_cached_at": DateTime.now().to_unix(), "models": out })
+  out
+end
+
+fn list_codex_models()
+  let cached = Setting.get_or("codex_models_cache", nil)
+  if cached != nil
+    let age = (cached["_cached_at"] ?? 0)
+    if DateTime.now().to_unix() - age < 300
+      return cached["models"] ?? []
+    end
+  end
+  let res = System.run_sync(["codex", "models"]) rescue nil
+  if res == nil or res["exit_code"] != 0
+    return []
+  end
+  let lines = (res["stdout"] ?? "").split("\n")
+  let out = []
+  for line in lines
+    let s = line.trim()
+    if s.length() > 0
+      out.push("codex/" + s)
+    end
+  end
+  Setting.set("codex_models_cache", { "_cached_at": DateTime.now().to_unix(), "models": out })
   out
 end
 

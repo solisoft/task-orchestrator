@@ -290,9 +290,9 @@ fn update(req)
     return {"status": 404, "body": "Feature not found"}
   end
   let form = req["all"] ?? {}
-  let title = (form["title"] ?? feature.title).trim()
-  let description = (form["description"] ?? feature.description).trim()
-  let status = (form["status"] ?? feature.status).trim()
+  let title = ((form["title"] ?? feature.title) ?? "").trim()
+  let description = ((form["description"] ?? feature.description) ?? "").trim()
+  let status = ((form["status"] ?? feature.status) ?? "").trim()
   if title == ""
     return {"status": 422, "body": "Title is required"}
   end

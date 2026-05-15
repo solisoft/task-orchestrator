@@ -26,6 +26,7 @@
             "current":          plan_model,
             "claude_options":   claude_options,
             "opencode_options": opencode_options,
+            "codex_options":    codex_options,
             "include_blank":    false,
             "blank_label":      ""
           }) %>
@@ -38,6 +39,7 @@
             "current":          review_model,
             "claude_options":   claude_options,
             "opencode_options": opencode_options,
+            "codex_options":    codex_options,
             "include_blank":    false,
             "blank_label":      ""
           }) %>
@@ -69,6 +71,22 @@
             <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">opencode CLI</h3>
             <div class="space-y-2">
               <% for m in opencode_models %>
+                <div class="flex items-center gap-3">
+                  <input type="checkbox" id="allowed_<%= m %>" name="allowed_<%= m %>" value="1"
+                         <%= allowed_set[m] == true ? "checked" : "" %>
+                         class="h-4 w-4 rounded border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
+                  <label for="allowed_<%= m %>" class="text-sm font-mono text-slate-200"><%= m %></label>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <% if codex_models != nil and codex_models.length() > 0 %>
+          <div class="mt-5">
+            <h3 class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">codex CLI</h3>
+            <div class="space-y-2">
+              <% for m in codex_models %>
                 <div class="flex items-center gap-3">
                   <input type="checkbox" id="allowed_<%= m %>" name="allowed_<%= m %>" value="1"
                          <%= allowed_set[m] == true ? "checked" : "" %>

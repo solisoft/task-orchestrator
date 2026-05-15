@@ -145,7 +145,7 @@ describe("Task.effective_agent", fn()
     assert_eq(Task.effective_agent(t), "opencode-sdk")
   end)
 
-  test("falls back to the global default when agent_type is missing", fn()
+    test("falls back to the global default when agent_type is missing", fn()
     Setting.set("agent_type", "opencode")
     let t = Task.create({
       "_key": "agspec--notype",
@@ -155,6 +155,71 @@ describe("Task.effective_agent", fn()
       "status": "todo"
     })
     assert_eq(Task.effective_agent(t), "opencode")
+  end)
+
+  test("routes codex/ model to codex agent", fn()
+    let t = Task.create({
+      "_key": "agspec--codex",
+      "project": "agspec",
+      "slug": "codex",
+      "title": "x",
+      "status": "todo",
+      "model": "codex/gpt-4o"
+    })
+    assert_eq(Task.effective_agent(t), "codex")
+  end)
+
+  test("routes provider/model to opencode, not codex", fn()
+    let t = Task.create({
+      "_key": "agspec--opencode",
+      "project": "agspec",
+      "slug": "opencode",
+      "title": "x",
+      "status": "todo",
+      "model": "deepseek/deepseek-chat"
+    })
+    assert_eq(Task.effective_agent(t), "opencode")
+  end)
+
+  test("routes claude-* model to claude", fn()
+    let t = Task.create({
+      "_key": "agspec--claude",
+      "project": "agspec",
+      "slug": "claude",
+      "title": "x",
+      "status": "todo",
+      "model": "claude-opus-4-7"
+    })
+    assert_eq(Task.effective_agent(t), "claude")
+  end)
+
+  test("known_agents includes codex", fn()
+    let agents = Task.known_agents()
+    assert_contains(agents, "codex")
+  end)
+
+  test("display_model returns task.model when set", fn()
+    let t = Task.create({
+      "_key": "agspec--display",
+      "project": "agspec",
+      "slug": "display",
+      "title": "x",
+      "status": "todo",
+      "model": "codex/gpt-4o"
+    })
+    assert_eq(Task.display_model(t), "codex/gpt-4o")
+  end)
+
+  test("display_model falls back to effective_agent when model is unset", fn()
+    Setting.set("agent_type", "claude")
+    let t = Task.create({
+      "_key": "agspec--display-fallback",
+      "project": "agspec",
+      "slug": "display-fallback",
+      "title": "x",
+      "status": "todo"
+    })
+    assert_eq(Task.display_model(t), "claude")
   end)
 end)
 
@@ -279,5 +344,93 @@ describe("Task.dashboard_scan", fn()
       assert_eq(scan["usage"]["day"][a], 0)
       assert_eq(scan["usage"]["week"][a], 0)
     end
+  end)
+end)
+
+describe("Task.for_project", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+  end)
+
+  test("returns tasks for the given project", fn()
+    Task.create({ "_key": "p--a", "project": "p", "slug": "a", "title": "A", "status": "todo" })
+    Task.create({ "_key": "p--b", "project": "p", "slug": "b", "title": "B", "status": "done" })
+    Task.create({ "_key": "q--c", "project": "q", "slug": "c", "title": "C", "status": "todo" })
+    let tasks = Task.for_project("p")
+    assert_eq(tasks.length(), 2)
+  end)
+
+  test("returns empty for unknown project", fn()
+    assert_eq(Task.for_project("nonexistent").length(), 0)
+  end)
+end)
+
+describe("Task.board_for", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+  end)
+
+  test("returns every kanban column with tasks under them", fn()
+    Task.create({ "_key": "p--a", "project": "p", "slug": "a", "title": "A", "status": "todo" })
+    Task.create({ "_key": "p--b", "project": "p", "slug": "b", "title": "B", "status": "review" })
+    let board = Task.board_for("p")
+    assert_hash_has_key(board, "todo")
+    assert_hash_has_key(board, "review")
+    assert_eq(board["todo"].length(), 1)
+    assert_eq(board["review"].length(), 1)
+    assert_eq(board["done"].length(), 0)
+  end)
+
+  test("zero-fills every kanban column for empty project", fn()
+    let board = Task.board_for("empty-proj")
+    for s in Task.kanban_statuses()
+      assert_hash_has_key(board, s)
+      assert_eq(board[s].length(), 0)
+    end
+  end)
+end)
+
+describe("Task.key_for", fn()
+  test("joins project and slug with --", fn()
+    assert_eq(Task.key_for("my-project", "my-slug"), "my-project--my-slug")
+  end)
+end)
+
+describe("Task.known_projects", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+  end)
+
+  test("returns sorted project names that have tasks", fn()
+    Task.create({ "_key": "b--t1", "project": "b", "slug": "t1", "title": "T1", "status": "todo" })
+    Task.create({ "_key": "a--t1", "project": "a", "slug": "t1", "title": "T2", "status": "todo" })
+    Task.create({ "_key": "c--t1", "project": "c", "slug": "t1", "title": "T3", "status": "todo" })
+    let projects = Task.known_projects()
+    assert_eq(projects, ["a", "b", "c"])
+  end)
+
+  test("returns empty list when no tasks exist", fn()
+    assert_eq(Task.known_projects().length(), 0)
+  end)
+end)
+
+describe("Task.statuses / kanban_statuses", fn()
+  test("statuses returns all valid statuses", fn()
+    let s = Task.statuses()
+    assert(s.contains("todo"))
+    assert(s.contains("done"))
+    assert(s.contains("failed"))
+    assert(s.contains("archived"))
+  end)
+
+  test("kanban_statuses excludes archived and proposed", fn()
+    let ks = Task.kanban_statuses()
+    assert(ks.contains("todo"))
+    assert(ks.contains("review"))
+    assert_not(ks.contains("archived"))
+    assert_not(ks.contains("proposed"))
   end)
 end)

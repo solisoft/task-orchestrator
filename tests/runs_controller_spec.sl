@@ -60,4 +60,21 @@ describe("RunsController", fn()
       assert_eq(res_status(response), 200)
     end)
   end)
+
+  describe("POST /projects/:name/tasks/:slug/run/resume", fn()
+    test("returns 422 for non-resumable task", fn()
+      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      System.run_sync(["mkdir", "-p", root + "/proj_resume/tasks/todo"])
+      Task.create({
+        "_key":    "proj_resume--resume-me",
+        "project": "proj_resume",
+        "slug":    "resume-me",
+        "title":   "Resume me",
+        "status":  "done"
+      })
+      let response = post("/projects/proj_resume/tasks/resume-me/run/resume", {})
+      assert_eq(res_status(response), 422)
+      assert_contains(res_body(response), "not in a resumable state")
+    end)
+  end)
 end)

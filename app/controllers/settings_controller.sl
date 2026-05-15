@@ -9,6 +9,7 @@ fn show(req)
   # render the allowlist checkbox panel). The shell-out is paid here, not
   # in `plan_model_picker_data`, so every other page stays cheap.
   let opencode_all       = list_opencode_models()
+  let codex_all         = list_codex_models()
   let allowed            = Plan.allowed_model_ids()
   let claude_ids         = Plan.claude_model_ids()
   let claude_labels      = Plan.claude_model_labels()
@@ -22,11 +23,13 @@ fn show(req)
     "review_model": current_review_model,
     "claude_options":   pmd["claude_options"],
     "opencode_options": pmd["opencode_options"],
+    "codex_options":    pmd["codex_options"],
     "opencode_models":  opencode_all,
+    "codex_models":      codex_all,
     "claude_model_ids":     claude_ids,
     "claude_model_labels":  claude_labels,
     "allowed_set":          _settings_allowed_set(allowed),
-    "allowed_orphans":      _settings_allowed_orphans(allowed, claude_ids, opencode_all),
+    "allowed_orphans":      _settings_allowed_orphans(allowed, claude_ids, opencode_all, codex_all),
     "theme": Setting.current_theme(),
     "theme_css_vars": Setting.current_theme_css_vars(),
     "theme_class": Setting.current_theme_class(),
@@ -311,12 +314,15 @@ end
 # detection. Surfaced in their own panel so the user can see (and untick)
 # stale entries — e.g. an opencode provider that's been uninstalled —
 # rather than having them silently vanish from the page.
-fn _settings_allowed_orphans(allowed, claude_ids, opencode_models)
+fn _settings_allowed_orphans(allowed, claude_ids, opencode_models, codex_models)
   let known = {}
   for c in claude_ids
     known[c] = true
   end
   for m in (opencode_models ?? [])
+    known[m] = true
+  end
+  for m in (codex_models ?? [])
     known[m] = true
   end
   let out = []

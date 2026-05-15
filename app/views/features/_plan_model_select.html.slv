@@ -7,6 +7,8 @@
   #                        allowlist, with `current` always preserved.
   #   - opencode_options : list of "provider/model" strings — same
   #                        filter applied.
+  #   - codex_options    : list of "codex/<model>" strings — same
+  #                        filter applied.
   #   - include_blank    : when true, render a leading blank option
   #   - blank_label      : label for the blank option when include_blank is true
   #
@@ -28,6 +30,14 @@
   <% if opencode_options.length() > 0 %>
     <optgroup label="opencode CLI (no questions)">
       <% for m in opencode_options %>
+        <option value="<%= m %>" <%= current == m ? "selected" : "" %>><%= m %></option>
+      <% end %>
+    </optgroup>
+  <% end %>
+  <% let cx_opts = codex_options ?? [] %>
+  <% if cx_opts.length() > 0 %>
+    <optgroup label="codex CLI">
+      <% for m in cx_opts %>
         <option value="<%= m %>" <%= current == m ? "selected" : "" %>><%= m %></option>
       <% end %>
     </optgroup>

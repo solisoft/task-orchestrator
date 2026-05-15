@@ -1,20 +1,17 @@
 fn comments_probe(req)
   let lines = []
   lines.push("=== COMMENTS ===")
-  for c in (Comment.all() rescue [])
+  let comments = []
+  try
+    comments = Comment.all()
+  catch e
+    comments = []
+  end
+  for c in (comments ?? [])
     let bids = c.attachment_blob_ids ?? []
     lines.push("  key=" + (c._key ?? "?") +
                "  feature=" + (c.feature_slug ?? "?") +
                "  blob_ids=" + str(bids))
-  end
-  lines.push("")
-  lines.push("=== comment_attachments collection ===")
-  let rows = @sdbql{ FOR d IN comment_attachments RETURN d } rescue []
-  for r in rows
-    lines.push("  _key=" + str(r["_key"]) +
-               "  name=" + str(r["name"]) +
-               "  type=" + str(r["type"]) +
-               "  size=" + str(r["size"]))
   end
   {
     "status": 200,

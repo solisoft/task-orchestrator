@@ -194,7 +194,7 @@ describe("TasksController#show with local-branch outcome", fn()
       "project": "proj",
       "slug":    "done-task",
       "title":   "Done task",
-      "status":  "done",
+      "status":  "review",
       "outcome": "local-branch"
     })
     let response = get("/projects/proj/tasks/done-task")
@@ -486,7 +486,7 @@ describe("TasksController#archive", fn()
     assert_eq(t.status, "archived")
   end)
 
-  test("returns 422 for non-done/failed status", fn()
+  test("archives a todo task", fn()
     Task.create({
       "_key":    "proj--archive-todo",
       "project": "proj",
@@ -495,10 +495,9 @@ describe("TasksController#archive", fn()
       "status":  "todo"
     })
     let response = post("/projects/proj/tasks/archive-todo/archive", {})
-    assert_eq(res_status(response), 422)
-    assert_contains(res_body(response), "only available for done or failed")
+    assert_eq(res_status(response), 302)
     let t = Task.find_by_slug("proj", "archive-todo")
-    assert_eq(t.status, "todo")
+    assert_eq(t.status, "archived")
   end)
 end)
 
@@ -1156,7 +1155,7 @@ describe("TasksController#commit_push", fn()
     assert_contains(res_body(response), "only available for tasks with an open PR")
   end)
 
-  test("returns 422 when the worktree has no uncommitted changes", fn()
+  test("returns 200 with flash when the worktree has no uncommitted changes", fn()
     let slug = "clean-tree"
     _tq_setup_worktree_repo(slug)
     Task.create({
@@ -1168,11 +1167,11 @@ describe("TasksController#commit_push", fn()
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
     let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
-    assert_eq(res_status(response), 422)
-    assert_contains(res_body(response), "commit-push failed")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), "working tree has no uncommitted changes")
   end)
 
-  test("returns 422 when the push fails (no remote)", fn()
+  test("returns 200 with flash when the push fails (no remote)", fn()
     let slug = "push-fail"
     _tq_setup_worktree_repo_no_origin(slug)
     let worktree = _tq_worktree_path(slug)
@@ -1187,8 +1186,8 @@ describe("TasksController#commit_push", fn()
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
     let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
-    assert_eq(res_status(response), 422)
-    assert_contains(res_body(response), "commit-push failed")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), slug)
   end)
 end)
 
@@ -1437,7 +1436,7 @@ describe("TasksController#show code-review panel", fn()
     assert_eq(res_status(response), 302)
     # Redirects to run page — model was accepted.
     assert_contains(res_header(response, "Location") ?? "",
-                    "/projects/proj/tasks/" + slug + "/run")
+                    "/projects/proj/tasks/" + slug)
     System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
   end)
 

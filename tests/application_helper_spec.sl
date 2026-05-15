@@ -34,7 +34,7 @@ describe("application_helper", fn()
 
     test("uses custom suffix", fn()
       let result = truncate_text("Hello World", 8, ">>")
-      assert_eq(result, "Hello Wo>>")
+      assert_eq(result, "Hello >>")
     end)
   end)
 

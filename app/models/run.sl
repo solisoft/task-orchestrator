@@ -339,17 +339,15 @@ fn run_pr_url(repo, slug)
   Trusted.read(path).strip()
 end
 
-let _pr_merged_mock = {"value": nil}
-
 fn set_pr_merged_mock(val)
-  _pr_merged_mock["value"] = val
+  Setting.set("_pr_merged_mock", val)
 end
 
 # Check whether a GitHub PR has been merged. Shells out to `gh` CLI;
 # returns false when the command fails (e.g. unauthenticated, PR not
 # found, network flake) so the caller can decide how to handle it.
 fn pr_merged(pr_url)
-  let mock = _pr_merged_mock["value"]
+  let mock = Setting.get("_pr_merged_mock") rescue nil
   if mock == true
     return true
   end

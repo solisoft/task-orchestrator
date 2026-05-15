@@ -14,7 +14,7 @@ class Task < Model
   # `agent_type` is optional — when unset the dashboard falls back to
   # `Setting.get("agent_type")`. The format check only fires when the
   # field is a string, so null rows still validate.
-  validates("agent_type", { "format": "^(claude|opencode|opencode-sdk)$" })
+  validates("agent_type", { "format": "^(claude|opencode|opencode-sdk|codex)$" })
   # tags is an optional string array; when present every element must be a
   # known tag (see `known_tags`). Solidb is schemaless so the field itself
   # requires no migration — validation and the sparse index are enough.
@@ -30,7 +30,7 @@ class Task < Model
   # bucketises usage by this set so a row whose `agent_type` falls
   # outside of it is silently ignored rather than corrupting a tile.
   static def known_agents()
-    ["claude", "opencode", "opencode-sdk"]
+    ["claude", "opencode", "opencode-sdk", "codex"]
   end
 
   # Enabled agents = all known agents with enabled flag true (or no flag
@@ -205,6 +205,9 @@ class Task < Model
   # board badge.
   static def effective_agent(t)
     if t.model != nil and t.model != ""
+      if t.model.starts_with("codex/")
+        return "codex"
+      end
       if t.model.contains("/")
         return "opencode"
       end
@@ -292,6 +295,9 @@ class Task < Model
   # resolve the default once and read it back N times.
   static def _effective_agent_with_default(t, default_agent)
     if t.model != nil and t.model != ""
+      if t.model.starts_with("codex/")
+        return "codex"
+      end
       if t.model.contains("/")
         return "opencode"
       end

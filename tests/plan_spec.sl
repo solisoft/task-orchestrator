@@ -200,3 +200,167 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
         assert_eq(p["terminal"], true)
     })
 })
+
+describe("Plan.allow_plan_model / _is_codex_model_id", fn() {
+    before_each(fn() {
+        assert_test_db()
+    })
+
+    test("allow_plan_model accepts a valid codex model id", fn() {
+        assert_eq(Plan.allow_plan_model("codex/gpt-4o"), "codex/gpt-4o")
+    })
+
+    test("allow_plan_model accepts a codex model with dots and dashes", fn() {
+        assert_eq(Plan.allow_plan_model("codex/gpt-4.1-mini"), "codex/gpt-4.1-mini")
+    })
+
+    test("allow_plan_model rejects bare model without codex/ prefix", fn() {
+        assert_eq(Plan.allow_plan_model("gpt-4o"), "claude-sonnet-4-6")
+    })
+
+    test("allow_plan_model rejects codex/ with empty model", fn() {
+        assert_eq(Plan.allow_plan_model("codex/"), "claude-sonnet-4-6")
+    })
+
+    test("allow_plan_model still accepts Claude SDK ids", fn() {
+        assert_eq(Plan.allow_plan_model("claude-opus-4-7"), "claude-opus-4-7")
+    })
+
+    test("allow_plan_model still accepts opencode provider/model ids", fn() {
+        assert_eq(Plan.allow_plan_model("deepseek/deepseek-chat"), "deepseek/deepseek-chat")
+    })
+
+    test("_is_codex_model_id returns false for empty strings", fn() {
+        assert_not(Plan._is_codex_model_id(""))
+    })
+
+    test("_is_codex_model_id returns false for short strings", fn() {
+        assert_not(Plan._is_codex_model_id("codex"))
+    })
+
+    test("_is_codex_model_id returns false for non-codex models", fn() {
+        assert_not(Plan._is_codex_model_id("claude-opus-4-7"))
+    })
+
+    test("_is_codex_model_id returns true for valid codex models", fn() {
+        assert(Plan._is_codex_model_id("codex/gpt-4o"))
+        assert(Plan._is_codex_model_id("codex/o3-mini"))
+        assert(Plan._is_codex_model_id("codex/gpt-4.1-nano"))
+    })
+})
+
+describe("Plan.default_plan_model", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Setting.delete_all()
+    })
+
+    test("returns claude-sonnet-4-6 when nothing is persisted", fn() {
+        assert_eq(Plan.default_plan_model(), "claude-sonnet-4-6")
+    })
+
+    test("returns the persisted plan_model", fn() {
+        Setting.set("plan_model", "claude-opus-4-7")
+        assert_eq(Plan.default_plan_model(), "claude-opus-4-7")
+    })
+})
+
+describe("Plan.default_review_model", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Setting.delete_all()
+    })
+
+    test("returns claude-haiku-4-5-20251001 when nothing is persisted", fn() {
+        assert_eq(Plan.default_review_model(), "claude-haiku-4-5-20251001")
+    })
+
+    test("returns the persisted review_model", fn() {
+        Setting.set("review_model", "claude-sonnet-4-6")
+        assert_eq(Plan.default_review_model(), "claude-sonnet-4-6")
+    })
+})
+
+describe("Plan.allowed_model_ids", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Setting.delete_all()
+    })
+
+    test("returns empty list when nothing is persisted", fn() {
+        assert_eq(Plan.allowed_model_ids().length(), 0)
+    })
+
+    test("returns the persisted allowlist", fn() {
+        Setting.set("allowed_models", ["claude-opus-4-7", "codex/gpt-4o"])
+        let ids = Plan.allowed_model_ids()
+        assert_eq(ids.length(), 2)
+        assert(ids.contains("claude-opus-4-7"))
+        assert(ids.contains("codex/gpt-4o"))
+    })
+})
+
+describe("Plan.is_allowed_model", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Setting.delete_all()
+    })
+
+    test("returns true when allowlist is empty (no filter)", fn() {
+        Setting.set("allowed_models", [])
+        assert(Plan.is_allowed_model("claude-opus-4-7"))
+    })
+
+    test("returns true when id is on the allowlist", fn() {
+        Setting.set("allowed_models", ["claude-opus-4-7"])
+        assert(Plan.is_allowed_model("claude-opus-4-7"))
+    })
+
+    test("returns false when id is not on the allowlist", fn() {
+        Setting.set("allowed_models", ["claude-opus-4-7"])
+        assert_not(Plan.is_allowed_model("codex/gpt-4o"))
+    })
+})
+
+describe("Plan.claude_model_ids / claude_model_labels", fn() {
+    test("claude_model_ids returns the expected list", fn() {
+        let ids = Plan.claude_model_ids()
+        assert(ids.contains("claude-opus-4-7"))
+        assert(ids.contains("claude-sonnet-4-6"))
+        assert_eq(ids.length(), 3)
+    })
+
+    test("claude_model_labels maps every id to a friendly label", fn() {
+        let labels = Plan.claude_model_labels()
+        for id in Plan.claude_model_ids()
+            assert_hash_has_key(labels, id)
+        end
+    })
+})
+
+describe("Plan.filter_allowed", fn() {
+    before_each(fn() {
+        assert_test_db()
+        Setting.delete_all()
+    })
+
+    test("passes through when allowlist is empty", fn() {
+        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        assert_eq(Plan.filter_allowed(ids, ""), ids)
+    })
+
+    test("filters to only allowlisted ids", fn() {
+        Setting.set("allowed_models", ["claude-opus-4-7"])
+        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        let filtered = Plan.filter_allowed(ids, "")
+        assert_eq(filtered.length(), 1)
+        assert_eq(filtered[0], "claude-opus-4-7")
+    })
+
+    test("always keeps the current selection even if outside allowlist", fn() {
+        Setting.set("allowed_models", ["claude-opus-4-7"])
+        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        let filtered = Plan.filter_allowed(ids, "claude-haiku-4-5-20251001")
+        assert(filtered.contains("claude-haiku-4-5-20251001"))
+    })
+})

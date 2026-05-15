@@ -185,10 +185,27 @@ class Plan < Model
         return v
       end
     end
+    if Plan._is_codex_model_id(v)
+      return v
+    end
     if Plan._is_opencode_model_id(v)
       return v
     end
     "claude-sonnet-4-6"
+  end
+
+  static def _is_codex_model_id(s)
+    if s.length() < 6 or s.length() > 200
+      return false
+    end
+    if not s.starts_with("codex/")
+      return false
+    end
+    let model = s.substring(6, s.length)
+    if model.length() == 0
+      return false
+    end
+    Plan._matches_segment(model, "model")
   end
 
   # Shape gate for an opencode model id ("provider/model" with an

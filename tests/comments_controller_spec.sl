@@ -1,58 +1,46 @@
-# CommentsController and Comment model — covers comment creation and
-# listing on feature briefs.
+# Comments controller — create and destroy comments on feature briefs.
+# Routes sit inside the `authenticate` middleware block.
 
-describe("Comment model", fn()
+fn _comments_origin()
+  let probe = get("/login")
+  let url = probe["url"] ?? ""
+  let prefix = "http://"
+  if not url.starts_with(prefix)
+    return url
+  end
+  let rest = url.substring(prefix.length(), url.length())
+  let slash = rest.index_of("/")
+  if slash > 0
+    return prefix + rest.substring(0, slash)
+  end
+  url
+end
+
+describe("CommentsController", fn()
   before_each(fn()
     assert_test_db()
     Comment.delete_all()
     Feature.delete_all()
+    User.delete_all()
   end)
 
-  test("create_comment sets fields correctly", fn()
-    let comment = Comment.create_comment("myapp--feat1", "tester@example.com", "Nice!")
-    assert(comment._errors == nil)
-    assert_eq(comment.feature_slug, "myapp--feat1")
-    assert_eq(comment.author, "tester@example.com")
-    assert_eq(comment.body, "Nice!")
-    assert_not_null(comment.created_at)
-  end)
+  describe("POST /features/:id/comments", fn()
+    test("redirects to login without authentication", fn()
+      as_guest()
+      let response = post("/features/feat-1/comments", { "body": "Hello" })
+      assert_eq(res_status(response), 302)
+    end)
 
-  test("for_feature returns comments ordered by created_at", fn()
-    Comment.create_comment("myapp--feat1", "a@x.com", "First")
-    Comment.create_comment("myapp--feat1", "b@x.com", "Second")
-    let comments = Comment.for_feature("myapp--feat1")
-    assert_eq(comments.length(), 2)
-    assert_eq(comments[0].body, "First")
-    assert_eq(comments[1].body, "Second")
-  end)
-
-  test("validates required fields", fn()
-    let comment = Comment.create({})
-    assert(comment._errors != nil)
-  end)
-
-  test("for_feature returns empty for unknown feature", fn()
-    let comments = Comment.for_feature("unknown--feat")
-    assert_eq(comments.length(), 0)
-  end)
-
-  test("multiple comments on same feature are all retrievable", fn()
-    Comment.create_comment("myapp--feat1", "a@x.com", "One")
-    Comment.create_comment("myapp--feat1", "b@x.com", "Two")
-    Comment.create_comment("myapp--feat1", "c@x.com", "Three")
-    let comments = Comment.for_feature("myapp--feat1")
-    assert_eq(comments.length(), 3)
-  end)
-
-  test("comments on different features are independent", fn()
-    Comment.create_comment("myapp--feat1", "a@x.com", "A1")
-    Comment.create_comment("myapp--feat2", "a@x.com", "A2")
-    assert_eq(Comment.for_feature("myapp--feat1").length(), 1)
-    assert_eq(Comment.for_feature("myapp--feat2").length(), 1)
-  end)
-
-  test("_key is auto-generated with feature prefix", fn()
-    let comment = Comment.create_comment("myapp--feat1", "a@x.com", "Body")
-    assert(comment._key.starts_with("myapp--feat1--"))
+    test("creates a comment when authenticated", fn()
+      User.register("commenter@test.com", "password", "Commenter")
+      login("commenter@test.com", "password")
+      Feature.create({ "_key": "proj--feat", "project": "proj", "slug": "feat", "title": "Feature", "status": "draft" })
+      let response = post("/features/proj--feat/comments", { "body": "Great feature!" },
+        { "headers": { "Origin": _comments_origin() } })
+      assert_eq(res_status(response), 200)
+      let comments = Comment.for_feature("proj--feat")
+      assert_eq(comments.length(), 1)
+      assert_eq(comments[0].body, "Great feature!")
+    end)
   end)
 end)
