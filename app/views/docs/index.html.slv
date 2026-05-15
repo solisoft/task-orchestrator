@@ -1,7 +1,7 @@
 <div class="min-h-screen text-white">
   <div class="max-w-4xl mx-auto px-6 py-12">
     <nav class="text-sm text-slate-500 mb-4 animate-fade-in">
-      <a href="/" class="hover:text-slate-300 transition-colors">&larr; All projects</a>
+      <a href="/agents-dashboard" class="hover:text-slate-300 transition-colors">&larr; All projects</a>
     </nav>
 
     <header class="mb-10 animate-fade-in">
@@ -55,7 +55,7 @@ tail -f ~/.local/state/task-orchestrator/dispatcher.log</code></pre>
       <h2>Daily use</h2>
       <p>The browser flow:</p>
       <ol>
-        <li>From <a href="/">the project list</a>, pick a project. The kanban shows <code>todo / queued / in-progress / review / done</code>.</li>
+        <li>From <a href="/agents-dashboard">the project list</a>, pick a project. The kanban shows <code>todo / queued / in-progress / review / done</code>.</li>
         <li>Click <strong>+ New task</strong>, type a title and a markdown body (or paste rough notes and let <em>Plan with agent</em> structure them).</li>
         <li>Hit <strong>Queue → agent</strong> on the task page. The dispatcher picks the row up within a frame; the kanban swaps it into <code>queued</code> in place via HTMX.</li>
         <li>Open <strong>View run log</strong> to follow the live tail. The page polls every second until the agent settles.</li>
