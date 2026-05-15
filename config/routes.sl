@@ -65,6 +65,10 @@ router_websocket("/ws/plan-stream", "tasks#plan_stream")
 # (a server-generated nonce) is what gates access, mirroring how
 # `runs#stream` treats its slug.
 router_websocket("/ws/feature-generate-stream", "features#generate_stream")
+# Access is gated by a per-plan `stream_token` nonce rendered into the
+# auth-gated show page and echoed back on every WS tick. Anonymous callers
+# cannot guess the token, so the stream is effectively auth-gated even
+# though the WS route itself is not wrapped in `middleware("authenticate")`.
 
 # ── Runs ─────────────────────────────
 
