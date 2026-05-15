@@ -60,7 +60,11 @@ def web_push_send_to_all(payload)
     elsif res["ok"]
       sent = sent + 1
     else
-      _web_push_log("web_push_send_to_all: send failed for " + (sub.endpoint ?? "?").substring(0, 60) + "...")
+      let short_ep = (sub.endpoint ?? "?")
+      if short_ep.length() > 60
+        short_ep = short_ep.substring(0, 60)
+      end
+      _web_push_log("web_push_send_to_all: send failed for " + short_ep + "...")
     end
   end
   _web_push_log("web_push_send_to_all: sent=" + str(sent) + " pruned=" + str(pruned) + " total=" + str(count))
@@ -147,13 +151,21 @@ def _web_push_send_one(sub, body, keys)
       _web_push_vapid_subject
     )
     let status = res["status"] ?? 0
-    if status < 200 or status >= 300
+        if status < 200 or status >= 300
+      let ep_short = (sub.endpoint ?? "?")
+      if ep_short.length() > 60
+        ep_short = ep_short.substring(0, 60)
+      end
       _web_push_log("_web_push_send_one: vapid_send returned status " + str(status) +
-                    " for " + (sub.endpoint ?? "?").substring(0, 60) + "...")
+                    " for " + ep_short + "... body=" + (res["body"] ?? ""))
     end
     return _web_push_outcome_from_status(status)
   catch e
-    _web_push_log("_web_push_send_one: vapid_send threw for " + (sub.endpoint ?? "?").substring(0, 60) +
+    let short_ep = (sub.endpoint ?? "?")
+    if short_ep.length() > 60
+      short_ep = short_ep.substring(0, 60)
+    end
+    _web_push_log("_web_push_send_one: vapid_send threw for " + short_ep +
                   "...: " + str(e))
     return { "ok": false, "pruned": false }
   end

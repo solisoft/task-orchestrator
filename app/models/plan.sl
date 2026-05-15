@@ -267,6 +267,45 @@ class Plan < Model
       self.created_at = now
     end
     self.updated_at = now
+    self._notify_if_status_changed()
+  end
+
+  def _notify_if_status_changed()
+    if self._key == nil or self._key == ""
+      return nil
+    end
+    let new_status = self.status ?? ""
+    if self.last_notified_status == new_status
+      return nil
+    end
+    let prev = Plan.find_by("_key", self._key) rescue nil
+    if prev == nil
+      return nil
+    end
+    let prev_status = prev.status ?? ""
+    if prev_status == new_status
+      return nil
+    end
+    self.last_notified_status = new_status
+    let ts = self.task_slug ?? ""
+    let fs = self.feature_slug ?? ""
+    let url = ""
+    if ts != ""
+      url = "/projects/" + (self.project ?? "") + "/tasks/" + ts
+    elsif fs != ""
+      url = "/projects/" + (self.project ?? "") + "/features/" + fs
+    else
+      url = "/projects/" + (self.project ?? "") + "/plans"
+    end
+    let title = self.prompt_preview(80)
+    if title == nil or title == ""
+      title = self.plan_id ?? "Plan"
+    end
+    web_push_send_to_all({
+      "title":  title,
+      "status": new_status,
+      "url":    url
+    }) rescue null
   end
 
   def prompt_emoji()
