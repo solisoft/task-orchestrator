@@ -100,6 +100,16 @@ get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
 
 middleware("authenticate", -> {
 
+  # ── Versions (nested under projects) ─
+
+  get("/projects/:name/versions",          "versions#index")
+  get("/projects/:name/versions/new",      "versions#new")
+  post("/projects/:name/versions",         "versions#create")
+  get("/projects/:name/versions/:id",      "versions#show")
+  get("/projects/:name/versions/:id/edit", "versions#edit")
+  post("/projects/:name/versions/:id/update",  "versions#update")
+  post("/projects/:name/versions/:id/destroy", "versions#destroy")
+
   # ── Features ─────────────────────────
 
   resources("features")

@@ -1,0 +1,70 @@
+<div class="min-h-screen text-white">
+  <div class="max-w-3xl mx-auto px-6 py-8">
+    <nav class="text-sm text-slate-500 mb-6 animate-fade-in">
+      <a href="/" class="hover:text-slate-300 transition-colors">All projects</a>
+      <span class="mx-2">/</span>
+      <a href="/projects/<%= h(project["name"]) %>?tab=roadmap" class="hover:text-slate-300 transition-colors"><%= h(project["name"]) %></a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-300"><%= h(version.name) %></span>
+    </nav>
+
+    <div class="flex items-baseline justify-between gap-4 mb-6 animate-fade-in">
+      <h1 class="text-2xl font-bold gradient-text"><%= h(version.name) %></h1>
+      <a href="/projects/<%= h(project["name"]) %>/versions/<%= h(version._key) %>/edit"
+         class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Edit</a>
+    </div>
+
+    <div class="rounded-xl glass-card border border-white/5 p-5 mb-6 animate-fade-in-1">
+      <dl class="space-y-2 text-sm">
+        <div class="flex gap-4">
+          <dt class="w-24 text-slate-500 flex-shrink-0">Status</dt>
+          <dd class="text-slate-200"><%= h(version.status ?? "planned") %></dd>
+        </div>
+        <% let _vcn = (version.code_name ?? "").trim() %>
+        <% if _vcn != "" %>
+          <div class="flex gap-4">
+            <dt class="w-24 text-slate-500 flex-shrink-0">Code name</dt>
+            <dd class="text-slate-200 italic">&ldquo;<%= h(_vcn) %>&rdquo;</dd>
+          </div>
+        <% end %>
+        <% let _vdd = (version.due_date ?? "").trim() %>
+        <% if _vdd != "" %>
+          <div class="flex gap-4">
+            <dt class="w-24 text-slate-500 flex-shrink-0">Due date</dt>
+            <dd class="text-slate-200"><%= h(_vdd) %></dd>
+          </div>
+        <% end %>
+        <% let _vdesc = (version.description ?? "").trim() %>
+        <% if _vdesc != "" %>
+          <div class="flex gap-4">
+            <dt class="w-24 text-slate-500 flex-shrink-0">Description</dt>
+            <dd class="text-slate-400 leading-relaxed"><%= h(_vdesc) %></dd>
+          </div>
+        <% end %>
+      </dl>
+    </div>
+
+    <h2 class="text-sm font-medium text-slate-400 mb-3 animate-fade-in-1">Feature bets (<%= features.length() %>)</h2>
+
+    <% if features.length() == 0 %>
+      <div class="rounded-xl glass-card border border-white/5 px-6 py-8 text-center text-slate-600 text-sm italic animate-fade-in-1">
+        No features assigned to this cycle.
+      </div>
+    <% else %>
+      <ul class="rounded-xl glass-card border border-white/5 divide-y divide-white/5 overflow-hidden animate-fade-in-1">
+        <% for f in features %>
+          <li class="flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-colors">
+            <span class="text-xs font-mono px-2 py-0.5 rounded-full border
+              <%= f.status == "done" ? "bg-emerald-500/15 border-emerald-500/20 text-emerald-300" :
+                 (f.status == "in-progress" ? "bg-amber-500/15 border-amber-500/20 text-amber-300" :
+                 (f.status == "ready" ? "bg-blue-500/15 border-blue-500/20 text-blue-300" :
+                 "bg-slate-500/15 border-slate-500/20 text-slate-400")) %>">
+              <%= h(f.status ?? "draft") %>
+            </span>
+            <a href="/features/<%= h(f._key) %>" class="text-sm text-slate-300 hover:text-white transition-colors"><%= h(f.title) %></a>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </div>
+</div>

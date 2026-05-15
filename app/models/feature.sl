@@ -27,6 +27,13 @@ class Feature < Model
     Feature.where({ "project": project }).order("updated_at", "desc").all()
   end
 
+  static def for_version(version_id)
+    if version_id == nil or version_id == ""
+      return []
+    end
+    Feature.where({ "version_id": version_id }).order("updated_at", "desc").all()
+  end
+
   # Search features by title/description, scoped to a project.
   # When `project` is empty, searches across all projects.
   # Returns { "results": [Feature, ...], "total": N }.

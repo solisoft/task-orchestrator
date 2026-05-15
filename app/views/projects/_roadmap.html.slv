@@ -1,0 +1,154 @@
+<div class="animate-fade-in">
+
+  <!-- header row -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-100 tracking-tight">Roadmap</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Shape Up cycles &amp; feature bets</p>
+    </div>
+    <a href="/projects/<%= h(project["name"]) %>/versions/new"
+       class="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 text-sm font-medium px-3 py-1.5 transition-all">
+      + New cycle
+    </a>
+  </div>
+
+  <% if versions.length() == 0 %>
+    <!-- empty state -->
+    <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
+      <p class="text-slate-300 font-medium mb-1">No cycles yet</p>
+      <p class="text-slate-500 text-sm mb-5">Create your first Shape Up cycle to start planning feature bets into releases.</p>
+      <a href="/projects/<%= h(project["name"]) %>/versions/new"
+         class="inline-flex items-center gap-2 rounded-lg bg-indigo-500/80 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">
+        Create first cycle
+      </a>
+    </div>
+
+  <% else %>
+
+    <!-- version cards — features_by_version[v._key] = { features, done_count, total } -->
+    <div class="space-y-4">
+      <% for v in versions %>
+        <% let _vstatus = v.status ?? "planned" %>
+        <% let _vdata   = features_by_version[v._key] ?? {} %>
+        <% let _vfeats  = _vdata["features"] ?? [] %>
+        <% let _vdone   = _vdata["done_count"] ?? 0 %>
+        <% let _vtotal  = _vdata["total"] ?? 0 %>
+        <% let _vpct    = _vtotal > 0 ? (_vdone * 100 / _vtotal) : 0 %>
+
+        <div class="rounded-2xl glass-card border <%= _vstatus == "active" ? "border-emerald-500/25" : (_vstatus == "shipped" ? "border-slate-500/20" : "border-indigo-500/15") %> overflow-hidden animate-fade-in">
+
+          <!-- version header -->
+          <div class="flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-white/5">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+
+                <!-- status badge -->
+                <% if _vstatus == "active" %>
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>Active
+                  </span>
+                <% elsif _vstatus == "shipped" %>
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-500/15 border border-slate-500/25 text-slate-400 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Shipped
+                  </span>
+                <% else %>
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/25 text-indigo-300 text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>Planned
+                  </span>
+                <% end %>
+
+                <h3 class="text-base font-semibold text-slate-100"><%= h(v.name) %></h3>
+
+                <% let _vcn = (v.code_name ?? "").trim() %>
+                <% if _vcn != "" %>
+                  <span class="text-xs font-mono text-slate-500 italic">&ldquo;<%= h(_vcn) %>&rdquo;</span>
+                <% end %>
+              </div>
+
+              <div class="flex items-center gap-4 mt-1.5 flex-wrap">
+                <% let _vdd = (v.due_date ?? "").trim() %>
+                <% if _vdd != "" %>
+                  <span class="text-xs text-slate-500">Due: <%= h(_vdd) %></span>
+                <% end %>
+                <span class="text-xs text-slate-500"><%= _vtotal %> bet<%= _vtotal == 1 ? "" : "s" %></span>
+                <% if _vtotal > 0 %>
+                  <span class="text-xs text-slate-500"><%= _vdone %>/<%= _vtotal %> done</span>
+                <% end %>
+              </div>
+
+              <!-- mini progress bar -->
+              <% if _vtotal > 0 %>
+                <div class="mt-2 h-1 w-48 max-w-full rounded-full bg-white/5 overflow-hidden">
+                  <div class="h-full rounded-full transition-all <%= _vstatus == "shipped" ? "bg-slate-400" : (_vstatus == "active" ? "bg-emerald-400" : "bg-indigo-400") %>"
+                       style="width: <%= _vpct %>%"></div>
+                </div>
+              <% end %>
+            </div>
+
+            <!-- actions -->
+            <div class="flex items-center gap-1 flex-shrink-0 pt-0.5">
+              <a href="/projects/<%= h(project["name"]) %>/versions/<%= h(v._key) %>/edit"
+                 class="rounded-md px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors">Edit</a>
+              <form method="post" action="/projects/<%= h(project["name"]) %>/versions/<%= h(v._key) %>/destroy">
+                <button type="submit" class="rounded-md px-2 py-1 text-xs text-rose-400/70 hover:text-rose-300 hover:bg-rose-500/10 transition-colors">Delete</button>
+              </form>
+            </div>
+          </div>
+
+          <!-- feature bets list -->
+          <% if _vfeats.length() == 0 %>
+            <div class="px-5 py-4 text-xs text-slate-600 italic">No bets assigned to this cycle yet.</div>
+          <% else %>
+            <ul class="divide-y divide-white/[0.04]">
+              <% for f in _vfeats %>
+                <% let _fs = f.status ?? "draft" %>
+                <li class="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
+                  <% if _fs == "done" %>
+                    <span class="flex-shrink-0 inline-block rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">done</span>
+                  <% elsif _fs == "in-progress" %>
+                    <span class="flex-shrink-0 inline-block rounded-full bg-amber-500/15 border border-amber-500/20 text-amber-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">active</span>
+                  <% elsif _fs == "ready" %>
+                    <span class="flex-shrink-0 inline-block rounded-full bg-blue-500/15 border border-blue-500/20 text-blue-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">ready</span>
+                  <% else %>
+                    <span class="flex-shrink-0 inline-block rounded-full bg-slate-500/15 border border-slate-500/20 text-slate-400 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">draft</span>
+                  <% end %>
+                  <a href="/features/<%= h(f._key) %>" class="flex-1 min-w-0 text-sm text-slate-300 hover:text-white truncate transition-colors"><%= h(f.title) %></a>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+
+        </div>
+      <% end %>
+    </div>
+
+    <!-- unscheduled bets -->
+    <% if unscheduled_features.length() > 0 %>
+      <div class="mt-6 rounded-2xl border border-dashed border-white/10 overflow-hidden animate-fade-in">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-white/5">
+          <h3 class="text-sm font-medium text-slate-400">Unscheduled bets</h3>
+          <span class="text-xs text-slate-600"><%= unscheduled_features.length() %> feature<%= unscheduled_features.length() == 1 ? "" : "s" %></span>
+        </div>
+        <ul class="divide-y divide-white/[0.04]">
+          <% for f in unscheduled_features %>
+            <% let _ufs = f.status ?? "draft" %>
+            <li class="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
+              <% if _ufs == "done" %>
+                <span class="flex-shrink-0 inline-block rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">done</span>
+              <% elsif _ufs == "in-progress" %>
+                <span class="flex-shrink-0 inline-block rounded-full bg-amber-500/15 border border-amber-500/20 text-amber-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">active</span>
+              <% elsif _ufs == "ready" %>
+                <span class="flex-shrink-0 inline-block rounded-full bg-blue-500/15 border border-blue-500/20 text-blue-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">ready</span>
+              <% else %>
+                <span class="flex-shrink-0 inline-block rounded-full bg-slate-500/15 border border-slate-500/20 text-slate-400 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">draft</span>
+              <% end %>
+              <a href="/features/<%= h(f._key) %>" class="flex-1 min-w-0 text-sm text-slate-400 hover:text-slate-200 truncate transition-colors"><%= h(f.title) %></a>
+            </li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+  <% end %>
+
+</div>
