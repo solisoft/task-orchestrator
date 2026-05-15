@@ -25,6 +25,23 @@
     <textarea name="description" rows="12" class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y" placeholder="Describe the feature, UI/UX brief, acceptance criteria..."><%= feature == nil ? "" : (feature.description ?? "") %></textarea>
   </div>
 
+  <% let _versions = locals["versions"] ?? [] %>
+  <% if _versions.length() > 0 or (feature != nil and (feature.version_id ?? "") != "") %>
+    <div>
+      <label class="block text-sm font-medium text-slate-300 mb-1">Cycle</label>
+      <p class="text-xs text-slate-500 mb-2">Shape Up cycle / bet this feature belongs to. Leave on Unscheduled to keep it in the backlog.</p>
+      <% let _cur_vid = (feature == nil ? "" : (feature.version_id ?? "")) %>
+      <select name="version_id" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
+        <option value="" <%= _cur_vid == "" ? "selected" : "" %>>Unscheduled</option>
+        <% for v in _versions %>
+          <option value="<%= h(v._key) %>" <%= _cur_vid == v._key ? "selected" : "" %>>
+            <%= h(v.name) %><% if (v.status ?? "") != "" %> &middot; <%= h(v.status) %><% end %>
+          </option>
+        <% end %>
+      </select>
+    </div>
+  <% end %>
+
   <div>
     <label class="block text-sm font-medium text-slate-300 mb-1">Status</label>
     <select name="status" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">

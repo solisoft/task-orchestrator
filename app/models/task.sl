@@ -61,7 +61,16 @@ class Task < Model
     # Use find_by so a miss returns nil rather than the 404-mapping
     # raise that `Task.find` performs. `unique_slug_for` and the show
     # action both want a soft "is this taken?" check, not an exception.
-    Task.find_by("_key", Task.key_for(project, slug))
+    let by_key = Task.find_by("_key", Task.key_for(project, slug))
+    if by_key != nil
+      return by_key
+    end
+    # Defensive fallback: rows whose `_key` drifted off the
+    # `<project>--<slug>` convention (legacy ingest, manual inserts)
+    # still need to resolve from a slug-based URL. The (project, slug)
+    # pair is unique, so .all()[0] is deterministic.
+    let rows = Task.where({ "project": project, "slug": slug }).all() rescue []
+    rows.length() > 0 ? rows[0] : nil
   end
 
   static def for_project(project)

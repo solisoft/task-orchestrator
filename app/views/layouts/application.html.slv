@@ -95,7 +95,10 @@
 <body class="min-h-full text-slate-900 dark:text-white font-sans antialiased gradient-mesh" style="font-family: 'Space Grotesk', system-ui, sans-serif">
     <div class="gradient-accent-bar"></div>
     <% if !(locals["hide_header"] ?? false) %>
-      <%- partial("layouts/header", { "current_user": locals["current_user"] ?? nil }) %>
+      <%- partial("layouts/header", {
+        "current_user":    locals["current_user"] ?? nil,
+        "current_project": locals["current_project"] ?? nil
+      }) %>
     <% end %>
     <%= yield %>
 </body>

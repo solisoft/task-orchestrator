@@ -206,6 +206,7 @@ fn new(req)
     "feature": nil,
     "projects": list_projects() rescue [],
     "project": project,
+    "versions": _versions_for_form(project_name),
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
     "default_plan_model": _pkr["default_plan_model"],
@@ -213,6 +214,15 @@ fn new(req)
     "theme_css_vars": Setting.current_theme_css_vars(),
     "theme_class": Setting.current_theme_class()
   })
+end
+
+# Versions for the feature form picker — empty list when project is unknown
+# (so the picker hides itself rather than showing every project's cycles).
+fn _versions_for_form(project_name)
+  if project_name == nil or project_name == ""
+    return []
+  end
+  Version.for_project(project_name) rescue []
 end
 
 # POST /features
@@ -235,6 +245,7 @@ fn create(req)
   if req["current_user"] != nil
     author = req["current_user"].email ?? ""
   end
+  let version_id = (form["version_id"] ?? "").trim()
   let feature = Feature.create({
     "_key":        Feature.key_for(project, slug),
     "project":     project,
@@ -243,6 +254,7 @@ fn create(req)
     "description": description,
     "status":      status,
     "plan_model":  plan_model,
+    "version_id":  version_id,
     "author":      author
   })
   if feature._errors
@@ -251,6 +263,7 @@ fn create(req)
       "title": "New Feature",
       "feature": feature,
       "projects": list_projects() rescue [],
+      "versions": _versions_for_form(project),
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
         "default_plan_model": _pkr["default_plan_model"],
@@ -273,6 +286,7 @@ fn edit(req)
     "title": "Edit — " + feature.title,
     "feature": feature,
     "projects": list_projects() rescue [],
+    "versions": _versions_for_form(feature.project),
     "claude_options":     _pkr["claude_options"],
     "opencode_options":   _pkr["opencode_options"],
     "default_plan_model": _pkr["default_plan_model"],
@@ -301,6 +315,9 @@ fn update(req)
   feature.description = description
   feature.status = status
   feature.plan_model = _persisted_plan_model(form)
+  if form["version_id"] != nil
+    feature.version_id = (form["version_id"] ?? "").trim()
+  end
   feature.save()
   if feature._errors
     let _pkr = _picker_locals(feature)
@@ -308,6 +325,7 @@ fn update(req)
       "title": "Edit — " + title,
       "feature": feature,
       "projects": list_projects() rescue [],
+      "versions": _versions_for_form(feature.project),
       "claude_options":     _pkr["claude_options"],
       "opencode_options":   _pkr["opencode_options"],
         "default_plan_model": _pkr["default_plan_model"],
@@ -317,6 +335,34 @@ fn update(req)
     })
   end
   redirect("/features/" + feature._key)
+end
+
+# POST /features/:id/assign-cycle
+# Inline cycle reassignment from the project hub's Features tab.
+# Empty version_id removes the assignment (back to Unscheduled).
+fn assign_cycle(req)
+  let feature = _find_feature(req)
+  if feature == nil
+    return {"status": 404, "body": "Feature not found"}
+  end
+  let form = req["all"] ?? {}
+  let new_vid = (form["version_id"] ?? "").trim()
+  if new_vid != ""
+    let version = Version.find_by("_key", new_vid) rescue nil
+    if version == nil
+      return {"status": 422, "body": "Unknown cycle"}
+    end
+    let _vproj = version.project ?? ""
+    if _vproj != feature.project
+      return {"status": 422, "body": "Cycle belongs to a different project"}
+    end
+  end
+  feature.version_id = new_vid
+  feature.save()
+  if feature._errors
+    return {"status": 422, "body": "Could not assign cycle: " + str(feature._errors)}
+  end
+  redirect("/projects/" + feature.project + "?tab=features")
 end
 
 # POST /features/:id/publish

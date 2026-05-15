@@ -832,6 +832,106 @@ describe("FeaturesController CRUD", fn()
     assert_eq(f.title, "New Feature")
   end)
 
+  test("POST /features persists version_id when provided", fn()
+    Version.delete_all()
+    let v = Version.create({
+      "project": "proj", "name": "Cycle 1", "status": "active"
+    })
+    assert(v._errors == nil)
+    let response = post("/features", {
+      "title": "Bet One", "project": "proj", "status": "draft",
+      "version_id": v._key
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "bet-one")
+    assert_not_null(f)
+    assert_eq(f.version_id, v._key)
+  end)
+
+  test("POST /features/:id/update updates version_id", fn()
+    Version.delete_all()
+    let v = Version.create({
+      "project": "proj", "name": "Cycle Edit", "status": "planned"
+    })
+    Feature.create({
+      "_key": "proj--reassign", "project": "proj", "slug": "reassign",
+      "title": "Reassign", "status": "draft"
+    })
+    let response = post("/features/proj--reassign/update", {
+      "title": "Reassign", "version_id": v._key
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "reassign")
+    assert_eq(f.version_id, v._key)
+  end)
+
+  test("POST /features/:id/assign-cycle reassigns the cycle", fn()
+    Version.delete_all()
+    let v = Version.create({
+      "project": "proj", "name": "Inline Cycle", "status": "active"
+    })
+    Feature.create({
+      "_key": "proj--inline", "project": "proj", "slug": "inline",
+      "title": "Inline", "status": "draft"
+    })
+    let response = post("/features/proj--inline/assign-cycle", {
+      "version_id": v._key
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "inline")
+    assert_eq(f.version_id, v._key)
+  end)
+
+  test("POST /features/:id/assign-cycle with empty version_id clears it", fn()
+    Version.delete_all()
+    let v = Version.create({
+      "project": "proj", "name": "Clear Cycle", "status": "active"
+    })
+    Feature.create({
+      "_key": "proj--clear", "project": "proj", "slug": "clear",
+      "title": "Clear", "status": "draft", "version_id": v._key
+    })
+    let response = post("/features/proj--clear/assign-cycle", {
+      "version_id": ""
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 302)
+    let f = Feature.find_by_slug("proj", "clear")
+    assert_eq(f.version_id ?? "", "")
+  end)
+
+  test("POST /features/:id/assign-cycle rejects unknown cycle", fn()
+    Feature.create({
+      "_key": "proj--badcycle", "project": "proj", "slug": "badcycle",
+      "title": "Bad", "status": "draft"
+    })
+    let response = post("/features/proj--badcycle/assign-cycle", {
+      "version_id": "no--such--cycle"
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("POST /features/:id/assign-cycle rejects cross-project cycle", fn()
+    Version.delete_all()
+    let other = Version.create({
+      "project": "other-proj", "name": "Other", "status": "active"
+    })
+    Feature.create({
+      "_key": "proj--mismatch", "project": "proj", "slug": "mismatch",
+      "title": "Mismatch", "status": "draft"
+    })
+    let response = post("/features/proj--mismatch/assign-cycle", {
+      "version_id": other._key
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 422)
+  end)
+
+  test("POST /features/:id/assign-cycle returns 404 for unknown feature", fn()
+    let response = post("/features/no-such--feature/assign-cycle", {
+      "version_id": ""
+    }, { "headers": { "Origin": _publish_origin_for_worker() } })
+    assert_eq(res_status(response), 404)
+  end)
+
   test("POST /features returns 422 when project is missing", fn()
     let response = post("/features", { "title": "No Project" },
       { "headers": { "Origin": _publish_origin_for_worker() } })

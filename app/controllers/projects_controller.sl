@@ -1,5 +1,42 @@
 # Projects controller — project hub with Board / Roadmap / Overview tabs.
 
+fn index(req)
+  let projects = list_projects() rescue []
+  let _email = session_get("user_email") ?? ""
+  let _user = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
+  render("projects/index", {
+    "title":          "Projects",
+    "projects":       projects,
+    "version_counts": _index_version_counts(projects),
+    "current_user":   _user,
+    "theme":          Setting.current_theme(),
+    "theme_css_vars": Setting.current_theme_css_vars(),
+    "theme_class":    Setting.current_theme_class()
+  })
+end
+
+# Per-project Shape Up version counts — { name => { total, active } }.
+# One Version.all() scan, bucketised by project, instead of one
+# Version.where({project}) round-trip per project.
+fn _index_version_counts(projects)
+  let h = {}
+  for p in projects
+    h[p["name"]] = { "total": 0, "active": 0 }
+  end
+  let all = Version.all() rescue []
+  for v in all
+    let key = v.project ?? ""
+    if h[key] != nil
+      h[key]["total"] = h[key]["total"] + 1
+      let _status = v.status ?? ""
+      if _status == "active"
+        h[key]["active"] = h[key]["active"] + 1
+      end
+    end
+  end
+  h
+end
+
 fn show(req)
   let name = req["params"]["name"]
   let project = find_project(name)
@@ -23,8 +60,9 @@ fn show(req)
   let task_total = _task_total(columns)
 
   render("projects/show", {
-    "title":    project["name"],
-    "project":  project,
+    "title":           project["name"],
+    "project":         project,
+    "current_project": project,
     "columns":  columns,
     "indicators": indicators_for(name, columns),
     "totals":   totals_for(name, columns),
@@ -43,16 +81,28 @@ fn show(req)
     "all_features":     all_features,
     "feature_counts":   _feature_counts(all_features),
     "version_progress": _version_progress(versions, fbv),
-    "task_total":       task_total
+    "task_total":       task_total,
+    # Features tab
+    "version_lookup":   _version_lookup(versions)
   })
 end
 
-# Resolve the hub-level tab (board / roadmap / overview).
+# Resolve the hub-level tab (board / roadmap / overview / features).
 fn _pick_hub_tab(requested)
-  if requested == "roadmap" or requested == "overview"
+  if requested == "roadmap" or requested == "overview" or requested == "features"
     return requested
   end
   return "board"
+end
+
+# Build a { version_key => Version } lookup so the Features tab can show
+# each feature's current cycle name without an N+1 read.
+fn _version_lookup(versions)
+  let h = {}
+  for v in versions
+    h[v._key] = v
+  end
+  h
 end
 
 # Resolve which kanban column to show inside the Board tab.

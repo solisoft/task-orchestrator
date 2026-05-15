@@ -10,16 +10,19 @@
 #   2. Create a fresh git worktree on a new branch off origin/main.
 #   3. Write the body into the worktree's tasks/todo/<slug>.md so
 #      `/do-task` finds it.
-#   4. Run `claude -p "/do-task ..."` and then `/review-task` headlessly.
-#   5. If review-task produced a commit: push the branch, open a PR via gh,
-#      mark the row `status=review` (with `pr_url`), and tear down the
-#      worktree.
-#   6. If review-task produced no commit and the worktree is clean
-#      (Approved-no-fix-needed): mark `status=done, outcome=no-commit`
-#      and tear down the worktree.
-#   7. If review-task produced no commit but left uncommitted changes
-#      (Rejected): mark `status=review` and preserve the worktree so
-#      the user can iterate via the web UI.
+#   4. Run `claude -p "/do-task ..."` headlessly. `/do-task` implements
+#      the fix, commits, and (when `gh` is available) opens a draft PR.
+#      `/review-task` is NOT auto-fired here — the user invokes it
+#      explicitly from the web UI when they want a code review.
+#   5. If /do-task produced a commit: capture the draft PR URL it
+#      opened (fall back to opening one ourselves if it couldn't),
+#      mark the row `status=review` (with `pr_url`), and tear down
+#      the worktree.
+#   6. If /do-task produced no commit and the worktree is clean:
+#      mark `status=done, outcome=no-commit` and tear down the worktree.
+#   7. If /do-task produced no commit but left uncommitted changes:
+#      mark `status=review` and preserve the worktree so the user can
+#      iterate via the web UI.
 #
 # State files live under $TASK_ORCH_STATE (default ~/.local/state/task-orchestrator).
 # The DB row is the source of truth for status / pr_url / timestamps;
@@ -64,9 +67,9 @@ if [[ ! -d "$project_path" ]]; then
 fi
 
 # Local-only mode: no `origin` remote means there's nowhere to push and
-# no PR to open. We still run /do-task + /review-task end-to-end, but
-# leave the resulting commit on the local task/<slug> branch for the
-# user to merge by hand. `gh` is not required in this mode.
+# no PR to open. We still run /do-task end-to-end, but leave the
+# resulting commit on the local task/<slug> branch for the user to
+# merge by hand. `gh` is not required in this mode.
 local_only=0
 if ! git -C "$project_path" remote get-url origin >/dev/null 2>&1; then
   local_only=1
@@ -247,8 +250,9 @@ fi
 # The spec is orchestrator-owned context (not project content) — but we
 # can't filter it via .git/info/exclude because worktrees read excludes
 # from the common git-dir, not the worktree-local one, and writing to
-# the common dir would pollute the main repo. Instead, the review-task
-# skill is responsible for unstaging it before commit.
+# the common dir would pollute the main repo. Instead, /do-task is
+# responsible for unstaging it before commit; the safety-net amend
+# below catches the case where it forgets.
 mkdir -p "$worktree_dir/tasks/todo"
 printf '%s' "$body_md" > "$worktree_dir/tasks/todo/$md_name"
 log "seeded worktree's tasks/todo/$md_name (${#body_md} bytes)"
@@ -260,6 +264,9 @@ canonical_skills="$project_root/.claude/skills"
 if [[ -d "$canonical_skills/do-task" && -d "$canonical_skills/review-task" ]]; then
   mkdir -p "$worktree_dir/.claude/skills"
   cp -r "$canonical_skills/do-task" "$worktree_dir/.claude/skills/"
+  # /review-task is not auto-fired by task-run, but is copied into the
+  # worktree so on-demand code reviews (bin/review-run, triggered from
+  # the web UI) can still invoke it against the agent's tree.
   cp -r "$canonical_skills/review-task" "$worktree_dir/.claude/skills/"
   log "seeded worktree's .claude/skills/{do-task,review-task}"
 else
@@ -285,8 +292,8 @@ if [[ -f "$canonical_hooks/timeout-soli-serve.sh" && -f "$canonical_hooks/agent-
 fi
 
 # 3b. Copy the project's `.env.test` into the worktree so `soli test`
-# (which the do-task / review-task skills run for verification) can
-# find it. The file is gitignored, so the worktree's checkout of
+# (which the do-task skill runs for verification) can find it. The
+# file is gitignored, so the worktree's checkout of
 # origin/main never has it; without this, every `soli test` in the
 # agent fails with "`.env.test` file not found at <worktree>/.env.test"
 # and the test server's port-bind errors that follow are red
@@ -298,7 +305,8 @@ if [[ -f "$project_path/.env.test" ]]; then
   log "seeded worktree's .env.test"
 fi
 
-# 4. Run /do-task and /review-task headlessly.
+# 4. Run /do-task headlessly. /review-task is on-demand only — invoked
+#    by the user from the web UI via bin/review-run.
 # A `task_model` of "codex/<model>" routes through OpenAI's codex CLI;
 # a "<provider>/<model>" format routes through opencode CLI; a bare
 # claude-* id pins claude --model; an empty value uses claude default.
@@ -382,27 +390,31 @@ run_agent() {
   fi
 }
 
-# Memory rule: never run /do-task and /review-task in parallel.
 run_agent "/do-task $slug" "running /do-task"
-run_agent "/review-task $slug" "running /review-task"
 
-# 5. /review-task may or may not produce a commit.
+# 5. /do-task may or may not produce a commit.
 head_sha=$(git -C "$worktree_dir" rev-parse HEAD)
 base_sha=$(git -C "$worktree_dir" rev-parse "$base_ref")
 
-# Safety net: if the review-task agent missed the explicit unstage
-# step and committed the orchestrator-seeded spec md, amend it out so
-# the user's branch / PR doesn't carry the noise. Only acts when a
-# commit was actually produced (head moved off base) and only on the
-# top commit (we never rewrite history beyond the most recent commit).
+# Safety net: if /do-task missed the explicit unstage step and
+# committed the orchestrator-seeded spec md, amend it out so the
+# user's branch / PR doesn't carry the noise. Only acts when a commit
+# was actually produced (head moved off base) and only on the top
+# commit (we never rewrite history beyond the most recent commit).
+# When this fires after /do-task already pushed via `gh pr create`,
+# sync the rewrite to origin with --force-with-lease.
 if [[ "$head_sha" != "$base_sha" ]]; then
   if git -C "$worktree_dir" show --name-only --pretty=format: HEAD \
        | grep -qxF "tasks/todo/$md_name"; then
-    log "safety-net: review-task committed tasks/todo/$md_name; amending it out"
+    log "safety-net: /do-task committed tasks/todo/$md_name; amending it out"
     git -C "$worktree_dir" rm --cached --quiet "tasks/todo/$md_name" >> "$log_file" 2>&1 || true
     git -C "$worktree_dir" commit --amend --no-edit --quiet >> "$log_file" 2>&1 || \
       log "safety-net: amend failed; spec md may remain in HEAD commit"
     head_sha=$(git -C "$worktree_dir" rev-parse HEAD)
+    if [[ $local_only -eq 0 ]] && git -C "$worktree_dir" ls-remote --exit-code origin "$branch" >/dev/null 2>&1; then
+      git -C "$worktree_dir" push --quiet --force-with-lease origin "$branch" \
+        >> "$log_file" 2>&1 || log "safety-net: force-with-lease push failed"
+    fi
   fi
 fi
 
@@ -465,7 +477,7 @@ if [[ "$head_sha" == "$base_sha" ]]; then
       '{status: "review", finished_at: $iso, outcome: "rejected-review"}')"
     write_status "review:rejected"
     kill_worktree_soli
-    log "DONE — rejected (review-task declined to commit; worktree preserved at $worktree_dir)"
+    log "DONE — uncommitted changes left by /do-task; worktree preserved at $worktree_dir"
     exit 0
   fi
   log "no commit produced — treating as no-code-change success"
@@ -498,35 +510,37 @@ if [[ $local_only -eq 1 ]]; then
   exit 0
 fi
 
-write_status "pushing branch"
-log "pushing $branch to origin"
-git -C "$worktree_dir" push --quiet --set-upstream origin "$branch" \
-  >> "$log_file" 2>&1 || fail "git push"
-
-write_status "opening PR"
-title=$(git -C "$worktree_dir" log -1 --format=%s "$base_ref..$branch" | head -1)
-# Fallback chain: gh rejects --title "" with "pull request title must not
-# be blank". The range can come back empty when the branch HEAD coincides
-# with origin/main (e.g. after the agent reset/rebased onto a local ref
-# and only the safety-net amend remains), even though head_sha != base_sha
-# was true earlier. Prefer the task's stored title, then any most-recent
-# commit subject, then the slug — anything beats failing the PR.
-if [[ -z "$title" ]]; then
+write_status "capturing PR"
+# /do-task is responsible for opening the draft PR (and pushing the
+# branch via `gh pr create`). Prefer reusing its URL over creating a
+# duplicate. If /do-task couldn't open one (gh not auth'd, network
+# error, etc.), fall back to pushing + opening a draft here so the
+# user always lands on the same `status=review` + pr_url path.
+pr_url=$(cd "$worktree_dir" && gh pr view --json url --jq .url 2>/dev/null || true)
+if [[ -z "$pr_url" ]]; then
+  log "no existing PR; pushing $branch and opening draft PR ourselves"
+  git -C "$worktree_dir" push --quiet --set-upstream origin "$branch" \
+    >> "$log_file" 2>&1 || fail "git push"
+  # Fallback chain: gh rejects --title "" with "pull request title must
+  # not be blank". Prefer the task's stored title, then the latest
+  # commit subject, then the slug — anything beats failing the PR.
   title="$task_title"
+  if [[ -z "$title" ]]; then
+    title=$(git -C "$worktree_dir" log -1 --format=%s | head -1)
+  fi
+  if [[ -z "$title" ]]; then
+    title="$slug"
+  fi
+  body="Automated by task-orchestrator. Source: tasks DB row $key."
+  log "opening draft PR: $title"
+  pr_url=$(
+    cd "$worktree_dir"
+    gh pr create --draft --title "$title" --body "$body" --base main --head "$branch" 2>&1 | tee -a "$log_file" | tail -1
+  ) || fail "gh pr create"
+  log "PR opened: $pr_url"
+else
+  log "reusing draft PR opened by /do-task: $pr_url"
 fi
-if [[ -z "$title" ]]; then
-  title=$(git -C "$worktree_dir" log -1 --format=%s | head -1)
-fi
-if [[ -z "$title" ]]; then
-  title="$slug"
-fi
-body="Automated by task-orchestrator. Source: tasks DB row $key."
-log "opening PR: $title"
-pr_url=$(
-  cd "$worktree_dir"
-  gh pr create --title "$title" --body "$body" --base main --head "$branch" 2>&1 | tee -a "$log_file" | tail -1
-) || fail "gh pr create"
-log "PR opened: $pr_url"
 
 # 6. Mark the row done (status=review until merge; pr_url stored).
 sync_new_todos
@@ -537,16 +551,5 @@ db_update "$(jq -n --arg iso "$iso" --arg url "$pr_url" \
   '{status: "review", pr_url: $url, finished_at: $iso}')"
 printf '%s\n' "$pr_url" > "$state_dir/$slug.pr"
 
-# Auto-spawn a background code review using the review_model from
-# settings so the reviewer runs independently of the task-runner.
-# Falls back to a fast/cheap default when no review_model is saved.
-review_model=$(curl -s -u "$USER:$PASS" \
-  "$HOST/_api/database/$DB/document/settings/review_model" 2>/dev/null \
-  | jq -r '.value // "claude-haiku-4-5-20251001"') || review_model="claude-haiku-4-5-20251001"
-review_id=$(date +%s)
-log "spawning background code review id=$review_id model=$review_model"
-nohup "$script_dir/review-run" "$repo_name" "$slug" "$review_model" "$review_id" \
-  >/dev/null 2>&1 & disown
-
 write_status "done:$pr_url"
-log "DONE — PR: $pr_url"
+log "DONE — PR: $pr_url (status=review; user invokes /review-task on demand)"

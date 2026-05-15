@@ -23,6 +23,11 @@
          class="<%= hub_tab == "roadmap" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
         Roadmap
       </a>
+      <a href="/projects/<%= project["name"] %>?tab=features"
+         class="<%= hub_tab == "features" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
+        Features
+        <span class="ml-2 text-[10px] font-mono text-slate-500"><%= all_features.length() %></span>
+      </a>
       <a href="/projects/<%= project["name"] %>?tab=overview"
          class="<%= hub_tab == "overview" ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center px-5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
         Overview
@@ -49,6 +54,16 @@
           "versions":             versions,
           "features_by_version":  features_by_version,
           "unscheduled_features": unscheduled_features
+      }) %>
+    <% end %>
+
+    <!-- features panel -->
+    <% if hub_tab == "features" %>
+      <%- partial("projects/features", {
+          "project":        project,
+          "all_features":   all_features,
+          "versions":       versions,
+          "version_lookup": version_lookup
       }) %>
     <% end %>
 

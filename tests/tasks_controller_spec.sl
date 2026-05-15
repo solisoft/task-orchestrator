@@ -243,6 +243,23 @@ describe("TasksController#show with local-branch outcome", fn()
     assert_not(body.contains("Merge into main"))
   end)
 
+  # Regression: legacy/manual inserts can leave a Task row with a UUID
+  # `_key` that doesn't match `<project>--<slug>`. The slug-based URL
+  # must still resolve via the (project, slug) fallback.
+  test("resolves tasks whose _key drifted off the project--slug convention", fn()
+    _tq_setup_git_proj("drifted")
+    Task.create({
+      "_key":    "019e2cc2-0ce8-7c1f-8dc7-deadbeef0001",
+      "project": "proj",
+      "slug":    "drifted-key-task",
+      "title":   "Drifted key task",
+      "status":  "todo"
+    })
+    let response = get("/projects/proj/tasks/drifted-key-task")
+    assert_eq(res_status(response), 200)
+    assert_contains(res_body(response), "Drifted key task")
+  end)
+
   # Regression: model classes aren't reachable from view scope, so the
   # feature link in the header has to be pre-loaded by the controller.
   test("renders the feature chip for tasks linked to a feature", fn()

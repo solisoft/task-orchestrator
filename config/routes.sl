@@ -21,6 +21,7 @@ get("/docs", "docs#index")
 
 # ── Projects ─────────────────────────
 
+get("/projects", "projects#index")
 get("/projects/:name", "projects#show")
 
 # ── Tasks ────────────────────────────
@@ -133,6 +134,7 @@ middleware("authenticate", -> {
   post("/features/:id/plan-answer/:plan_id", "features#plan_answer")
   post("/features/:id/publish", "features#publish")
   post("/features/:id/tasks/:slug/remove", "features#remove_task")
+  post("/features/:id/assign-cycle", "features#assign_cycle")
 
   # ── Comments (nested under features) ─
 
