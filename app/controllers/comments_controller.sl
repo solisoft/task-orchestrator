@@ -5,26 +5,18 @@
 # comments/_list partial can resolve filenames + content types in O(1)
 # without firing one Blob lookup per attachment.
 fn _attachments_meta_for(comments)
-  let ids = []
-  for c in comments
+  let ids = comments.reduce(fn(ids, c) {
     let bids = c.attachment_blob_ids ?? []
-    for b in bids
-      ids.push(b)
-    end
-  end
-  if ids.length() == 0
-    return {}
-  end
+    for b in bids { ids.push(b) }
+    ids
+  }, [])
+  return {} if ids.length == 0
   let rows = @sdbql{
     FOR d IN comment_attachments
       FILTER d._key IN #{ids}
       RETURN { "_key": d._key, "name": d.name, "type": d.type, "size": d["size"] }
   } rescue []
-  let h = {}
-  for r in rows
-    h[r["_key"]] = r
-  end
-  h
+  rows.reduce(fn(h, r) { h[r["_key"]] = r; h }, {})
 end
 
 # POST /comments/:key/delete
