@@ -835,12 +835,24 @@ fn plan_model_picker_data(current)
   }
 end
 
+fn _models_skip_shellout()
+  # Suite-wide kill-switch for `opencode models` / `codex models` shellouts
+  # during tests. APP_ENV=test is set by `soli test` on every test-server
+  # child regardless of which per-worker SOLIDB_DATABASE it's pointed at,
+  # so this works for `--jobs 1` and `--jobs N` alike. Cuts settings spec
+  # from 30s (84 tests × shellout latency) to under 1s.
+  (getenv("APP_ENV") ?? "") == "test"
+end
+
 # Shell out to `opencode models`, return the (possibly empty) list of
 # `provider/model` strings. Cached in the Setting table for 5 minutes so
 # we don't pay the shell exec on every page load. The cache reflects
 # whatever opencode currently has configured — providers come and go,
 # but not faster than the TTL.
 fn list_opencode_models()
+  if _models_skip_shellout()
+    return []
+  end
   cached = Setting.get_or("opencode_models_cache", nil)
   if cached != nil
     age = (cached["_cached_at"] ?? 0)
@@ -865,6 +877,9 @@ fn list_opencode_models()
 end
 
 fn list_codex_models()
+  if _models_skip_shellout()
+    return []
+  end
   cached = Setting.get_or("codex_models_cache", nil)
   if cached != nil
     age = (cached["_cached_at"] ?? 0)
