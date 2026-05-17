@@ -40,30 +40,30 @@ class Feature < Model
   # Uses in-memory filtering (consistent with PlansController pattern)
   # over the @sdbql fulltext index sits beneath for future optimization.
   static def search(project, query, offset, limit)
-    let q = (query ?? "").trim()
-    let p = (project ?? "").trim()
-    let off = offset ?? 0
-    let lim = limit ?? 10
+    q = (query ?? "").trim()
+    p = (project ?? "").trim()
+    off = offset ?? 0
+    lim = limit ?? 10
     if off < 0 then off = 0 end
     if lim < 1 then lim = 10 end
 
-    let all_raw = p == ""
+    all_raw = p == ""
       ? Feature.all()
       : Feature.where({ "project": p }).all()
-    let all = all_raw.sort_by(fn(f) f.updated_at ?? "").reverse()
+    all = all_raw.sort_by(fn(f) f.updated_at ?? "").reverse()
 
-    let filtered = q == ""
+    filtered = q == ""
       ? all
       : all.filter(fn(f)
-          let title = f.title ?? ""
-          let desc  = f.description ?? ""
+          title = f.title ?? ""
+          desc  = f.description ?? ""
           title.index_of(q) != -1 or desc.index_of(q) != -1
         end)
 
-    let total = filtered.length()
-    let end_at = off + lim
-    let results = []
-    let i = off
+    total = filtered.length()
+    end_at = off + lim
+    results = []
+    i = off
     while i < total and i < end_at
       results.push(filtered[i])
       i = i + 1
@@ -80,11 +80,11 @@ class Feature < Model
     if task == nil
       return nil
     end
-    let fslug = task.feature_slug ?? ""
+    fslug = task.feature_slug ?? ""
     if fslug == ""
       return nil
     end
-    let feature = Feature.find_by("_key", fslug)
+    feature = Feature.find_by("_key", fslug)
     if feature == nil
       return nil
     end
@@ -93,7 +93,7 @@ class Feature < Model
   end
 
   def touch_timestamps()
-    let now = DateTime.now().to_iso()
+    now = DateTime.now().to_iso()
     if self.created_at == nil
       self.created_at = now
     end
@@ -117,15 +117,15 @@ class Feature < Model
     if self._key == nil or self._key == ""
       return nil
     end
-    let new_status = self.status ?? ""
+    new_status = self.status ?? ""
     if self.last_logged_status == new_status
       return nil
     end
-    let prev = Feature.find_by("_key", self._key) rescue nil
+    prev = Feature.find_by("_key", self._key) rescue nil
     if prev == nil
       return nil
     end
-    let prev_status = prev.status ?? ""
+    prev_status = prev.status ?? ""
     if prev_status == new_status
       return nil
     end
@@ -156,19 +156,19 @@ class Feature < Model
   # hub view; callers can pass `{ "review": N, "done": N, ... }`. Falls
   # back to a single `self.tasks()` scan when not provided.
   def stage(status_counts = nil)
-    let fs = self.status ?? "draft"
+    fs = self.status ?? "draft"
     if fs == "done"
       return "ship"
     end
-    let counts = status_counts ?? Feature._stage_count_tasks(self._key)
-    let in_review = (counts["review"] ?? 0) + (counts["done"] ?? 0)
+    counts = status_counts ?? Feature._stage_count_tasks(self._key)
+    in_review = (counts["review"] ?? 0) + (counts["done"] ?? 0)
     if in_review > 0
       return "ship"
     end
-    let building = (counts["todo"] ?? 0) +
-                   (counts["queued"] ?? 0) +
-                   (counts["inprogress"] ?? 0) +
-                   (counts["failed"] ?? 0)
+    building = (counts["todo"] ?? 0) +
+      (counts["queued"] ?? 0) +
+      (counts["inprogress"] ?? 0) +
+      (counts["failed"] ?? 0)
     if fs == "in-progress" or building > 0
       return "build"
     end
@@ -181,10 +181,10 @@ class Feature < Model
   # Bucket a single feature's tasks into `{status: count}`. Used by `stage`
   # when the caller doesn't already have the data in hand.
   static def _stage_count_tasks(feature_key)
-    let h = {}
-    let rows = Task.where({ "feature_slug": feature_key }).all() rescue []
+    h = {}
+    rows = Task.where({ "feature_slug": feature_key }).all() rescue []
     for t in rows
-      let s = t.status ?? ""
+      s = t.status ?? ""
       h[s] = (h[s] ?? 0) + 1
     end
     h
@@ -207,9 +207,9 @@ class Feature < Model
     if self.status == "done"
       return false
     end
-    let any_done = false
+    any_done = false
     for t in self.tasks()
-      let s = t.status ?? ""
+      s = t.status ?? ""
       if s == "archived"
         next
       end

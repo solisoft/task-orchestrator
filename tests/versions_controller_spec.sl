@@ -3,14 +3,14 @@
 # Derive the test server's origin from a probe response's url field.
 # Needed to satisfy the CSRF middleware's Origin check on POST requests.
 def _origin_for_worker()
-  let probe = get("/login")
-  let url = probe["url"] ?? ""
-  let prefix = "http://"
+  probe = get("/login")
+  url = probe["url"] ?? ""
+  prefix = "http://"
   if not url.starts_with(prefix)
     return url
   end
-  let rest = url.substring(prefix.length(), url.length())
-  let slash = rest.index_of("/")
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
   if slash > 0
     return prefix + rest.substring(0, slash)
   end
@@ -19,7 +19,7 @@ end
 
 # Setup helper: ensure a project directory exists on disk so find_project() works.
 def _ensure_project(name)
-  let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+  root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
   System.run_sync(["mkdir", "-p", root + "/" + name + "/tasks/todo"])
   root + "/" + name
 end
@@ -39,27 +39,27 @@ describe("Version model", fn()
   end)
 
   test("validates presence of name", fn()
-    let v = Version.create({ "project": "proj", "status": "planned" })
+    v = Version.create({ "project": "proj", "status": "planned" })
     assert(v._errors != nil)
   end)
 
   test("validates presence of status", fn()
-    let v = Version.create({ "project": "proj", "name": "v1" })
+    v = Version.create({ "project": "proj", "name": "v1" })
     assert(v._errors != nil)
   end)
 
   test("validates presence of project", fn()
-    let v = Version.create({ "name": "v1", "status": "planned" })
+    v = Version.create({ "name": "v1", "status": "planned" })
     assert(v._errors != nil)
   end)
 
   test("validates status format", fn()
-    let v = Version.create({ "project": "proj", "name": "v1", "status": "invalid" })
+    v = Version.create({ "project": "proj", "name": "v1", "status": "invalid" })
     assert(v._errors != nil)
   end)
 
   test("creates with valid data", fn()
-    let v = Version.create({ "project": "proj", "name": "v1.0", "status": "planned" })
+    v = Version.create({ "project": "proj", "name": "v1.0", "status": "planned" })
     assert(v._errors == nil)
     assert_eq(v.name, "v1.0")
     assert_eq(v.status, "planned")
@@ -67,7 +67,7 @@ describe("Version model", fn()
   end)
 
   test("statuses returns the three lifecycle values", fn()
-    let s = Version.statuses()
+    s = Version.statuses()
     assert_eq(s.length(), 3)
     assert_eq(s[0], "planned")
     assert_eq(s[1], "active")
@@ -78,7 +78,7 @@ describe("Version model", fn()
     Version.create({ "project": "proj-a", "name": "v1", "status": "planned" })
     Version.create({ "project": "proj-a", "name": "v2", "status": "active" })
     Version.create({ "project": "proj-b", "name": "v1", "status": "planned" })
-    let va = Version.for_project("proj-a")
+    va = Version.for_project("proj-a")
     assert_eq(va.length(), 2)
   end)
 
@@ -90,7 +90,7 @@ describe("Version model", fn()
     Version.create({ "project": "sort-proj", "name": "shipped-one", "status": "shipped" })
     Version.create({ "project": "sort-proj", "name": "planned-one", "status": "planned" })
     Version.create({ "project": "sort-proj", "name": "active-one",  "status": "active"  })
-    let vs = Version.for_project("sort-proj")
+    vs = Version.for_project("sort-proj")
     assert_eq(vs[0].status, "active")
     assert_eq(vs[1].status, "planned")
     assert_eq(vs[2].status, "shipped")
@@ -105,11 +105,14 @@ describe("Feature.for_version", fn()
   end)
 
   test("returns features assigned to a version", fn()
-    let v = Version.create({ "project": "p", "name": "v1", "status": "planned" })
-    Feature.create({ "_key": "p--f1", "project": "p", "slug": "f1", "title": "F1", "status": "draft", "version_id": v._key })
-    Feature.create({ "_key": "p--f2", "project": "p", "slug": "f2", "title": "F2", "status": "draft", "version_id": v._key })
-    Feature.create({ "_key": "p--f3", "project": "p", "slug": "f3", "title": "F3", "status": "draft" })
-    let feats = Feature.for_version(v._key)
+    v = Version.create({ "project": "p", "name": "v1", "status": "planned" })
+    Feature.create({ "_key": "p--f1", "project": "p", "slug": "f1",
+      "title": "F1", "status": "draft", "version_id": v._key })
+    Feature.create({ "_key": "p--f2", "project": "p", "slug": "f2",
+      "title": "F2", "status": "draft", "version_id": v._key })
+    Feature.create({ "_key": "p--f3", "project": "p", "slug": "f3",
+      "title": "F3", "status": "draft" })
+    feats = Feature.for_version(v._key)
     assert_eq(feats.length(), 2)
   end)
 
@@ -122,8 +125,8 @@ describe("Feature.for_version", fn()
   end)
 
   test("existing features without version_id continue to work", fn()
-    let f = Feature.create({ "_key": "p--noversion", "project": "p", "slug": "noversion",
-                             "title": "No version", "status": "draft" })
+    f = Feature.create({ "_key": "p--noversion", "project": "p", "slug": "noversion",
+                          "title": "No version", "status": "draft" })
     assert(f._errors == nil)
     assert_null(f.version_id)
   end)
@@ -141,44 +144,44 @@ describe("VersionsController GET routes", fn()
   end)
 
   test("GET /projects/:name/versions returns 200", fn()
-    let resp = get("/projects/versions-get-proj/versions")
+    resp = get("/projects/versions-get-proj/versions")
     assert_eq(res_status(resp), 200)
   end)
 
   test("GET /projects/:name/versions returns 404 for unknown project", fn()
-    let resp = get("/projects/nonexistent_xyz_ver/versions")
+    resp = get("/projects/nonexistent_xyz_ver/versions")
     assert_eq(res_status(resp), 404)
   end)
 
   test("GET /projects/:name/versions/new returns 200", fn()
-    let resp = get("/projects/versions-get-proj/versions/new")
+    resp = get("/projects/versions-get-proj/versions/new")
     assert_eq(res_status(resp), 200)
   end)
 
   test("GET /projects/:name/versions/new returns 404 for unknown project", fn()
-    let resp = get("/projects/nonexistent_xyz_ver/versions/new")
+    resp = get("/projects/nonexistent_xyz_ver/versions/new")
     assert_eq(res_status(resp), 404)
   end)
 
   test("GET /projects/:name/versions/:id returns 200 for existing version", fn()
-    let v = _make_version("versions-get-proj", "v1.0", "planned")
-    let resp = get("/projects/versions-get-proj/versions/" + v._key)
+    v = _make_version("versions-get-proj", "v1.0", "planned")
+    resp = get("/projects/versions-get-proj/versions/" + v._key)
     assert_eq(res_status(resp), 200)
   end)
 
   test("GET /projects/:name/versions/:id returns 404 for missing version", fn()
-    let resp = get("/projects/versions-get-proj/versions/no-such-version-key")
+    resp = get("/projects/versions-get-proj/versions/no-such-version-key")
     assert_eq(res_status(resp), 404)
   end)
 
   test("GET /projects/:name/versions/:id/edit returns 200", fn()
-    let v = _make_version("versions-get-proj", "v2.0-edit", "planned")
-    let resp = get("/projects/versions-get-proj/versions/" + v._key + "/edit")
+    v = _make_version("versions-get-proj", "v2.0-edit", "planned")
+    resp = get("/projects/versions-get-proj/versions/" + v._key + "/edit")
     assert_eq(res_status(resp), 200)
   end)
 
   test("GET /projects/:name/versions/:id/edit returns 404 for missing version", fn()
-    let resp = get("/projects/versions-get-proj/versions/no-such-key/edit")
+    resp = get("/projects/versions-get-proj/versions/no-such-key/edit")
     assert_eq(res_status(resp), 404)
   end)
 end)
@@ -195,19 +198,19 @@ describe("VersionsController CRUD", fn()
   end)
 
   test("POST /projects/:name/versions creates a version and redirects", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions", {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions", {
       "name": "v1.0", "status": "planned"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 302)
-    let vs = Version.for_project("versions-crud-proj")
+    vs = Version.for_project("versions-crud-proj")
     assert_eq(vs.length(), 1)
     assert_eq(vs[0].name, "v1.0")
   end)
 
   test("POST /projects/:name/versions returns 422 on blank name", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions", {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions", {
       "name": "", "status": "planned"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 422)
@@ -215,49 +218,49 @@ describe("VersionsController CRUD", fn()
   end)
 
   test("POST /projects/:name/versions returns 404 for unknown project", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/nonexistent_xyz_ver/versions", {
+    origin = _origin_for_worker()
+    resp = post("/projects/nonexistent_xyz_ver/versions", {
       "name": "v1", "status": "planned"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 404)
   end)
 
   test("POST /projects/:name/versions/:id/update updates name and status", fn()
-    let v = _make_version("versions-crud-proj", "original-name", "planned")
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
+    v = _make_version("versions-crud-proj", "original-name", "planned")
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
       "name": "updated-name", "status": "active"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 302)
-    let reloaded = Version.find_by("_key", v._key)
+    reloaded = Version.find_by("_key", v._key)
     assert_not_null(reloaded)
     assert_eq(reloaded.name, "updated-name")
     assert_eq(reloaded.status, "active")
   end)
 
   test("POST /projects/:name/versions/:id/update returns 422 on blank name", fn()
-    let v = _make_version("versions-crud-proj", "valid-ver", "planned")
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
+    v = _make_version("versions-crud-proj", "valid-ver", "planned")
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
       "name": "", "status": "planned"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 422)
-    let unchanged = Version.find_by("_key", v._key)
+    unchanged = Version.find_by("_key", v._key)
     assert_eq(unchanged.name, "valid-ver")
   end)
 
   test("POST /projects/:name/versions/:id/update returns 404 for missing version", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/no-such-key/update", {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/no-such-key/update", {
       "name": "x", "status": "planned"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 404)
   end)
 
   test("POST /projects/:name/versions/:id/destroy deletes the version", fn()
-    let v = _make_version("versions-crud-proj", "to-delete", "planned")
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/" + v._key + "/destroy", {}, {
+    v = _make_version("versions-crud-proj", "to-delete", "planned")
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/" + v._key + "/destroy", {}, {
       "headers": { "Origin": origin }
     })
     assert_eq(res_status(resp), 302)
@@ -265,16 +268,16 @@ describe("VersionsController CRUD", fn()
   end)
 
   test("POST /projects/:name/versions/:id/destroy returns 404 for missing version", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/no-such-key/destroy", {}, {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/no-such-key/destroy", {}, {
       "headers": { "Origin": origin }
     })
     assert_eq(res_status(resp), 404)
   end)
 
   test("POST /projects/:name/versions returns 422 on model validation failure", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions", {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions", {
       "name": "v-bad", "status": "not-a-valid-status"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 422)
@@ -282,19 +285,19 @@ describe("VersionsController CRUD", fn()
   end)
 
   test("POST /projects/:name/versions/:id/update returns 422 on invalid status format", fn()
-    let v = _make_version("versions-crud-proj", "format-test", "planned")
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
+    v = _make_version("versions-crud-proj", "format-test", "planned")
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions/" + v._key + "/update", {
       "name": "format-test", "status": "not-a-valid-status"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 422)
-    let unchanged = Version.find_by("_key", v._key)
+    unchanged = Version.find_by("_key", v._key)
     assert_eq(unchanged.status, "planned")
   end)
 
   test("POST /projects/:name/versions creates version with all optional fields", fn()
-    let origin = _origin_for_worker()
-    let resp = post("/projects/versions-crud-proj/versions", {
+    origin = _origin_for_worker()
+    resp = post("/projects/versions-crud-proj/versions", {
       "name":        "Full Cycle",
       "code_name":   "Nighthawk",
       "status":      "active",
@@ -302,7 +305,7 @@ describe("VersionsController CRUD", fn()
       "description": "Our biggest release yet"
     }, { "headers": { "Origin": origin } })
     assert_eq(res_status(resp), 302)
-    let vs = Version.for_project("versions-crud-proj")
+    vs = Version.for_project("versions-crud-proj")
     assert_eq(vs.length(), 1)
     assert_eq(vs[0].code_name,   "Nighthawk")
     assert_eq(vs[0].due_date,    "2026-09-01")
@@ -322,25 +325,25 @@ describe("ProjectsController hub tabs with versions", fn()
   end)
 
   test("GET /projects/:name?tab=roadmap returns 200 and renders roadmap", fn()
-    let resp = get("/projects/hub-tab-proj?tab=roadmap")
+    resp = get("/projects/hub-tab-proj?tab=roadmap")
     assert_eq(res_status(resp), 200)
     assert_contains(res_body(resp), "Roadmap")
   end)
 
   test("GET /projects/:name?tab=overview (legacy) aliases to Cycles", fn()
-    let resp = get("/projects/hub-tab-proj?tab=overview")
+    resp = get("/projects/hub-tab-proj?tab=overview")
     assert_eq(res_status(resp), 200)
     assert_contains(res_body(resp), "Roadmap")
   end)
 
   test("GET /projects/:name?tab=board (legacy) aliases to Build", fn()
-    let resp = get("/projects/hub-tab-proj?tab=board")
+    resp = get("/projects/hub-tab-proj?tab=board")
     assert_eq(res_status(resp), 200)
     assert_contains(res_body(resp), "Build")
   end)
 
   test("GET /projects/:name without tab defaults to the Build hub", fn()
-    let resp = get("/projects/hub-tab-proj")
+    resp = get("/projects/hub-tab-proj")
     assert_eq(res_status(resp), 200)
     assert_contains(res_body(resp), "Build")
   end)
@@ -350,7 +353,7 @@ describe("ProjectsController hub tabs with versions", fn()
     User.register("hub-v@test.com", "password", "Hub")
     login("hub-v@test.com", "password")
     Version.create({ "project": "hub-tab-proj", "name": "Sprint One", "status": "active" })
-    let resp = get("/projects/hub-tab-proj?tab=roadmap")
+    resp = get("/projects/hub-tab-proj?tab=roadmap")
     assert_eq(res_status(resp), 200)
     assert_contains(res_body(resp), "Sprint One")
   end)

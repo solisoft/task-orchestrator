@@ -211,7 +211,7 @@ class ThemePreset < Model
         return p
       end
     end
-    let custom = ThemePreset.find_by("_key", key)
+    custom = ThemePreset.find_by("_key", key)
     if custom == nil
       return nil
     end

@@ -14,7 +14,7 @@ describe("Plan.effective_status", fn() {
     })
 
     test("returns the raw status for terminal: done", fn() {
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-test-done",
             "project": "x",
             "plan_id": "plan-test-done",
@@ -25,7 +25,7 @@ describe("Plan.effective_status", fn() {
     })
 
     test("returns the raw status for terminal: failed:*", fn() {
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-test-failed",
             "project": "x",
             "plan_id": "plan-test-failed",
@@ -41,9 +41,9 @@ describe("Plan.effective_status", fn() {
         # kill needed (and `kill` is forbidden by CLAUDE.md anyway).
         # Cannot use `bash -c "echo $$"` — that subprocess exits before
         # the assertion runs.
-        let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
-        let live_pid = spawn["stdout"].trim().to_int()
-        let plan = Plan.create({
+        spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+        live_pid = spawn["stdout"].trim().to_int()
+        plan = Plan.create({
             "_key":    "plan-test-alive",
             "project": "x",
             "plan_id": "plan-test-alive",
@@ -56,14 +56,14 @@ describe("Plan.effective_status", fn() {
     test("synthesizes failed:zombie when pid is dead", fn() {
         # PID 2^31 - 1 is reserved as "no process" on Linux — kill -0
         # against it always returns ESRCH.
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-test-zombie",
             "project": "x",
             "plan_id": "plan-test-zombie",
             "status":  "starting",
             "pid":     2147483647
         })
-        let s = plan.effective_status
+        s = plan.effective_status
         assert(s.starts_with("failed:zombie"))
     })
 
@@ -71,7 +71,7 @@ describe("Plan.effective_status", fn() {
         # No pid + stale updated_at → heartbeat path. Updated_at is set
         # by the touch_timestamps callback to now, so override it after
         # creation (save() refreshes it; bypass via direct AQL).
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-test-heartbeat",
             "project": "x",
             "plan_id": "plan-test-heartbeat",
@@ -85,7 +85,7 @@ describe("Plan.effective_status", fn() {
     })
 
     test("prompt_preview returns the whole prompt under the cap", fn() {
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-prev-short",
             "project": "x",
             "plan_id": "plan-prev-short",
@@ -96,20 +96,20 @@ describe("Plan.effective_status", fn() {
     })
 
     test("prompt_preview truncates with ellipsis above the cap", fn() {
-        let long = ""
-        let i = 0
+        long = ""
+        i = 0
         while i < 120
             long = long + "a"
             i = i + 1
         end
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-prev-long",
             "project": "x",
             "plan_id": "plan-prev-long",
             "status":  "done",
             "prompt":  long
         })
-        let out = plan.prompt_preview(100)
+        out = plan.prompt_preview(100)
         # The ellipsis is multi-byte under UTF-8 (Soli .length returns
         # bytes), so check the byte count is 100 'a's + 3 for "…".
         assert_eq(out.length(), 103)
@@ -117,7 +117,7 @@ describe("Plan.effective_status", fn() {
     })
 
     test("prompt_preview collapses newlines into single line", fn() {
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-prev-nl",
             "project": "x",
             "plan_id": "plan-prev-nl",
@@ -128,7 +128,7 @@ describe("Plan.effective_status", fn() {
     })
 
     test("keeps starting when no pid and updated_at is recent", fn() {
-        let plan = Plan.create({
+        plan = Plan.create({
             "_key":    "plan-test-recent",
             "project": "x",
             "plan_id": "plan-test-recent",
@@ -148,8 +148,8 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
     })
 
     test("connect → snapshot returns the entire log as one chunk", fn() {
-        let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
-        let live_pid = spawn["stdout"].trim().to_int()
+        spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+        live_pid = spawn["stdout"].trim().to_int()
         Plan.create({
             "_key":    "plan-stream-snap",
             "project": "x",
@@ -158,7 +158,7 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
             "log":     "boot...\nready\n",
             "pid":     live_pid
         })
-        let p = plan_stream_payload("plan-stream-snap", "connect", 0)
+        p = plan_stream_payload("plan-stream-snap", "connect", 0)
         assert_eq(p["event"], "snapshot")
         assert_eq(p["log_chunk"], "boot...\nready\n")
         assert_eq(p["log_offset"], "boot...\nready\n".length)
@@ -166,8 +166,8 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
     })
 
     test("tick → delta only the bytes past the cursor", fn() {
-        let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
-        let live_pid = spawn["stdout"].trim().to_int()
+        spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+        live_pid = spawn["stdout"].trim().to_int()
         Plan.create({
             "_key":    "plan-stream-delta",
             "project": "x",
@@ -176,7 +176,7 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
             "log":     "abcdefghij",
             "pid":     live_pid
         })
-        let p = plan_stream_payload("plan-stream-delta", "message", 4)
+        p = plan_stream_payload("plan-stream-delta", "message", 4)
         assert_eq(p["event"], "delta")
         assert_eq(p["log_chunk"], "efghij")
         assert_eq(p["log_offset"], 10)
@@ -190,12 +190,12 @@ describe("plan_stream_payload — model-layer builder for the plan/feature WS fr
             "status":  "done",
             "log":     "all green\n"
         })
-        let p = plan_stream_payload("plan-stream-done", "message", 0)
+        p = plan_stream_payload("plan-stream-done", "message", 0)
         assert_eq(p["terminal"], true)
     })
 
     test("unknown plan returns an error frame", fn() {
-        let p = plan_stream_payload("plan-stream-missing", "connect", 0)
+        p = plan_stream_payload("plan-stream-missing", "connect", 0)
         assert_eq(p["event"], "error")
         assert_eq(p["terminal"], true)
     })
@@ -293,7 +293,7 @@ describe("Plan.allowed_model_ids", fn() {
 
     test("returns the persisted allowlist", fn() {
         Setting.set("allowed_models", ["claude-opus-4-7", "codex/gpt-4o"])
-        let ids = Plan.allowed_model_ids()
+        ids = Plan.allowed_model_ids()
         assert_eq(ids.length(), 2)
         assert(ids.contains("claude-opus-4-7"))
         assert(ids.contains("codex/gpt-4o"))
@@ -324,14 +324,14 @@ describe("Plan.is_allowed_model", fn() {
 
 describe("Plan.claude_model_ids / claude_model_labels", fn() {
     test("claude_model_ids returns the expected list", fn() {
-        let ids = Plan.claude_model_ids()
+        ids = Plan.claude_model_ids()
         assert(ids.contains("claude-opus-4-7"))
         assert(ids.contains("claude-sonnet-4-6"))
         assert_eq(ids.length(), 3)
     })
 
     test("claude_model_labels maps every id to a friendly label", fn() {
-        let labels = Plan.claude_model_labels()
+        labels = Plan.claude_model_labels()
         for id in Plan.claude_model_ids()
             assert_hash_has_key(labels, id)
         end
@@ -345,22 +345,22 @@ describe("Plan.filter_allowed", fn() {
     })
 
     test("passes through when allowlist is empty", fn() {
-        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
         assert_eq(Plan.filter_allowed(ids, ""), ids)
     })
 
     test("filters to only allowlisted ids", fn() {
         Setting.set("allowed_models", ["claude-opus-4-7"])
-        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
-        let filtered = Plan.filter_allowed(ids, "")
+        ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        filtered = Plan.filter_allowed(ids, "")
         assert_eq(filtered.length(), 1)
         assert_eq(filtered[0], "claude-opus-4-7")
     })
 
     test("always keeps the current selection even if outside allowlist", fn() {
         Setting.set("allowed_models", ["claude-opus-4-7"])
-        let ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
-        let filtered = Plan.filter_allowed(ids, "claude-haiku-4-5-20251001")
+        ids = ["claude-opus-4-7", "claude-haiku-4-5-20251001"]
+        filtered = Plan.filter_allowed(ids, "claude-haiku-4-5-20251001")
         assert(filtered.contains("claude-haiku-4-5-20251001"))
     })
 })

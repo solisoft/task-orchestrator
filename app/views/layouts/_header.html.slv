@@ -1,5 +1,5 @@
-<% let _user    = locals["current_user"] ?? nil %>
-<% let _project = locals["current_project"] ?? nil %>
+<% _user    = locals["current_user"] ?? nil %>
+<% _project = locals["current_project"] ?? nil %>
 <nav data-shared-header class="border-b border-white/10 bg-slate-900/40 backdrop-blur-sm">
   <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
     <a href="/" class="flex items-center gap-2 text-sm font-semibold tracking-tight gradient-text">
@@ -29,9 +29,9 @@
         </svg>
       </button>
       <% if _user != nil %>
-        <% let _name = (_user.display_name ?? _user.email ?? "").trim() %>
+        <% _name = (_user.display_name ?? _user.email ?? "").trim() %>
         <% if _name == "" %><% _name = "User" %><% end %>
-        <% let _initials = "" %>
+        <% _initials = "" %>
         <% for _part in _name.split(" ") %>
           <% if _part.length() > 0 and _initials.length() < 2 %>
             <% _initials = _initials + _part.substring(0, 1).upcase() %>

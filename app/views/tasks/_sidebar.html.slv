@@ -1,4 +1,4 @@
-<% let body_for_render = strip_title_heading(task.body_md ?? "") %>
+<% body_for_render = strip_title_heading(task.body_md ?? "") %>
 <div class="space-y-5 animate-fade-in">
   <header class="space-y-2">
     <p class="text-xs text-slate-500 font-mono"><%= task.project %> / <%= task.slug %></p>

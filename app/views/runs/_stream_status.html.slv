@@ -1,6 +1,6 @@
-<% let token = status == nil ? nil : status["status"] %>
-<% let pill = task_status_pill(token) %>
-<% let elapsed = status == nil ? "" : task_format_elapsed(status["at"]) %>
+<% token = status == nil ? nil : status["status"] %>
+<% pill = task_status_pill(token) %>
+<% elapsed = status == nil ? "" : task_format_elapsed(status["at"]) %>
 <span class="inline-flex items-center gap-2 rounded-full border <%= task_status_pill_classes(pill["tone"]) %> px-3 py-1 text-sm font-medium">
   <% if pill["tone"] == "amber" %>
     <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>

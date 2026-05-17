@@ -12,7 +12,7 @@ class AgentConfig < Model
   validates("_key", { "presence": true })
 
   static def get(key)
-    let c = AgentConfig.find_by("_key", key)
+    c = AgentConfig.find_by("_key", key)
     if c == nil
       return nil
     end
@@ -20,7 +20,7 @@ class AgentConfig < Model
   end
 
   static def get_or(key, default_value)
-    let v = AgentConfig.get(key)
+    v = AgentConfig.get(key)
     if v == nil
       return default_value
     end
@@ -28,7 +28,7 @@ class AgentConfig < Model
   end
 
   static def set(key, value)
-    let existing = AgentConfig.find_by("_key", key)
+    existing = AgentConfig.find_by("_key", key)
     if existing == nil
       return AgentConfig.create({ "_key": key, "value": value })
     end
@@ -42,7 +42,7 @@ class AgentConfig < Model
   # of N. Missing keys are simply absent from the hash; callers read
   # `hash[key] ?? default` to recover the "unset means enabled" rule.
   static def all_as_hash()
-    let h = {}
+    h = {}
     for c in AgentConfig.all()
       h[c._key] = c.value
     end
@@ -50,10 +50,10 @@ class AgentConfig < Model
   end
 
   static def enabled_agents(all_agents)
-    let configs = AgentConfig.all_as_hash()
-    let enabled = []
+    configs = AgentConfig.all_as_hash()
+    enabled = []
     for a in all_agents
-      let v = configs[a]
+      v = configs[a]
       # Unset (`nil`) means enabled by default — the row only exists
       # once the user has explicitly flipped the agent off (or on).
       if v == nil or v != false

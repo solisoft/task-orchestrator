@@ -24,7 +24,7 @@
           <div class="rounded-xl glass-card border border-white/5 px-5 py-3 flex items-center justify-between gap-4">
             <div>
               <span class="text-slate-100 font-medium"><%= h(v.name) %></span>
-              <% let _vcn = (v.code_name ?? "").trim() %>
+              <% _vcn = (v.code_name ?? "").trim() %>
               <% if _vcn != "" %>
                 <span class="ml-2 text-xs font-mono text-slate-500 italic">&ldquo;<%= h(_vcn) %>&rdquo;</span>
               <% end %>

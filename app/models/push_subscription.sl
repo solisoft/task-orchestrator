@@ -26,8 +26,8 @@ class PushSubscription < Model
   # (the browser may have rotated keys); otherwise create a new row.
   # Returns the persisted instance — caller should check `_errors`.
   static def upsert(attrs)
-    let endpoint = attrs["endpoint"]
-    let existing = PushSubscription.find_by_endpoint(endpoint)
+    endpoint = attrs["endpoint"]
+    existing = PushSubscription.find_by_endpoint(endpoint)
     if existing == nil
       return PushSubscription.create(attrs)
     end
@@ -43,7 +43,7 @@ class PushSubscription < Model
   # and by the helper when the push service responds 404/410 (dead
   # endpoint — don't keep retrying).
   static def remove_by_endpoint(endpoint)
-    let existing = PushSubscription.find_by_endpoint(endpoint)
+    existing = PushSubscription.find_by_endpoint(endpoint)
     if existing == nil
       return false
     end

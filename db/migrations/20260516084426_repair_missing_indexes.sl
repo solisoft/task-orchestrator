@@ -55,9 +55,12 @@ fn up(db: Any) -> Any {
     _safe_create(db, "activity_logs", "idx_activity_logs_task_key",    ["task_key"],        { "sparse": true });
     _safe_create(db, "activity_logs", "idx_activity_logs_feature_key", ["feature_key"],     { "sparse": true });
     // code_reviews
-    _safe_create(db, "code_reviews", "idx_code_reviews_project_slug_review_id", ["project", "slug", "review_id"], { "unique": true });
-    _safe_create(db, "code_reviews", "idx_code_reviews_project_slug",           ["project", "slug"],              { "sparse": true });
-    _safe_create(db, "code_reviews", "idx_code_reviews_status",                 ["status"],                       { "sparse": true });
+    _safe_create(db, "code_reviews", "idx_code_reviews_project_slug_review_id",
+      ["project", "slug", "review_id"], { "unique": true });
+  _safe_create(db, "code_reviews", "idx_code_reviews_project_slug",
+      ["project", "slug"], { "sparse": true });
+  _safe_create(db, "code_reviews", "idx_code_reviews_status",
+      ["status"], { "sparse": true });
     // versions
     _safe_create(db, "versions", "idx_versions_project_name",   ["project", "name"],        { "unique": true });
     _safe_create(db, "versions", "idx_versions_project_status", ["project", "status"],      { "sparse": true });

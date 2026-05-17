@@ -31,7 +31,7 @@ class CodeReview < Model
   # Append to the log column atomically — bin/review-run writes one
   # rendered line at a time, mirroring Plan.append_log.
   static def append_log(review_id, text)
-    let row = CodeReview.find_by_review_id(review_id)
+    row = CodeReview.find_by_review_id(review_id)
     if row != nil
       row.log = (row.log ?? "") + text
       row.save()
@@ -39,7 +39,7 @@ class CodeReview < Model
   end
 
   static def append_status(review_id, status)
-    let row = CodeReview.find_by_review_id(review_id)
+    row = CodeReview.find_by_review_id(review_id)
     if row != nil
       row.status = status
       row.updated_at = DateTime.now().to_iso()
@@ -51,16 +51,16 @@ class CodeReview < Model
   # handler can flip a stuck `starting`/`running` row to `failed:zombie`
   # when the runner is gone and the heartbeat is stale.
   def effective_status()
-    let s = self.status ?? ""
+    s = self.status ?? ""
     if s == "done" or s.starts_with("failed:")
       return s
     end
-    let alive = CodeReview._pid_alive(self.pid)
+    alive = CodeReview._pid_alive(self.pid)
     if alive == false
       return "failed:zombie (no live process)"
     end
     if alive == nil
-      let age = self._stale_seconds()
+      age = self._stale_seconds()
       if age != nil and age > 600
         return "failed:zombie (no heartbeat for " + str(age / 60) + "m)"
       end
@@ -72,7 +72,7 @@ class CodeReview < Model
     if pid == nil
       return nil
     end
-    let res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
+    res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
     res["exit_code"] == 0
   end
 
@@ -80,7 +80,7 @@ class CodeReview < Model
     if self.updated_at == nil or self.updated_at == ""
       return nil
     end
-    let prior = DateTime.parse(self.updated_at).to_unix() rescue nil
+    prior = DateTime.parse(self.updated_at).to_unix() rescue nil
     if prior == nil
       return nil
     end
@@ -91,21 +91,21 @@ class CodeReview < Model
     if self._key == nil or self._key == ""
       return nil
     end
-    let new_status = self.status ?? ""
+    new_status = self.status ?? ""
     if self.last_notified_status == new_status
       return nil
     end
-    let prev = CodeReview.find_by("_key", self._key) rescue nil
+    prev = CodeReview.find_by("_key", self._key) rescue nil
     if prev == nil
       return nil
     end
-    let prev_status = prev.status ?? ""
+    prev_status = prev.status ?? ""
     if prev_status == new_status
       return nil
     end
     self.last_notified_status = new_status
-    let title = "Code Review: " + (self.slug ?? "")
-    let url = "/projects/" + (self.project ?? "") + "/tasks/" + (self.slug ?? "")
+    title = "Code Review: " + (self.slug ?? "")
+    url = "/projects/" + (self.project ?? "") + "/tasks/" + (self.slug ?? "")
     web_push_send_to_all({
       "title":  title,
       "status": new_status,
@@ -114,26 +114,26 @@ class CodeReview < Model
   end
 
   def verdict()
-    let b = self.body ?? ""
+    b = self.body ?? ""
     if b == ""
       return nil
     end
-    let marker = "**Verdict:**"
-    let parts = b.split(marker)
+    marker = "**Verdict:**"
+    parts = b.split(marker)
     if parts.length() < 2
-      let plain_parts = b.split("Verdict:")
+      plain_parts = b.split("Verdict:")
       if plain_parts.length() < 2
         return nil
       end
-      let raw = plain_parts[1].split("\n")[0].trim()
-      let words = raw.split(" ")
+      raw = plain_parts[1].split("\n")[0].trim()
+      words = raw.split(" ")
       if words.length() > 0 and words[0].length() > 0
         return words[0].replace("**", "")
       end
       return nil
     end
-    let line = parts[1].split("\n")[0].trim()
-    let words = line.split(" ")
+    line = parts[1].split("\n")[0].trim()
+    words = line.split(" ")
     if words.length() > 0 and words[0].length() > 0
       return words[0].replace("**", "")
     end
@@ -141,7 +141,7 @@ class CodeReview < Model
   end
 
   def touch_timestamps()
-    let now = DateTime.now().to_iso()
+    now = DateTime.now().to_iso()
     if self.created_at == nil
       self.created_at = now
     end
@@ -154,26 +154,26 @@ end
 # delta/snapshot shape as plan_stream_payload so the same client
 # controller in public/run-stream.js can drive both.
 fn code_review_stream_payload(review_id, event_type, offset)
-  let row = CodeReview.find_by_review_id(review_id)
+  row = CodeReview.find_by_review_id(review_id)
   if row == nil
     return { "event": "error", "terminal": true, "message": "unknown review" }
   end
-  let cursor = offset
+  cursor = offset
   if cursor == nil or cursor < 0
     cursor = 0
   end
-  let log = row.log ?? ""
-  let size = log.length
+  log = row.log ?? ""
+  size = log.length
   if cursor > size
     cursor = 0
   end
-  let chunk = ""
+  chunk = ""
   if cursor < size
     chunk = log.substring(cursor, size)
   end
-  let status_token = row.effective_status
-  let done = status_token == "done"
-  let failed = status_token.starts_with("failed:")
+  status_token = row.effective_status
+  done = status_token == "done"
+  failed = status_token.starts_with("failed:")
   {
     "event":      event_type == "connect" ? "snapshot" : "delta",
     "log_chunk":  chunk,

@@ -1,6 +1,6 @@
-<% let _theme       = theme ?? "dark" %>
-<% let _theme_vars  = locals["theme_css_vars"] ?? {} %>
-<% let _theme_class = locals["theme_class"] ?? (_theme == "light" ? "light" : "dark") %>
+<% _theme       = theme ?? "dark" %>
+<% _theme_vars  = locals["theme_css_vars"] ?? {} %>
+<% _theme_class = locals["theme_class"] ?? (_theme == "light" ? "light" : "dark") %>
 <!DOCTYPE html>
 <html lang="en" class="h-full <%= _theme_class %>" data-theme="<%= h(_theme) %>">
 <head>

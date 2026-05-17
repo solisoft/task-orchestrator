@@ -62,7 +62,7 @@
       </div>
     <% end %>
 
-    <% let _body = (task.body_md ?? "").trim() %>
+    <% _body = (task.body_md ?? "").trim() %>
     <% if _body == "" %>
       <%- render_partial("runs/log", {
         "project": project,

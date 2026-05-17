@@ -137,15 +137,15 @@
         <p class="mt-1 text-xs text-slate-500">Click a card to apply.</p>
         <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4" id="preset-grid">
           <% for preset in presets %>
-            <% let _cv = preset["css_vars"] %>
-            <% let _bg      = _cv["--color-bg"]      ?? "#0f172a" %>
-            <% let _surface = _cv["--color-surface"] ?? "#1e293b" %>
-            <% let _text    = _cv["--color-text"]    ?? "#e2e8f0" %>
-            <% let _muted   = _cv["--color-muted"]   ?? "#64748b" %>
-            <% let _accent  = _cv["--color-accent"]  ?? "#6366f1" %>
-            <% let _success = _cv["--color-success"] ?? "#10b981" %>
-            <% let _warning = _cv["--color-warning"] ?? "#f59e0b" %>
-            <% let _danger  = _cv["--color-danger"]  ?? "#ef4444" %>
+            <% _cv = preset["css_vars"] %>
+            <% _bg      = _cv["--color-bg"]      ?? "#0f172a" %>
+            <% _surface = _cv["--color-surface"] ?? "#1e293b" %>
+            <% _text    = _cv["--color-text"]    ?? "#e2e8f0" %>
+            <% _muted   = _cv["--color-muted"]   ?? "#64748b" %>
+            <% _accent  = _cv["--color-accent"]  ?? "#6366f1" %>
+            <% _success = _cv["--color-success"] ?? "#10b981" %>
+            <% _warning = _cv["--color-warning"] ?? "#f59e0b" %>
+            <% _danger  = _cv["--color-danger"]  ?? "#ef4444" %>
             <div class="preset-card rounded-xl border border-white/10 overflow-hidden cursor-pointer hover:border-indigo-400/50 transition-colors"
                  data-preset-key="<%= preset["_key"] %>"
                  data-css-vars='<%- JSON.stringify(_cv) %>'>

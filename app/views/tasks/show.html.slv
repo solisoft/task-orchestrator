@@ -1,4 +1,4 @@
-<% let body_for_render = strip_title_heading(task.body_md ?? "") %>
+<% body_for_render = strip_title_heading(task.body_md ?? "") %>
 <div class="min-h-screen text-white">
   <div class="max-w-4xl mx-auto px-6 py-8">
     <%- partial("shared/breadcrumbs", { "crumbs": [
@@ -22,7 +22,7 @@
           <span>
             Status:
             <span class="inline-block rounded-md bg-indigo-500/20 text-indigo-300 px-2 py-0.5 text-xs font-medium ml-1"><%= task.status %></span>
-            <% let _agent = (task.agent_type ?? "").trim() %>
+            <% _agent = (task.agent_type ?? "").trim() %>
             <% if _agent != "" %>
               <span>Agent: <span class="text-slate-400"><%= _agent %></span></span>
             <% end %>
@@ -34,12 +34,12 @@
               <% end %>
             <% end %>
           </span>
-          <% let _author = (task.author ?? "").trim() %>
+          <% _author = (task.author ?? "").trim() %>
           <% if _author != "" %>
             <span>by <span class="text-slate-400"><%= _author %></span></span>
           <% end %>
           <% if task.feature_slug != nil and task.feature_slug != "" %>
-            <% let _feature_label = (feature != nil and feature.title != nil and feature.title != "") ? feature.title : task.feature_slug %>
+            <% _feature_label = (feature != nil and feature.title != nil and feature.title != "") ? feature.title : task.feature_slug %>
             <a href="/features/<%= task.feature_slug %>" class="inline-flex items-center gap-1 rounded-full bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 hover:text-sky-200 border border-sky-400/30 px-2.5 py-0.5 text-xs font-medium transition-colors">
               Feature: <%= _feature_label %>
             </a>

@@ -9,7 +9,7 @@ def _home_reset_state()
 end
 
 def _home_iso_seconds_ago(seconds_ago)
-  let unix = DateTime.now().to_unix() - seconds_ago
+  unix = DateTime.now().to_unix() - seconds_ago
   return DateTime.from_unix(unix).to_iso()
 end
 
@@ -22,12 +22,12 @@ describe("HomeController", fn()
     end)
 
     test("returns 200", fn()
-      let response = get("/")
+      response = get("/")
       assert_eq(res_status(response), 200)
     end)
 
     test("renders the landing page title", fn()
-      let response = get("/")
+      response = get("/")
       assert_contains(res_body(response), "Task Orchestrator")
     end)
   end)
@@ -42,14 +42,14 @@ describe("HomeController", fn()
     end)
 
     test("returns 200 with the Workspace heading", fn()
-      let response = get("/")
+      response = get("/")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Workspace")
     end)
 
     test("renders every section header even when empty", fn()
-      let response = get("/")
-      let body = res_body(response)
+      response = get("/")
+      body = res_body(response)
       assert_contains(body, "Awaiting your review")
       assert_contains(body, "Recently failed")
       assert_contains(body, "Long-running")
@@ -65,8 +65,8 @@ describe("HomeController", fn()
         "status":     "review",
         "updated_at": _home_iso_seconds_ago(60)
       })
-      let response = get("/")
-      let body = res_body(response)
+      response = get("/")
+      body = res_body(response)
       assert_contains(body, "Needs review")
       assert_contains(body, "/projects/wkspc/tasks/rev")
     end)
@@ -90,8 +90,8 @@ describe("HomeController", fn()
         "finished_at":  _home_iso_seconds_ago(200000),
         "updated_at":   _home_iso_seconds_ago(200000)
       })
-      let response = get("/")
-      let body = res_body(response)
+      response = get("/")
+      body = res_body(response)
       assert_contains(body, "Just failed")
     end)
 
@@ -114,8 +114,8 @@ describe("HomeController", fn()
         "started_at": _home_iso_seconds_ago(120),
         "updated_at": _home_iso_seconds_ago(120)
       })
-      let response = get("/")
-      let body = res_body(response)
+      response = get("/")
+      body = res_body(response)
       assert_contains(body, "Long agent")
     end)
 
@@ -130,14 +130,14 @@ describe("HomeController", fn()
         "updated_at":  _home_iso_seconds_ago(120),
         "pr_url":      "https://github.com/acme/repo/pull/9"
       })
-      let response = get("/")
-      let body = res_body(response)
+      response = get("/")
+      body = res_body(response)
       assert_contains(body, "Shipped one")
       assert_contains(body, "github.com/acme/repo/pull/9")
     end)
 
     test("renders the shared header", fn()
-      let response = get("/")
+      response = get("/")
       assert_contains(res_body(response), "data-shared-header")
     end)
   end)

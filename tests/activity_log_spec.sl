@@ -10,7 +10,7 @@ describe("ActivityLog model", fn()
   end)
 
   test("create stamps changed_at when missing", fn()
-    let row = ActivityLog.create({
+    row = ActivityLog.create({
       "task_key":   "proj--row1",
       "to_status":  "queued"
     })
@@ -20,12 +20,12 @@ describe("ActivityLog model", fn()
   end)
 
   test("validates to_status presence", fn()
-    let row = ActivityLog.create({})
+    row = ActivityLog.create({})
     assert(row._errors != nil)
   end)
 
   test("log_status_change persists the full transition tuple", fn()
-    let row = ActivityLog.log_status_change(
+    row = ActivityLog.log_status_change(
       "proj--alpha", nil, "todo", "queued", "alice@example.com"
     )
     assert(row._errors == nil)
@@ -38,7 +38,7 @@ describe("ActivityLog model", fn()
   end)
 
   test("log_status_change coerces nil changed_by to empty string", fn()
-    let row = ActivityLog.log_status_change(
+    row = ActivityLog.log_status_change(
       "proj--beta", nil, "todo", "queued", nil
     )
     assert_eq(row.changed_by, "")
@@ -57,7 +57,7 @@ describe("ActivityLog model", fn()
       "to_status":   "inprogress",
       "changed_at":  "2026-05-13T11:00:00Z"
     })
-    let rows = ActivityLog.for_task("proj--key")
+    rows = ActivityLog.for_task("proj--key")
     assert_eq(rows.length(), 2)
     assert_eq(rows[0].to_status, "inprogress")
     assert_eq(rows[1].to_status, "queued")
@@ -76,7 +76,7 @@ describe("ActivityLog model", fn()
       "to_status":   "ready",
       "changed_at":  "2026-05-13T10:00:00Z"
     })
-    let rows = ActivityLog.for_feature("proj--feat")
+    rows = ActivityLog.for_feature("proj--feat")
     assert_eq(rows.length(), 1)
     assert_eq(rows[0].feature_key, "proj--feat")
   end)
@@ -85,8 +85,8 @@ end)
 # Helper: rows from this spec only, so other specs touching the
 # `activity_logs` collection don't bleed into our counts.
 def _al_for_task(key)
-  let rows = ActivityLog.for_task(key)
-  let out = []
+  rows = ActivityLog.for_task(key)
+  out = []
   for r in rows
     out.push(r)
   end
@@ -111,11 +111,11 @@ describe("Task → ActivityLog integration", fn()
       "status":  "todo"
     })
     assert_eq(_al_for_task("al--t1").length(), 0)
-    let t = Task.find_by_slug("al", "t1")
+    t = Task.find_by_slug("al", "t1")
     t.change_author = "alice@example.com"
     t.status = "queued"
     t.save()
-    let rows = _al_for_task("al--t1")
+    rows = _al_for_task("al--t1")
     assert_eq(rows.length(), 1)
     assert_eq(rows[0].from_status, "todo")
     assert_eq(rows[0].to_status, "queued")
@@ -141,7 +141,7 @@ describe("Task → ActivityLog integration", fn()
       "title":   "same",
       "status":  "todo"
     })
-    let t = Task.find_by_slug("al", "same")
+    t = Task.find_by_slug("al", "same")
     t.title = "renamed"
     t.change_author = "alice@example.com"
     t.save()
@@ -156,10 +156,10 @@ describe("Task → ActivityLog integration", fn()
       "title":   "anon",
       "status":  "todo"
     })
-    let t = Task.find_by_slug("al", "anon")
+    t = Task.find_by_slug("al", "anon")
     t.status = "queued"
     t.save()
-    let rows = _al_for_task("al--anon")
+    rows = _al_for_task("al--anon")
     assert_eq(rows.length(), 1)
     assert_eq(rows[0].changed_by, "")
   end)
@@ -173,11 +173,11 @@ describe("Task → ActivityLog integration", fn()
       "status":       "todo",
       "feature_slug": "al--brief"
     })
-    let t = Task.find_by_slug("al", "linked")
+    t = Task.find_by_slug("al", "linked")
     t.change_author = "bob@example.com"
     t.status = "queued"
     t.save()
-    let rows = _al_for_task("al--linked")
+    rows = _al_for_task("al--linked")
     assert_eq(rows.length(), 1)
     assert_eq(rows[0].feature_key, "al--brief")
   end)
@@ -199,11 +199,11 @@ describe("Feature → ActivityLog integration", fn()
       "status":  "draft"
     })
     assert_eq(ActivityLog.for_feature("fa--f1").length(), 0)
-    let f = Feature.find_by_slug("fa", "f1")
+    f = Feature.find_by_slug("fa", "f1")
     f.change_author = "carol@example.com"
     f.status = "ready"
     f.save()
-    let rows = ActivityLog.for_feature("fa--f1")
+    rows = ActivityLog.for_feature("fa--f1")
     assert_eq(rows.length(), 1)
     assert_eq(rows[0].from_status, "draft")
     assert_eq(rows[0].to_status, "ready")

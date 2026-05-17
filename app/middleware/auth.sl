@@ -20,12 +20,12 @@
 # scope_only: true
 
 def authenticate(req: Any) -> Any
-  let email = session_get("user_email") ?? ""
+  email = session_get("user_email") ?? ""
   if email == ""
     return { "continue": false, "response": _redirect_to_login(req) }
   end
 
-  let user = User.find_by_email(email)
+  user = User.find_by_email(email)
   if user == nil
     session_delete("user_email")
     return { "continue": false, "response": _redirect_to_login(req) }
@@ -42,12 +42,12 @@ end
 # body anyway, and skipping non-GET avoids redirecting form submissions
 # back into themselves.
 def _redirect_to_login(req: Any) -> Any
-  let location = "/login"
-  let method = (req["method"] ?? "GET").to_string().upcase()
+  location = "/login"
+  method = (req["method"] ?? "GET").to_string().upcase()
   if method == "GET"
-    let path = req["path"] ?? ""
-    let qs = req["query_string"] ?? ""
-    let target = path
+    path = req["path"] ?? ""
+    qs = req["query_string"] ?? ""
+    target = path
     if qs != "" then target = target + "?" + qs end
     if _safe_return_to(target)
       location = "/login?return_to=" + _url_encode(target)
@@ -76,9 +76,9 @@ end
 # to escape characters that would break the URL parse — the path itself
 # is already URL-safe shape, but ?, &, #, = and space must be encoded.
 def _url_encode(s)
-  let out = ""
+  out = ""
   for ch in s.chars()
-    let mapped = ch
+    mapped = ch
     if ch == " " then mapped = "%20" end
     if ch == "?" then mapped = "%3F" end
     if ch == "&" then mapped = "%26" end

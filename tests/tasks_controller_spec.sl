@@ -17,14 +17,14 @@ def _tq_setup_workspace()
   # ensure the project subdirectory exists. setenv() inside the spec
   # would only affect the runner process — the test server child
   # already inherited TASK_ORCH_ROOT at spawn time.
-  let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
+  root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
   System.run_sync(["mkdir", "-p", root + "/proj/tasks/todo"])
   return root
 end
 
 # Helper: ISO timestamp `seconds_ago` seconds before now.
 def _tq_iso_seconds_ago(seconds_ago)
-  let unix = DateTime.now().to_unix() - seconds_ago
+  unix = DateTime.now().to_unix() - seconds_ago
   return DateTime.from_unix(unix).to_iso()
 end
 
@@ -65,10 +65,10 @@ describe("TasksController#queue", fn()
   end)
 
   test("queues a task when no limits are set", fn()
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", slug)
+    t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "queued")
   end)
 
@@ -76,10 +76,10 @@ describe("TasksController#queue", fn()
     Setting.set("agent_type", "claude")
     Setting.set("limit_daily_claude", 5)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", slug)
+    t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "queued")
   end)
 
@@ -87,10 +87,10 @@ describe("TasksController#queue", fn()
     Setting.set("agent_type", "claude")
     Setting.set("limit_daily_claude", 1)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 422)
-    let t = Task.find_by_slug("proj", slug)
+    t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "todo")
   end)
 
@@ -101,10 +101,10 @@ describe("TasksController#queue", fn()
     # 24h day window — only the weekly cap should bite.
     _tq_seed_consumed("w1", _tq_iso_seconds_ago(86400 * 2), "claude")
     _tq_seed_consumed("w2", _tq_iso_seconds_ago(86400 * 3), "claude")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 422)
-    let t = Task.find_by_slug("proj", slug)
+    t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "todo")
   end)
 
@@ -112,9 +112,9 @@ describe("TasksController#queue", fn()
     Setting.set("agent_type", "claude")
     Setting.set("limit_daily_claude", 1)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
-    let slug = _tq_seed_todo()
+    slug = _tq_seed_todo()
     post("/projects/proj/tasks/" + slug + "/queue", {})
-    let t = Task.find_by_slug("proj", slug)
+    t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "todo")
     assert_null(t.queued_at)
   end)
@@ -124,8 +124,8 @@ describe("TasksController#queue", fn()
     Setting.set("limit_daily_claude", 0)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
     _tq_seed_consumed("c2", _tq_iso_seconds_ago(120), "claude")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
   end)
 
@@ -138,8 +138,8 @@ describe("TasksController#queue", fn()
     _tq_seed_consumed("o1", _tq_iso_seconds_ago(60), "opencode")
     _tq_seed_consumed("o2", _tq_iso_seconds_ago(120), "opencode")
     _tq_seed_consumed("s1", _tq_iso_seconds_ago(180), "opencode-sdk")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
   end)
 
@@ -147,12 +147,12 @@ describe("TasksController#queue", fn()
     Setting.set("agent_type", "claude")
     Setting.set("limit_daily_claude", 1)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
-    let slug = _tq_seed_todo()
-    let response = post("/projects/proj/tasks/" + slug + "/queue", {}, {
+    slug = _tq_seed_todo()
+    response = post("/projects/proj/tasks/" + slug + "/queue", {}, {
       "headers": { "hx-request": "true" }
     })
     assert_eq(res_status(response), 422)
-    let body = res_body(response)
+    body = res_body(response)
     # The error fragment renders the board partial with the limit_error
     # banner — checking the message text confirms the partial path.
     assert_contains(body, "is at its day limit")
@@ -165,9 +165,9 @@ end)
 # out at the end so the merge action's "current branch must be main"
 # guard passes.
 def _tq_setup_git_proj(slug)
-  let root = _tq_setup_workspace()
-  let proj = root + "/proj"
-  let cmd = "set -e; cd " + proj + " && rm -rf .git && " +
+  root = _tq_setup_workspace()
+  proj = root + "/proj"
+  cmd = "set -e; cd " + proj + " && rm -rf .git && " +
             "git init -q -b main && " +
             "git config user.email t@example.com && " +
             "git config user.name Test && " +
@@ -197,16 +197,16 @@ describe("TasksController#show with local-branch outcome", fn()
       "status":  "review",
       "outcome": "local-branch"
     })
-    let response = get("/projects/proj/tasks/done-task")
+    response = get("/projects/proj/tasks/done-task")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "task/done-task")
     assert_contains(body, "Merge into main")
     assert_contains(body, "not merged into main")
   end)
 
   test("shows merged badge and hides merge button when already merged", fn()
-    let proj = _tq_setup_git_proj("already-merged")
+    proj = _tq_setup_git_proj("already-merged")
     System.run_sync(["bash", "-c",
       "cd " + proj + " && git -c user.email=t@example.com -c user.name=Test " +
       "merge --no-ff --no-edit -q task/already-merged"])
@@ -218,9 +218,9 @@ describe("TasksController#show with local-branch outcome", fn()
       "status":  "done",
       "outcome": "local-branch"
     })
-    let response = get("/projects/proj/tasks/already-merged")
+    response = get("/projects/proj/tasks/already-merged")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "merged into main")
     # The button only renders when `not merged` — its absence is the
     # signal the badge state matched.
@@ -237,9 +237,9 @@ describe("TasksController#show with local-branch outcome", fn()
       "status":  "done",
       "outcome": "no-commit"
     })
-    let response = get("/projects/proj/tasks/no-commit-task")
+    response = get("/projects/proj/tasks/no-commit-task")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_not(body.contains("Merge into main"))
   end)
 
@@ -255,7 +255,7 @@ describe("TasksController#show with local-branch outcome", fn()
       "title":   "Drifted key task",
       "status":  "todo"
     })
-    let response = get("/projects/proj/tasks/drifted-key-task")
+    response = get("/projects/proj/tasks/drifted-key-task")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Drifted key task")
   end)
@@ -280,7 +280,7 @@ describe("TasksController#show with local-branch outcome", fn()
       "status":       "todo",
       "feature_slug": "proj--my-brief"
     })
-    let response = get("/projects/proj/tasks/with-feature")
+    response = get("/projects/proj/tasks/with-feature")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "My Brief Title")
   end)
@@ -295,7 +295,7 @@ describe("TasksController#merge_branch", fn()
   end)
 
   test("merges the local branch into main on a clean main checkout", fn()
-    let proj = _tq_setup_git_proj("merge-me")
+    proj = _tq_setup_git_proj("merge-me")
     Task.create({
       "_key":    "proj--merge-me",
       "project": "proj",
@@ -304,9 +304,9 @@ describe("TasksController#merge_branch", fn()
       "status":  "done",
       "outcome": "local-branch"
     })
-    let response = post("/projects/proj/tasks/merge-me/merge", {})
+    response = post("/projects/proj/tasks/merge-me/merge", {})
     assert_eq(res_status(response), 302)
-    let check = System.run_sync(["git", "-C", proj,
+    check = System.run_sync(["git", "-C", proj,
       "merge-base", "--is-ancestor", "task/merge-me", "main"])
     assert_eq(check["exit_code"], 0)
   end)
@@ -321,12 +321,12 @@ describe("TasksController#merge_branch", fn()
       "status":  "done",
       "outcome": "no-commit"
     })
-    let response = post("/projects/proj/tasks/not-eligible/merge", {})
+    response = post("/projects/proj/tasks/not-eligible/merge", {})
     assert_eq(res_status(response), 422)
   end)
 
   test("rejects with 422 when the branch ref is missing locally", fn()
-    let proj = _tq_setup_git_proj("ghost")
+    proj = _tq_setup_git_proj("ghost")
     System.run_sync(["git", "-C", proj, "branch", "-D", "task/ghost"])
     Task.create({
       "_key":    "proj--ghost",
@@ -336,13 +336,13 @@ describe("TasksController#merge_branch", fn()
       "status":  "done",
       "outcome": "local-branch"
     })
-    let response = post("/projects/proj/tasks/ghost/merge", {})
+    response = post("/projects/proj/tasks/ghost/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "not found")
   end)
 
   test("refuses to merge when the working tree is dirty", fn()
-    let proj = _tq_setup_git_proj("dirty-tree")
+    proj = _tq_setup_git_proj("dirty-tree")
     System.run_sync(["bash", "-c",
       "cd " + proj + " && echo dirty > untracked.txt"])
     Task.create({
@@ -353,7 +353,7 @@ describe("TasksController#merge_branch", fn()
       "status":  "done",
       "outcome": "local-branch"
     })
-    let response = post("/projects/proj/tasks/dirty-tree/merge", {})
+    response = post("/projects/proj/tasks/dirty-tree/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "uncommitted changes")
     # Cleanup so a re-run starts clean.
@@ -361,7 +361,7 @@ describe("TasksController#merge_branch", fn()
   end)
 
   test("refuses to merge when main is not checked out", fn()
-    let proj = _tq_setup_git_proj("wrong-branch")
+    proj = _tq_setup_git_proj("wrong-branch")
     System.run_sync(["git", "-C", proj, "checkout", "-q", "task/wrong-branch"])
     Task.create({
       "_key":    "proj--wrong-branch",
@@ -371,7 +371,7 @@ describe("TasksController#merge_branch", fn()
       "status":  "done",
       "outcome": "local-branch"
     })
-    let response = post("/projects/proj/tasks/wrong-branch/merge", {})
+    response = post("/projects/proj/tasks/wrong-branch/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "Checkout main first")
   end)
@@ -394,14 +394,14 @@ describe("TasksController#mark_done", fn()
       "title":   "No PR review task",
       "status":  "review"
     })
-    let response = post("/projects/proj/tasks/no-pr-review/mark-done", {})
+    response = post("/projects/proj/tasks/no-pr-review/mark-done", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "no-pr-review")
+    t = Task.find_by_slug("proj", "no-pr-review")
     assert_eq(t.status, "done")
   end)
 
   test("transitions review task to done when the linked PR is merged", fn()
-    set_pr_merged_mock(true)
+    Run.set_pr_merged_mock(true)
     Task.create({
       "_key":    "proj--merged-pr",
       "project": "proj",
@@ -410,15 +410,15 @@ describe("TasksController#mark_done", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/merged-pr/mark-done", {})
-    set_pr_merged_mock(nil)
+    response = post("/projects/proj/tasks/merged-pr/mark-done", {})
+    Run.set_pr_merged_mock(nil)
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "merged-pr")
+    t = Task.find_by_slug("proj", "merged-pr")
     assert_eq(t.status, "done")
   end)
 
   test("returns 422 when the linked PR is not merged", fn()
-    set_pr_merged_mock(false)
+    Run.set_pr_merged_mock(false)
     Task.create({
       "_key":    "proj--open-pr",
       "project": "proj",
@@ -427,16 +427,16 @@ describe("TasksController#mark_done", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/2"
     })
-    let response = post("/projects/proj/tasks/open-pr/mark-done", {})
-    set_pr_merged_mock(nil)
+    response = post("/projects/proj/tasks/open-pr/mark-done", {})
+    Run.set_pr_merged_mock(nil)
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "PR not merged")
-    let t = Task.find_by_slug("proj", "open-pr")
+    t = Task.find_by_slug("proj", "open-pr")
     assert_eq(t.status, "review")
   end)
 
   test("force-marks a review task as done even when PR is not merged", fn()
-    set_pr_merged_mock(false)
+    Run.set_pr_merged_mock(false)
     Task.create({
       "_key":    "proj--force-pr",
       "project": "proj",
@@ -445,10 +445,10 @@ describe("TasksController#mark_done", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/3"
     })
-    let response = post("/projects/proj/tasks/force-pr/mark-done", { "force": "true" })
-    set_pr_merged_mock(nil)
+    response = post("/projects/proj/tasks/force-pr/mark-done", { "force": "true" })
+    Run.set_pr_merged_mock(nil)
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "force-pr")
+    t = Task.find_by_slug("proj", "force-pr")
     assert_eq(t.status, "done")
   end)
 
@@ -460,10 +460,10 @@ describe("TasksController#mark_done", fn()
       "title":   "Todo task",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/todo-task/mark-done", {})
+    response = post("/projects/proj/tasks/todo-task/mark-done", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for review tasks")
-    let t = Task.find_by_slug("proj", "todo-task")
+    t = Task.find_by_slug("proj", "todo-task")
     assert_eq(t.status, "todo")
   end)
 
@@ -484,9 +484,9 @@ describe("TasksController#mark_done", fn()
       "status":       "review",
       "feature_slug": "proj--brief"
     })
-    let response = post("/projects/proj/tasks/linked/mark-done", {})
+    response = post("/projects/proj/tasks/linked/mark-done", {})
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "brief")
+    f = Feature.find_by_slug("proj", "brief")
     assert_eq(f.status, "done")
   end)
 end)
@@ -508,9 +508,9 @@ describe("TasksController#archive", fn()
       "title":   "Archive done",
       "status":  "done"
     })
-    let response = post("/projects/proj/tasks/archive-done/archive", {})
+    response = post("/projects/proj/tasks/archive-done/archive", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "archive-done")
+    t = Task.find_by_slug("proj", "archive-done")
     assert_eq(t.status, "archived")
   end)
 
@@ -522,9 +522,9 @@ describe("TasksController#archive", fn()
       "title":   "Archive failed",
       "status":  "failed"
     })
-    let response = post("/projects/proj/tasks/archive-failed/archive", {})
+    response = post("/projects/proj/tasks/archive-failed/archive", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "archive-failed")
+    t = Task.find_by_slug("proj", "archive-failed")
     assert_eq(t.status, "archived")
   end)
 
@@ -536,9 +536,9 @@ describe("TasksController#archive", fn()
       "title":   "Archive todo",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/archive-todo/archive", {})
+    response = post("/projects/proj/tasks/archive-todo/archive", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "archive-todo")
+    t = Task.find_by_slug("proj", "archive-todo")
     assert_eq(t.status, "archived")
   end)
 end)
@@ -560,9 +560,9 @@ describe("TasksController#unarchive", fn()
       "title":   "Unarchive me",
       "status":  "archived"
     })
-    let response = post("/projects/proj/tasks/unarchive-me/unarchive", {})
+    response = post("/projects/proj/tasks/unarchive-me/unarchive", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "unarchive-me")
+    t = Task.find_by_slug("proj", "unarchive-me")
     assert_eq(t.status, "todo")
   end)
 
@@ -574,10 +574,10 @@ describe("TasksController#unarchive", fn()
       "title":   "Unarchive queued",
       "status":  "queued"
     })
-    let response = post("/projects/proj/tasks/unarchive-queued/unarchive", {})
+    response = post("/projects/proj/tasks/unarchive-queued/unarchive", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for archived")
-    let t = Task.find_by_slug("proj", "unarchive-queued")
+    t = Task.find_by_slug("proj", "unarchive-queued")
     assert_eq(t.status, "queued")
   end)
 end)
@@ -630,17 +630,17 @@ describe("TasksController#create author stamping", fn()
   # layer in `activity_log_spec.sl` — same code path, zero CSRF
   # surface. Here we just check the unauthenticated branch.
   test("leaves author empty when no session is set", fn()
-    let response = post("/projects/proj/tasks", {
+    response = post("/projects/proj/tasks", {
       "title":   "Anon task",
       "body_md": "# Anon task\n\nbody"
     })
     assert_eq(res_status(response), 302)
-    let task = Task.find_by_slug("proj", "anon-task")
+    task = Task.find_by_slug("proj", "anon-task")
     assert_eq(task.author ?? "", "")
   end)
 
   test("persists Task.author when create receives one", fn()
-    let task = Task.create({
+    task = Task.create({
       "_key":    "proj--by-author",
       "project": "proj",
       "slug":    "by-author",
@@ -649,7 +649,7 @@ describe("TasksController#create author stamping", fn()
       "status":  "todo"
     })
     assert(task._errors == nil)
-    let reloaded = Task.find_by_slug("proj", "by-author")
+    reloaded = Task.find_by_slug("proj", "by-author")
     assert_eq(reloaded.author, "alice@example.com")
   end)
 end)
@@ -662,7 +662,7 @@ describe("plan_stream_payload — model-layer builder for WS stream frames", fn(
 
   test("connect → snapshot carrying the full log and a fresh offset", fn()
     _tq_seed_plan("plan-snap", "running", "line one\nline two\n", "", nil)
-    let p = plan_stream_payload("plan-snap", "connect", 0)
+    p = plan_stream_payload("plan-snap", "connect", 0)
     assert_eq(p["event"], "snapshot")
     assert_eq(p["log_chunk"], "line one\nline two\n")
     assert_eq(p["log_offset"], "line one\nline two\n".length)
@@ -673,7 +673,7 @@ describe("plan_stream_payload — model-layer builder for WS stream frames", fn(
 
   test("tick sends only the bytes appended past the cursor", fn()
     _tq_seed_plan("plan-tick", "running", "abcde-FGHIJ", "", nil)
-    let p = plan_stream_payload("plan-tick", "message", 5)
+    p = plan_stream_payload("plan-tick", "message", 5)
     assert_eq(p["event"], "delta")
     assert_eq(p["log_chunk"], "-FGHIJ")
     assert_eq(p["log_offset"], 11)
@@ -685,49 +685,49 @@ describe("plan_stream_payload — model-layer builder for WS stream frames", fn(
     # matches what's actually on disk — better to re-render a few bytes
     # than skip them.
     _tq_seed_plan("plan-trunc", "running", "fresh", "", nil)
-    let p = plan_stream_payload("plan-trunc", "message", 9999)
+    p = plan_stream_payload("plan-trunc", "message", 9999)
     assert_eq(p["log_chunk"], "fresh")
     assert_eq(p["log_offset"], 5)
   end)
 
   test("done flips terminal + reload so the client navigates after the agent finishes", fn()
     _tq_seed_plan("plan-done", "done", "all done", "# spec", nil)
-    let p = plan_stream_payload("plan-done", "message", 0)
+    p = plan_stream_payload("plan-done", "message", 0)
     assert_eq(p["terminal"], true)
     assert_eq(p["reload"], true)
   end)
 
   test("failed: flips terminal but not reload (stay put for the retry CTA)", fn()
     _tq_seed_plan("plan-fail", "failed:cancelled", "boom", "", nil)
-    let p = plan_stream_payload("plan-fail", "message", 0)
+    p = plan_stream_payload("plan-fail", "message", 0)
     assert_eq(p["terminal"], true)
     assert_eq(p["reload"], false)
   end)
 
   test("carries the pending_question hash through verbatim", fn()
-    let pq = {
+    pq = {
       "id":    "q1",
       "tool":  "AskUserQuestion",
       "input": { "questions": [{ "question": "Pick a path",
                                   "options":  [{ "label": "A" }, { "label": "B" }] }] }
     }
     _tq_seed_plan("plan-q-ws", "awaiting_question", "thinking", "", pq)
-    let p = plan_stream_payload("plan-q-ws", "connect", 0)
+    p = plan_stream_payload("plan-q-ws", "connect", 0)
     assert_not_null(p["pending_question"])
     assert_eq(p["pending_question"]["id"], "q1")
   end)
 
   test("returns an error frame for an unknown plan", fn()
-    let p = plan_stream_payload("no-such-plan", "connect", 0)
+    p = plan_stream_payload("no-such-plan", "connect", 0)
     assert_eq(p["event"], "error")
     assert_eq(p["terminal"], true)
   end)
 
   test("normalises a negative or nil offset to 0", fn()
     _tq_seed_plan("plan-neg", "running", "abc", "", nil)
-    let a = plan_stream_payload("plan-neg", "message", -5)
+    a = plan_stream_payload("plan-neg", "message", -5)
     assert_eq(a["log_chunk"], "abc")
-    let b = plan_stream_payload("plan-neg", "message", nil)
+    b = plan_stream_payload("plan-neg", "message", nil)
     assert_eq(b["log_chunk"], "abc")
   end)
 end)
@@ -739,7 +739,7 @@ describe("read_plan_state — DB-backed plan rehydration", fn()
   end)
 
   test("returns the canonical unknown shape when the plan_id misses", fn()
-    let s = read_plan_state("ghost")
+    s = read_plan_state("ghost")
     assert_eq(s["status"], "unknown")
     assert_eq(s["log"], "")
     assert_eq(s["model"], "claude-sonnet-4-6")
@@ -747,7 +747,7 @@ describe("read_plan_state — DB-backed plan rehydration", fn()
 
   test("populates fields from the Plan row", fn()
     _tq_seed_plan("plan-read", "running", "stdout", "# body", nil)
-    let s = read_plan_state("plan-read")
+    s = read_plan_state("plan-read")
     assert_eq(s["status"], "running")
     assert_eq(s["log"], "stdout")
     assert_eq(s["body"], "# body")
@@ -755,7 +755,7 @@ describe("read_plan_state — DB-backed plan rehydration", fn()
 end)
 
 def _tq_worktree_path(slug)
-  let root = getenv("TASK_ORCH_WORKTREES") ?? "/tmp/task-orch-spec-worktree"
+  root = getenv("TASK_ORCH_WORKTREES") ?? "/tmp/task-orch-spec-worktree"
   root + "/proj/" + slug
 end
 
@@ -764,13 +764,13 @@ end
 # Returns the worktree path. Used by the commit_push tests so the
 # controller can find the worktree via run_worktree_exists / run_worktree_path.
 def _tq_setup_worktree_repo(slug)
-  let worktree = _tq_worktree_path(slug)
-  let origin = "/tmp/worktree-origin-" + slug + ".git"
+  worktree = _tq_worktree_path(slug)
+  origin = "/tmp/worktree-origin-" + slug + ".git"
   System.run_sync(["rm", "-rf", worktree, origin])
   System.run_sync(["mkdir", "-p", worktree + "/../"])
   System.run_sync(["git", "init", "-q", "--bare", origin])
   System.run_sync(["git", "init", "-q", "-b", "main", worktree])
-  let cmd = "cd " + worktree + " && " +
+  cmd = "cd " + worktree + " && " +
             "git config user.email t@example.com && " +
             "git config user.name Test && " +
             "git remote add origin " + origin + " && " +
@@ -786,11 +786,11 @@ end
 # Create a worktree repo WITHOUT an origin remote — the bare repo is
 # created but the worktree never adds it. Used for the push-failure test.
 def _tq_setup_worktree_repo_no_origin(slug)
-  let worktree = _tq_worktree_path(slug)
+  worktree = _tq_worktree_path(slug)
   System.run_sync(["rm", "-rf", worktree])
   System.run_sync(["mkdir", "-p", worktree + "/../"])
   System.run_sync(["git", "init", "-q", "-b", "main", worktree])
-  let cmd = "cd " + worktree + " && " +
+  cmd = "cd " + worktree + " && " +
             "git config user.email t@example.com && " +
             "git config user.name Test && " +
             "git commit --allow-empty -q -m initial && " +
@@ -818,14 +818,14 @@ describe("TasksController#save model persistence", fn()
       "body_md": "# original",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/save-model/save", {
+    response = post("/projects/proj/tasks/save-model/save", {
       "title":        "Save model",
       "body_md":      "# updated",
       "plan_model":   "claude-opus-4-7",
       "plan_variant": "default"
     })
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "save-model")
+    t = Task.find_by_slug("proj", "save-model")
     assert_eq(t.model, "claude-opus-4-7")
     assert_eq(t.body_md, "# updated")
   end)
@@ -839,13 +839,13 @@ describe("TasksController#save model persistence", fn()
       "body_md": "# x",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/save-stitched/save", {
+    response = post("/projects/proj/tasks/save-stitched/save", {
       "body_md":      "# x",
       "plan_model":   "deepseek/deepseek-chat",
       "plan_variant": "high"
     })
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "save-stitched")
+    t = Task.find_by_slug("proj", "save-stitched")
     assert_eq(t.model, "deepseek/deepseek-chat:high")
   end)
 
@@ -859,11 +859,11 @@ describe("TasksController#save model persistence", fn()
       "model":   "claude-opus-4-7",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/save-keep/save", {
+    response = post("/projects/proj/tasks/save-keep/save", {
       "body_md": "# updated"
     })
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "save-keep")
+    t = Task.find_by_slug("proj", "save-keep")
     assert_eq(t.model, "claude-opus-4-7")
     assert_eq(t.body_md, "# updated")
   end)
@@ -886,12 +886,12 @@ describe("TasksController#queue model override", fn()
       "title":   "Queue with model",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/queue-with-model/queue", {
+    response = post("/projects/proj/tasks/queue-with-model/queue", {
       "plan_model":   "claude-opus-4-7",
       "plan_variant": "default"
     })
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "queue-with-model")
+    t = Task.find_by_slug("proj", "queue-with-model")
     assert_eq(t.status, "queued")
     assert_eq(t.model, "claude-opus-4-7")
   end)
@@ -905,9 +905,9 @@ describe("TasksController#queue model override", fn()
       "model":   "claude-haiku-4-5-20251001",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/queue-no-model/queue", {})
+    response = post("/projects/proj/tasks/queue-no-model/queue", {})
     assert_eq(res_status(response), 302)
-    let t = Task.find_by_slug("proj", "queue-no-model")
+    t = Task.find_by_slug("proj", "queue-no-model")
     assert_eq(t.status, "queued")
     assert_eq(t.model, "claude-haiku-4-5-20251001")
   end)
@@ -931,9 +931,9 @@ describe("TasksController#show model picker", fn()
       "model":   "claude-opus-4-7",
       "status":  "todo"
     })
-    let response = get("/projects/proj/tasks/show-picker")
+    response = get("/projects/proj/tasks/show-picker")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     # The picker is in the Queue form; preselection is rendered as the
     # selected attribute on the matching option.
     assert_contains(body, "name=\"plan_model\"")
@@ -959,9 +959,9 @@ describe("TasksController#sidebar", fn()
       "body_md": "# Sidebar task\n\nMarkdown body content.",
       "status":  "todo"
     })
-    let response = get("/projects/proj/tasks/sidebar-task/sidebar")
+    response = get("/projects/proj/tasks/sidebar-task/sidebar")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     # Fragment must carry the task's title, status badge, rendered
     # markdown body, and the "View full page" escape hatch — no layout.
     assert_contains(body, "Sidebar task")
@@ -973,12 +973,12 @@ describe("TasksController#sidebar", fn()
   end)
 
   test("returns 404 for an unknown slug", fn()
-    let response = get("/projects/proj/tasks/does-not-exist/sidebar")
+    response = get("/projects/proj/tasks/does-not-exist/sidebar")
     assert_eq(res_status(response), 404)
   end)
 
   test("returns 404 for an unknown project", fn()
-    let response = get("/projects/no-such-proj/tasks/anything/sidebar")
+    response = get("/projects/no-such-proj/tasks/anything/sidebar")
     assert_eq(res_status(response), 404)
   end)
 end)
@@ -993,9 +993,9 @@ describe("TasksController#commit_push", fn()
   end)
 
   test("stages, commits, and pushes uncommitted changes in the worktree", fn()
-    let slug = "push-me"
+    slug = "push-me"
     _tq_setup_worktree_repo(slug)
-    let worktree = _tq_worktree_path(slug)
+    worktree = _tq_worktree_path(slug)
     System.run_sync(["bash", "-c",
       "cd " + worktree + " && echo 'review fix' > dirty.txt"])
     Task.create({
@@ -1006,18 +1006,18 @@ describe("TasksController#commit_push", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 302)
-    let log = System.run_sync(["git", "-C", worktree,
+    log = System.run_sync(["git", "-C", worktree,
       "log", "--oneline", "-1"])
-    let msg = (log["stdout"] ?? "").trim()
+    msg = (log["stdout"] ?? "").trim()
     assert(msg.contains("fix(review)"))
   end)
 
   test("returns 422 when the task has no pr_url set", fn()
-    let slug = "no-pr"
+    slug = "no-pr"
     _tq_setup_worktree_repo(slug)
-    let worktree = _tq_worktree_path(slug)
+    worktree = _tq_worktree_path(slug)
     System.run_sync(["bash", "-c",
       "cd " + worktree + " && echo 'fix' > dirty.txt"])
     Task.create({
@@ -1027,13 +1027,13 @@ describe("TasksController#commit_push", fn()
       "title":   "No PR",
       "status":  "review"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for tasks with an open PR")
   end)
 
   test("returns 200 with flash when the worktree has no uncommitted changes", fn()
-    let slug = "clean-tree"
+    slug = "clean-tree"
     _tq_setup_worktree_repo(slug)
     Task.create({
       "_key":    "proj--" + slug,
@@ -1043,15 +1043,15 @@ describe("TasksController#commit_push", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "working tree has no uncommitted changes")
   end)
 
   test("returns 200 with flash when the push fails (no remote)", fn()
-    let slug = "push-fail"
+    slug = "push-fail"
     _tq_setup_worktree_repo_no_origin(slug)
-    let worktree = _tq_worktree_path(slug)
+    worktree = _tq_worktree_path(slug)
     System.run_sync(["bash", "-c",
       "cd " + worktree + " && echo 'fix' > dirty.txt"])
     Task.create({
@@ -1062,7 +1062,7 @@ describe("TasksController#commit_push", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), slug)
   end)
@@ -1086,7 +1086,7 @@ describe("TasksController#show tags badge", fn()
       "status":  "todo",
       "tags":    ["follow_up"]
     })
-    let response = get("/projects/proj/tasks/tagged-task")
+    response = get("/projects/proj/tasks/tagged-task")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Follow-up")
   end)
@@ -1099,7 +1099,7 @@ describe("TasksController#show tags badge", fn()
       "title":   "Untagged task",
       "status":  "todo"
     })
-    let response = get("/projects/proj/tasks/untagged-task")
+    response = get("/projects/proj/tasks/untagged-task")
     assert_eq(res_status(response), 200)
     assert_not(res_body(response).contains("Follow-up"))
   end)
@@ -1113,13 +1113,13 @@ describe("TasksController#show tags badge", fn()
       "status":  "todo",
       "tags":    []
     })
-    let response = get("/projects/proj/tasks/empty-tags-task")
+    response = get("/projects/proj/tasks/empty-tags-task")
     assert_eq(res_status(response), 200)
     assert_not(res_body(response).contains("Follow-up"))
   end)
 
   test("persists tags through create and read-back", fn()
-    let task = Task.create({
+    task = Task.create({
       "_key":    "proj--readback-task",
       "project": "proj",
       "slug":    "readback-task",
@@ -1128,7 +1128,7 @@ describe("TasksController#show tags badge", fn()
       "tags":    ["follow_up"]
     })
     assert(task._errors == nil)
-    let reloaded = Task.find_by_slug("proj", "readback-task")
+    reloaded = Task.find_by_slug("proj", "readback-task")
     assert(reloaded.tags != nil)
     assert_eq(reloaded.tags.length(), 1)
     assert_eq(reloaded.tags[0], "follow_up")
@@ -1140,7 +1140,7 @@ end)
 # uses the same fn, so the existence check passes in tests regardless of
 # whether `TASK_ORCH_WORKTREES` is exported in the runner's env.
 def _tq_setup_run_worktree(slug)
-  let wt = run_worktree_path("proj", slug)
+  wt = Run.run_worktree_path("proj", slug)
   System.run_sync(["mkdir", "-p", wt])
   return wt
 end
@@ -1156,7 +1156,7 @@ describe("TasksController#code_review", fn()
   end)
 
   test("redirects to the task page and persists a CodeReview row when the worktree exists", fn()
-    let slug = "review-me"
+    slug = "review-me"
     _tq_setup_run_worktree(slug)
     Task.create({
       "_key":    "proj--" + slug,
@@ -1166,7 +1166,7 @@ describe("TasksController#code_review", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/code-review", {
+    response = post("/projects/proj/tasks/" + slug + "/code-review", {
       "plan_model":   "claude-sonnet-4-6",
       "plan_variant": "default"
     })
@@ -1177,10 +1177,10 @@ describe("TasksController#code_review", fn()
                     "/projects/proj/tasks/" + slug)
     # A CodeReview row was persisted so the panel has something to
     # show on the next render.
-    let reviews = CodeReview.for_task("proj", slug)
+    reviews = CodeReview.for_task("proj", slug)
     assert(reviews.length() > 0)
     # Tear down so a follow-up test in this file doesn't see a stale dir.
-    System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
+    System.run_sync(["rm", "-rf", Run.run_worktree_path("proj", slug)])
   end)
 
   test("rejects with 422 when the task is not in review status", fn()
@@ -1191,7 +1191,7 @@ describe("TasksController#code_review", fn()
       "title":   "Not in review",
       "status":  "todo"
     })
-    let response = post("/projects/proj/tasks/cr-not-review/code-review", {
+    response = post("/projects/proj/tasks/cr-not-review/code-review", {
       "plan_model":   "claude-sonnet-4-6",
       "plan_variant": "default"
     })
@@ -1212,7 +1212,7 @@ describe("TasksController#code_review", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/cr-no-tree/code-review", {
+    response = post("/projects/proj/tasks/cr-no-tree/code-review", {
       "plan_model":   "claude-sonnet-4-6",
       "plan_variant": "default"
     })
@@ -1229,7 +1229,7 @@ describe("TasksController#code_review", fn()
       "title":   "No worktree, no PR",
       "status":  "review"
     })
-    let response = post("/projects/proj/tasks/cr-no-tree-no-pr/code-review", {
+    response = post("/projects/proj/tasks/cr-no-tree-no-pr/code-review", {
       "plan_model":   "claude-sonnet-4-6",
       "plan_variant": "default"
     })
@@ -1255,9 +1255,9 @@ describe("TasksController#show code-review panel", fn()
       "title":   "CR panel",
       "status":  "review"
     })
-    let response = get("/projects/proj/tasks/cr-panel")
+    response = get("/projects/proj/tasks/cr-panel")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "Run code review")
     assert_contains(body, "/projects/proj/tasks/cr-panel/code-review")
   end)
@@ -1272,9 +1272,9 @@ describe("TasksController#show code-review panel", fn()
       "title":   "CR review default",
       "status":  "review"
     })
-    let response = get("/projects/proj/tasks/cr-review-default")
+    response = get("/projects/proj/tasks/cr-review-default")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     # The picker should pre-select the review_model default, not the
     # plan_model default, when the task has no per-task model.
     assert_contains(body, "value=\"claude-haiku-4-5-20251001\" selected")
@@ -1289,14 +1289,14 @@ describe("TasksController#show code-review panel", fn()
       "model":   "claude-opus-4-7",
       "status":  "review"
     })
-    let response = get("/projects/proj/tasks/cr-task-model")
+    response = get("/projects/proj/tasks/cr-task-model")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "value=\"claude-opus-4-7\" selected")
   end)
 
   test("code-review action uses submitted plan_model when present", fn()
-    let slug = "cr-submitted-model"
+    slug = "cr-submitted-model"
     _tq_setup_run_worktree(slug)
     Task.create({
       "_key":    "proj--" + slug,
@@ -1306,7 +1306,7 @@ describe("TasksController#show code-review panel", fn()
       "status":  "review",
       "pr_url":  "https://github.com/owner/repo/pull/1"
     })
-    let response = post("/projects/proj/tasks/" + slug + "/code-review", {
+    response = post("/projects/proj/tasks/" + slug + "/code-review", {
       "plan_model":   "claude-opus-4-7",
       "plan_variant": "default"
     })
@@ -1314,13 +1314,13 @@ describe("TasksController#show code-review panel", fn()
     # Redirects to run page — model was accepted.
     assert_contains(res_header(response, "Location") ?? "",
                     "/projects/proj/tasks/" + slug)
-    System.run_sync(["rm", "-rf", run_worktree_path("proj", slug)])
+    System.run_sync(["rm", "-rf", Run.run_worktree_path("proj", slug)])
   end)
 
   test("omits the code-review form for non-review tasks", fn()
-    let kept_statuses = ["todo", "queued", "inprogress", "done", "archived", "failed"]
+    kept_statuses = ["todo", "queued", "inprogress", "done", "archived", "failed"]
     for status in kept_statuses
-      let slug = "cr-omit-" + status
+      slug = "cr-omit-" + status
       Task.delete_all()
       Task.create({
         "_key":    "proj--" + slug,
@@ -1329,9 +1329,9 @@ describe("TasksController#show code-review panel", fn()
         "title":   "CR omit " + status,
         "status":  status
       })
-      let response = get("/projects/proj/tasks/" + slug)
+      response = get("/projects/proj/tasks/" + slug)
       assert_eq(res_status(response), 200)
-      let body = res_body(response)
+      body = res_body(response)
       assert_not(body.contains("Run code review"))
     end
   end)

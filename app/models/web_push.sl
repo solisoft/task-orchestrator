@@ -21,9 +21,9 @@ const _web_push_vapid_subject = "mailto:noreply@task-orchestrator.local"
 const _web_push_log_path = "/tmp/task-orch-push.log"
 
 def _web_push_log(msg)
-  let ts = DateTime.now().to_iso() rescue ""
-  let line = "[" + ts + "] " + msg + "\n"
-  let prev = (Trusted.read(_web_push_log_path) rescue "")
+  ts = DateTime.now().to_iso() rescue ""
+  line = "[" + ts + "] " + msg + "\n"
+  prev = (Trusted.read(_web_push_log_path) rescue "")
   Trusted.write(_web_push_log_path, prev + line)
 end
 
@@ -33,26 +33,26 @@ end
 # Pruning happens when the push service returns 404/410 — those rows
 # are dead and we don't want to keep retrying them.
 def web_push_send_to_all(payload)
-  let sentinel = "/tmp/_task_orch_web_push.active"
+  sentinel = "/tmp/_task_orch_web_push.active"
   if Trusted.exists(sentinel)
-    let log_path = "/tmp/_task_orch_web_push.log"
-    let prev = (Trusted.read(log_path) rescue "")
-    let line = JSON.stringify({ "payload": payload }) + "\n"
+    log_path = "/tmp/_task_orch_web_push.log"
+    prev = (Trusted.read(log_path) rescue "")
+    line = JSON.stringify({ "payload": payload }) + "\n"
     Trusted.write(log_path, prev + line)
     return { "sent": 0, "pruned": 0, "mocked": true }
   end
-  let keys = web_push_ensure_keys()
+  keys = web_push_ensure_keys()
   if keys == nil
     _web_push_log("web_push_send_to_all: no VAPID keys — skipping send")
     return { "sent": 0, "pruned": 0, "mocked": false }
   end
-  let body = JSON.stringify(payload)
-  let sent = 0
-  let pruned = 0
-  let count = 0
+  body = JSON.stringify(payload)
+  sent = 0
+  pruned = 0
+  count = 0
   for sub in PushSubscription.all()
     count = count + 1
-    let res = _web_push_send_one(sub, body, keys)
+    res = _web_push_send_one(sub, body, keys)
     if res["pruned"]
       _web_push_log("web_push_send_to_all: pruned endpoint " + (sub.endpoint ?? "?"))
       PushSubscription.remove_by_endpoint(sub.endpoint) rescue null
@@ -60,7 +60,7 @@ def web_push_send_to_all(payload)
     elsif res["ok"]
       sent = sent + 1
     else
-      let short_ep = (sub.endpoint ?? "?")
+      short_ep = (sub.endpoint ?? "?")
       if short_ep.length() > 60
         short_ep = short_ep.substring(0, 60)
       end
@@ -75,7 +75,7 @@ end
 # doesn't yet exist. Returns "" only if the builtin fails to produce
 # a keypair (effectively unreachable in normal operation).
 def web_push_public_key()
-  let keys = web_push_ensure_keys()
+  keys = web_push_ensure_keys()
   if keys == nil
     return ""
   end
@@ -89,8 +89,8 @@ end
 # in `Setting`, the pair is reused across restarts so subscriptions
 # remain valid.
 def web_push_ensure_keys()
-  let pub  = Setting.get("vapid_public_key")  ?? ""
-  let priv = Setting.get("vapid_private_key") ?? ""
+  pub  = Setting.get("vapid_public_key")  ?? ""
+  priv = Setting.get("vapid_private_key") ?? ""
   if pub != "" and priv != ""
     return { "public": pub, "private": priv }
   end
@@ -98,19 +98,19 @@ def web_push_ensure_keys()
   # short-circuits with deterministic fake keys before reaching the
   # in-process builtin. Some specs feed bogus values intentionally to
   # exercise the per-row send/prune branches.
-  let mock_pub  = Setting.get("vapid_test_public")  ?? ""
-  let mock_priv = Setting.get("vapid_test_private") ?? ""
+  mock_pub  = Setting.get("vapid_test_public")  ?? ""
+  mock_priv = Setting.get("vapid_test_private") ?? ""
   if mock_pub != "" and mock_priv != ""
     Setting.set("vapid_public_key",  mock_pub)
     Setting.set("vapid_private_key", mock_priv)
     return { "public": mock_pub, "private": mock_priv }
   end
-  let generated = vapid_generate_keys() rescue nil
+  generated = vapid_generate_keys() rescue nil
   if generated == nil
     return nil
   end
-  let new_pub  = generated["public_key"]  ?? ""
-  let new_priv = generated["private_key"] ?? ""
+  new_pub  = generated["public_key"]  ?? ""
+  new_priv = generated["private_key"] ?? ""
   if new_pub == "" or new_priv == ""
     return nil
   end
@@ -128,14 +128,14 @@ end
 # use this to exercise the per-row sent / pruned counter loop without
 # making real HTTP calls.
 def _web_push_send_one(sub, body, keys)
-  let test_outcome = Setting.get("web_push_test_send_outcome") ?? ""
+  test_outcome = Setting.get("web_push_test_send_outcome") ?? ""
   if test_outcome == "ok"
     return { "ok": true, "pruned": false }
   end
   if test_outcome == "pruned"
     return { "ok": false, "pruned": true }
   end
-  let subscription = {
+  subscription = {
     "endpoint": sub.endpoint,
     "keys": {
       "p256dh": sub.p256dh ?? "",
@@ -143,16 +143,16 @@ def _web_push_send_one(sub, body, keys)
     }
   }
   try
-    let res = vapid_send(
+    res = vapid_send(
       subscription,
       body,
       keys["private"],
       keys["public"],
       _web_push_vapid_subject
     )
-    let status = res["status"] ?? 0
+    status = res["status"] ?? 0
         if status < 200 or status >= 300
-      let ep_short = (sub.endpoint ?? "?")
+      ep_short = (sub.endpoint ?? "?")
       if ep_short.length() > 60
         ep_short = ep_short.substring(0, 60)
       end
@@ -161,7 +161,7 @@ def _web_push_send_one(sub, body, keys)
     end
     return _web_push_outcome_from_status(status)
   catch e
-    let short_ep = (sub.endpoint ?? "?")
+    short_ep = (sub.endpoint ?? "?")
     if short_ep.length() > 60
       short_ep = short_ep.substring(0, 60)
     end

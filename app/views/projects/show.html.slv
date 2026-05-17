@@ -18,7 +18,7 @@
 
     <!-- hub tab strip: Shape → Bet → Build → Ship → Cycles -->
     <nav class="flex items-center gap-1 border-b border-white/10 mb-6 animate-fade-in overflow-x-auto">
-      <% let _hub_tabs = [
+      <% _hub_tabs = [
         { "key": "shape",  "label": "Shape",  "count": (features_by_stage["shape"]  ?? []).length() },
         { "key": "bet",    "label": "Bet",    "count": (features_by_stage["bet"]    ?? []).length() },
         { "key": "build",  "label": "Build",  "count": build_lanes.length() },

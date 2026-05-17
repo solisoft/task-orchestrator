@@ -1,4 +1,4 @@
-<% let _vkey = version == nil ? "" : (version._key ?? "") %>
+<% _vkey = version == nil ? "" : (version._key ?? "") %>
 <form method="post"
       action="<%= _vkey == "" ? "/projects/" + h(project["name"]) + "/versions" : "/projects/" + h(project["name"]) + "/versions/" + h(_vkey) + "/update" %>"
       class="rounded-xl glass-card p-6 space-y-4">

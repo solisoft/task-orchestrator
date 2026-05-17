@@ -7,7 +7,7 @@
 # based on the leading glyph emitted by `bin/_stream-format.jq` plus the
 # raw `[ISO]` lines emitted by `bin/task-run`.
 def task_log_line_class(line: String) -> Any
-  let s = line.trim()
+  s = line.trim()
   if s == ""
     return "h-2"
   end
@@ -49,12 +49,12 @@ def task_status_pill(status_token: Any) -> Any
   if status_token == nil
     return { "icon": "·", "label": "no run yet", "tone": "slate" }
   end
-  let token = status_token
+  token = status_token
   if token.starts_with("done:")
     return { "icon": "✓", "label": "Done", "tone": "emerald" }
   end
   if token.starts_with("failed:")
-    let reason = token.substring(7, token.length)
+    reason = token.substring(7, token.length)
     return { "icon": "✗", "label": "Failed — " + reason, "tone": "red" }
   end
   if token == "starting"
@@ -95,11 +95,11 @@ def task_format_elapsed(iso_then: String) -> Any
   if iso_then == nil or iso_then == ""
     return ""
   end
-  let then_dt = DateTime.parse(iso_then) rescue nil
+  then_dt = DateTime.parse(iso_then) rescue nil
   if then_dt == nil
     return ""
   end
-  let secs = DateTime.now().to_unix() - then_dt.to_unix()
+  secs = DateTime.now().to_unix() - then_dt.to_unix()
   if secs < 0
     secs = 0
   end
@@ -113,14 +113,14 @@ def task_format_elapsed(iso_then: String) -> Any
 end
 
 def task_run_indicator(repo: String, slug: String) -> Any
-  return run_indicator(repo, slug)
+  return Run.run_indicator(repo, slug)
 end
 
 # Tailwind classes + glyph for a TodoWrite item, given its `status`
 # field. Returns `{ "icon": "...", "classes": "..." }`. Statuses outside
 # the known set fall back to the pending styling.
 def task_todo_chrome(status: Any) -> Any
-  let s = status ?? ""
+  s = status ?? ""
   if s == "completed"
     return { "icon": "✓", "classes": "text-emerald-300/90 line-through decoration-emerald-300/40" }
   end
@@ -134,6 +134,6 @@ def task_todo_chrome(status: Any) -> Any
 end
 
 def task_run_pr_url(repo: String, slug: String) -> Any
-  return run_pr_url(repo, slug)
+  return Run.run_pr_url(repo, slug)
 end
 

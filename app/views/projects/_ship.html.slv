@@ -15,10 +15,10 @@
   <% else %>
     <div class="space-y-3 animate-fade-in-1">
       <% for row in ship_rows %>
-        <% let _f       = row["feature"] %>
-        <% let _prs     = row["pr_tasks"] ?? [] %>
-        <% let _pending = row["pending"] ?? [] %>
-        <% let _fdone   = (_f.status ?? "") == "done" %>
+        <% _f       = row["feature"] %>
+        <% _prs     = row["pr_tasks"] ?? [] %>
+        <% _pending = row["pending"] ?? [] %>
+        <% _fdone   = (_f.status ?? "") == "done" %>
 
         <article class="rounded-2xl glass-card border <%= _fdone ? "border-emerald-500/25" : "border-amber-500/20" %> overflow-hidden">
           <header class="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/5">
@@ -39,8 +39,8 @@
 
           <div class="px-5 py-3 space-y-2">
             <% for entry in _prs %>
-              <% let _t  = entry["task"] %>
-              <% let _pr = entry["pr_url"] %>
+              <% _t  = entry["task"] %>
+              <% _pr = entry["pr_url"] %>
               <div class="flex items-center gap-3 text-sm">
                 <span class="inline-block rounded-full bg-<%= _t.status == "done" ? "emerald" : "blue" %>-500/15 border border-<%= _t.status == "done" ? "emerald" : "blue" %>-500/25 text-<%= _t.status == "done" ? "emerald" : "blue" %>-300 text-[10px] uppercase tracking-wider px-2 py-0.5"><%= h(_t.status) %></span>
                 <a href="/projects/<%= h(project["name"]) %>/tasks/<%= h(_t.slug) %>" class="flex-1 min-w-0 truncate text-slate-200 hover:text-white transition-colors"><%= h(_t.title) %></a>

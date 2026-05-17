@@ -11,24 +11,60 @@
 class Setting < Model
   validates("_key", { "presence": true })
 
+  # SoliKV cache TTL for memoized Setting.get reads (seconds). Settings
+  # change rarely — theme, plan_model, agent caps — so a 5-minute TTL
+  # cuts the "FOR doc IN settings FILTER doc._key == ..." round-trip on
+  # most page renders to a single cache hit. Writes go through `set`
+  # below, which invalidates the cache key explicitly so a freshly-set
+  # value is visible immediately, not after the TTL expires.
+  static def _cache_ttl_seconds()
+    300
+  end
+
+  static def _cache_key(key)
+    "_setting:" + key
+  end
+
+  # Sentinel for "the row exists but holds nil/missing" so a cached
+  # absence still short-circuits the DB lookup. Cache.get returns nil
+  # for both "not in cache" and "cached as nil" — those need to be
+  # distinguishable.
+  static def _cache_miss_sentinel()
+    "__setting_nil__"
+  end
+
   # Look up the value for `key`. Returns the stored value (any type), or
   # `nil` if the row doesn't exist. Callers wanting a default should
   # reach for `get_or` instead of `Setting.get(k) ?? default` so a
   # stored-but-falsy value (`0`, `""`) round-trips correctly — `??`
   # short-circuits on `nil` only, which is what we want here too.
+  #
+  # Memoized via SoliKV `Cache.*` with a short TTL — same key is reused
+  # across workers so a write in any process invalidates all caches.
+  # `Setting.set` punches the key out on write; readers see the new
+  # value on the next call. Settings written outside the model API
+  # (direct AQL, manual DB writes) bypass invalidation and stay stale
+  # until the TTL expires — that's the documented contract.
   static def get(key)
-    let s = Setting.find_by("_key", key)
-    if s == nil
-      return nil
+    cached = Cache.get(Setting._cache_key(key)) rescue nil
+    if cached != nil
+      if cached == Setting._cache_miss_sentinel()
+        return nil
+      end
+      return cached
     end
-    return s.value
+    s = Setting.find_by("_key", key)
+    value = (s == nil) ? nil : s.value
+    stash = (value == nil) ? Setting._cache_miss_sentinel() : value
+    Cache.set(Setting._cache_key(key), stash, Setting._cache_ttl_seconds()) rescue null
+    return value
   end
 
   # Same as `get`, but returns `default_value` when the row is absent.
   # `get_or("limit_daily_claude", 0)` is the canonical "unlimited"
   # encoding the dashboard expects.
   static def get_or(key, default_value)
-    let v = Setting.get(key)
+    v = Setting.get(key)
     if v == nil
       return default_value
     end
@@ -43,7 +79,7 @@ class Setting < Model
   # semantics — `??` short-circuits on nil only, so a stored falsy 0
   # round-trips correctly.
   static def all_as_hash()
-    let h = {}
+    h = {}
     for s in Setting.all()
       h[s._key] = s.value
     end
@@ -63,7 +99,7 @@ class Setting < Model
   # model layer directly (see CLAUDE.md), so every controller calls this
   # and threads the hash through `render()` as `theme_css_vars`.
   static def current_theme_css_vars()
-    let preset = ThemePreset.find_by_key(Setting.current_theme())
+    preset = ThemePreset.find_by_key(Setting.current_theme())
     if preset == nil
       return {}
     end
@@ -75,11 +111,11 @@ class Setting < Model
   # `theme-light.css` overrides keep working when a preset like
   # "Dracula" or "GitHub Light" is selected.
   static def current_theme_class()
-    let preset = ThemePreset.find_by_key(Setting.current_theme())
+    preset = ThemePreset.find_by_key(Setting.current_theme())
     if preset == nil
       return "dark"
     end
-    let base = preset["base"] ?? "dark"
+    base = preset["base"] ?? "dark"
     if base == "light"
       return "light"
     end
@@ -93,14 +129,14 @@ class Setting < Model
 
   # Persist a new preset or overwrite an existing one by name.
   static def set_theme_preset(name, css_vars)
-    let presets = Setting.theme_presets()
+    presets = Setting.theme_presets()
     presets[name] = { "css_vars": css_vars }
     Setting.set("theme_presets", presets)
   end
 
   # Remove a preset by name. Returns true if it existed.
   static def remove_theme_preset(name)
-    let presets = Setting.theme_presets()
+    presets = Setting.theme_presets()
     if presets[name] == nil
       return false
     end
@@ -120,11 +156,41 @@ class Setting < Model
   # the version of the framework this app targets — the static path
   # serialises the hash and round-trips the change correctly.
   static def set(key, value)
-    let existing = Setting.find_by("_key", key)
+    # Punch the cache key BEFORE the write so a concurrent reader can't
+    # repopulate the cache from the stale row in the gap between the
+    # write completing and the cache invalidation. Worst-case repopulate
+    # races read the new value off disk — never the old one off cache.
+    Cache.delete(Setting._cache_key(key)) rescue null
+    existing = Setting.find_by("_key", key)
     if existing == nil
-      return Setting.create({ "_key": key, "value": value })
+      created = Setting.create({ "_key": key, "value": value })
+      Cache.delete(Setting._cache_key(key)) rescue null
+      return created
     end
     Setting.update(key, { "value": value })
+    Cache.delete(Setting._cache_key(key)) rescue null
     return Setting.find_by("_key", key)
+  end
+
+  # Drop a key from the DB and from the cache. Symmetric with `set`.
+  static def unset(key)
+    Cache.delete(Setting._cache_key(key)) rescue null
+    existing = Setting.find_by("_key", key)
+    if existing == nil
+      return false
+    end
+    existing.delete()
+    Cache.delete(Setting._cache_key(key)) rescue null
+    return true
+  end
+
+  # Drop every row and punch every key out of the cache. Override so test
+  # `before_each(Setting.delete_all())` doesn't leave cached values
+  # behind that would shadow a freshly-cleared DB. `Cache.clear()` wipes
+  # the whole namespace — Setting is the only cache user in this app, and
+  # tests want a hard reset between specs, so the broad sweep is fine.
+  static def delete_all()
+    Cache.clear() rescue null
+    @sdbql{ FOR doc IN settings REMOVE doc IN settings }
   end
 end

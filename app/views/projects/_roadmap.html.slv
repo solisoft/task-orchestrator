@@ -28,12 +28,12 @@
     <!-- version cards — features_by_version[v._key] = { features, done_count, total } -->
     <div class="space-y-4">
       <% for v in versions %>
-        <% let _vstatus = v.status ?? "planned" %>
-        <% let _vdata   = features_by_version[v._key] ?? {} %>
-        <% let _vfeats  = _vdata["features"] ?? [] %>
-        <% let _vdone   = _vdata["done_count"] ?? 0 %>
-        <% let _vtotal  = _vdata["total"] ?? 0 %>
-        <% let _vpct    = _vtotal > 0 ? (_vdone * 100 / _vtotal) : 0 %>
+        <% _vstatus = v.status ?? "planned" %>
+        <% _vdata   = features_by_version[v._key] ?? {} %>
+        <% _vfeats  = _vdata["features"] ?? [] %>
+        <% _vdone   = _vdata["done_count"] ?? 0 %>
+        <% _vtotal  = _vdata["total"] ?? 0 %>
+        <% _vpct    = _vtotal > 0 ? (_vdone * 100 / _vtotal) : 0 %>
 
         <div class="rounded-2xl glass-card border <%= _vstatus == "active" ? "border-emerald-500/25" : (_vstatus == "shipped" ? "border-slate-500/20" : "border-indigo-500/15") %> overflow-hidden animate-fade-in">
 
@@ -59,14 +59,14 @@
 
                 <h3 class="text-base font-semibold text-slate-100"><%= h(v.name) %></h3>
 
-                <% let _vcn = (v.code_name ?? "").trim() %>
+                <% _vcn = (v.code_name ?? "").trim() %>
                 <% if _vcn != "" %>
                   <span class="text-xs font-mono text-slate-500 italic">&ldquo;<%= h(_vcn) %>&rdquo;</span>
                 <% end %>
               </div>
 
               <div class="flex items-center gap-4 mt-1.5 flex-wrap">
-                <% let _vdd = (v.due_date ?? "").trim() %>
+                <% _vdd = (v.due_date ?? "").trim() %>
                 <% if _vdd != "" %>
                   <span class="text-xs text-slate-500">Due: <%= h(_vdd) %></span>
                 <% end %>
@@ -101,7 +101,7 @@
           <% else %>
             <ul class="divide-y divide-white/[0.04]">
               <% for f in _vfeats %>
-                <% let _fs = f.status ?? "draft" %>
+                <% _fs = f.status ?? "draft" %>
                 <li class="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
                   <% if _fs == "done" %>
                     <span class="flex-shrink-0 inline-block rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">done</span>
@@ -131,7 +131,7 @@
         </div>
         <ul class="divide-y divide-white/[0.04]">
           <% for f in unscheduled_features %>
-            <% let _ufs = f.status ?? "draft" %>
+            <% _ufs = f.status ?? "draft" %>
             <li class="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
               <% if _ufs == "done" %>
                 <span class="flex-shrink-0 inline-block rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-300 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5">done</span>

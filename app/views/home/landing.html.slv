@@ -14,9 +14,9 @@
       <a href="/projects" class="rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Projects</a>
       <a href="/docs" class="rounded-lg text-slate-300 hover:text-white text-sm font-medium px-3 py-2 transition-colors">Docs</a>
       <% if current_user != nil %>
-        <% let _name = (current_user.display_name ?? current_user.email ?? "").trim() %>
+        <% _name = (current_user.display_name ?? current_user.email ?? "").trim() %>
         <% if _name == "" %><% _name = "User" %><% end %>
-        <% let _initials = "" %>
+        <% _initials = "" %>
         <% for _part in _name.split(" ") %>
           <% if _part.length() > 0 and _initials.length() < 2 %>
             <% _initials = _initials + _part.substring(0, 1).upcase() %>

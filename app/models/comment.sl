@@ -35,8 +35,8 @@ class Comment < Model
   end
 
   static def create_comment(feature_slug, author, body)
-    let existing = Comment.for_feature(feature_slug)
-    let next_num = existing.length() + 1
+    existing = Comment.for_feature(feature_slug)
+    next_num = existing.length() + 1
     Comment.create({
       "_key":         feature_slug + "--" + str(next_num),
       "feature_slug": feature_slug,

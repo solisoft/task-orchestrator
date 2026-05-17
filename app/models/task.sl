@@ -61,7 +61,7 @@ class Task < Model
     # Use find_by so a miss returns nil rather than the 404-mapping
     # raise that `Task.find` performs. `unique_slug_for` and the show
     # action both want a soft "is this taken?" check, not an exception.
-    let by_key = Task.find_by("_key", Task.key_for(project, slug))
+    by_key = Task.find_by("_key", Task.key_for(project, slug))
     if by_key != nil
       return by_key
     end
@@ -69,7 +69,7 @@ class Task < Model
     # `<project>--<slug>` convention (legacy ingest, manual inserts)
     # still need to resolve from a slug-based URL. The (project, slug)
     # pair is unique, so .all()[0] is deterministic.
-    let rows = Task.where({ "project": project, "slug": slug }).all() rescue []
+    rows = Task.where({ "project": project, "slug": slug }).all() rescue []
     rows.length() > 0 ? rows[0] : nil
   end
 
@@ -81,7 +81,7 @@ class Task < Model
   # present (empty list if no tasks in that column), so the view can
   # iterate `Task.kanban_statuses()` without nil-checking.
   static def board_for(project)
-    let cols = {}
+    cols = {}
     for s in Task.kanban_statuses()
       cols[s] = []
     end
@@ -98,7 +98,7 @@ class Task < Model
   end
 
   static def counts_by_status(project)
-    let h = {}
+    h = {}
     for s in Task.statuses()
       h[s] = 0
     end
@@ -115,13 +115,13 @@ class Task < Model
   # queries. Projects with no tasks are absent from the result —
   # callers should default-fill with `empty_status_counts()`.
   static def counts_by_project()
-    let result = {}
+    result = {}
     for t in Task.all()
-      let project = t.project
+      project = t.project
       if result[project] == nil
         result[project] = Task.empty_status_counts()
       end
-      let status = t.status
+      status = t.status
       if result[project][status] != nil
         result[project][status] = result[project][status] + 1
       end
@@ -135,7 +135,7 @@ class Task < Model
   # fall back to `Task.counts_by_status(name)` and fan out one
   # `FILTER doc.project == @project` query per empty-on-disk project.
   static def empty_status_counts()
-    let h = {}
+    h = {}
     for s in Task.statuses()
       h[s] = 0
     end
@@ -153,30 +153,30 @@ class Task < Model
   # Each shape matches its standalone helper exactly so callers can
   # swap to this without behaviour changes.
   static def dashboard_scan(windows)
-    let counts_by_project = {}
-    let usage = {}
-    let cutoffs = {}
+    counts_by_project = {}
+    usage = {}
+    cutoffs = {}
     for w in windows
-      let buckets = {}
+      buckets = {}
       for a in Task.known_agents()
         buckets[a] = 0
       end
       usage[w] = buckets
       cutoffs[w] = Task._window_cutoff_unix(w)
     end
-    let default_agent = Task.default_agent()
+    default_agent = Task.default_agent()
     for t in Task.all()
-      let project = t.project
+      project = t.project
       if counts_by_project[project] == nil
         counts_by_project[project] = Task.empty_status_counts()
       end
-      let status = t.status
+      status = t.status
       if counts_by_project[project][status] != nil
         counts_by_project[project][status] = counts_by_project[project][status] + 1
       end
-      let unix = Task._started_at_unix(t)
+      unix = Task._started_at_unix(t)
       if unix != nil
-        let agent = Task._effective_agent_with_default(t, default_agent)
+        agent = Task._effective_agent_with_default(t, default_agent)
         if agent == nil or agent == ""
           agent = default_agent
         end
@@ -194,9 +194,9 @@ class Task < Model
   # Reads the global `Setting.get("agent_type")` value; falls back to
   # the first enabled agent so the dashboard never NPEs on a clean DB.
   static def default_agent()
-    let cfg = Setting.get("agent_type") rescue nil
+    cfg = Setting.get("agent_type") rescue nil
     if cfg == nil or cfg == ""
-      let enabled = Task.enabled_agents()
+      enabled = Task.enabled_agents()
       if enabled.length() > 0
         return enabled[0]
       end
@@ -265,10 +265,10 @@ class Task < Model
   # `known_agents()` zero-fill, and tasks outside a window's cutoff
   # simply don't increment that window's buckets.
   static def usage_by_agent_for_windows(windows)
-    let result = {}
-    let cutoffs = {}
+    result = {}
+    cutoffs = {}
     for w in windows
-      let buckets = {}
+      buckets = {}
       for a in Task.known_agents()
         buckets[a] = 0
       end
@@ -280,11 +280,11 @@ class Task < Model
     # `_effective_agent_with_default`, which never re-reads
     # `Setting.get("agent_type")` — turning the previous O(N) settings
     # fan-out into a single query.
-    let default_agent = Task.default_agent()
+    default_agent = Task.default_agent()
     for t in Task.all()
-      let unix = Task._started_at_unix(t)
+      unix = Task._started_at_unix(t)
       next if unix == nil
-      let agent = Task._effective_agent_with_default(t, default_agent)
+      agent = Task._effective_agent_with_default(t, default_agent)
       if agent == nil or agent == ""
         agent = default_agent
       end
@@ -326,7 +326,7 @@ class Task < Model
     if t.started_at == nil or t.started_at == ""
       return nil
     end
-    let dt = DateTime.parse(t.started_at) rescue nil
+    dt = DateTime.parse(t.started_at) rescue nil
     if dt == nil
       return nil
     end
@@ -338,7 +338,7 @@ class Task < Model
   # so a typo in the caller produces visible-but-bounded output rather
   # than an unbounded scan.
   static def _window_cutoff_unix(window)
-    let now = DateTime.now().to_unix()
+    now = DateTime.now().to_unix()
     if window == "week"
       return now - 86400 * 7
     end
@@ -346,7 +346,7 @@ class Task < Model
   end
 
   static def totals_for(project_name, columns)
-    let h = {}
+    h = {}
     for status in Task.kanban_statuses()
       for task in columns[status]
         h[task.slug] = Task.totals_for_task(project_name, task.slug)
@@ -356,35 +356,35 @@ class Task < Model
   end
 
   static def totals_for_task(project_name, slug)
-    let jsonl_path = run_state_root() + "/" + project_name + "/" + slug + ".log.jsonl"
+    jsonl_path = Run.run_state_root() + "/" + project_name + "/" + slug + ".log.jsonl"
     if not Trusted.exists(jsonl_path)
       return { "duration_ms": 0, "total_cost_usd": 0.0 }
     end
-    let body = Trusted.read(jsonl_path) rescue ""
+    body = Trusted.read(jsonl_path) rescue ""
     if body == ""
       return { "duration_ms": 0, "total_cost_usd": 0.0 }
     end
-    let total_ms = 0
-    let total_cost = 0.0
+    total_ms = 0
+    total_cost = 0.0
     for line in body.split("\n")
       next if line == ""
-      let obj = JSON.parse(line) rescue nil
+      obj = JSON.parse(line) rescue nil
       next if obj == nil
       if obj["type"] == "result"
-        let ms = obj["duration_ms"] ?? 0
+        ms = obj["duration_ms"] ?? 0
         if ms > 0
           total_ms = total_ms + ms
         end
-        let cost = obj["total_cost_usd"] ?? 0.0
+        cost = obj["total_cost_usd"] ?? 0.0
         if cost > 0.0
           total_cost = total_cost + cost
         end
       elsif obj["type"] == "step_finish" and obj["part"] != nil and obj["part"]["cost"] != nil
-        let ms = obj["part"]["duration_ms"] ?? 0
+        ms = obj["part"]["duration_ms"] ?? 0
         if ms > 0
           total_ms = total_ms + ms
         end
-        let cost = obj["part"]["cost"] ?? 0.0
+        cost = obj["part"]["cost"] ?? 0.0
         if cost > 0.0
           total_cost = total_cost + cost
         end
@@ -395,8 +395,8 @@ class Task < Model
 
   # Distinct project names that have at least one task ingested.
   static def known_projects()
-    let names = []
-    let seen = {}
+    names = []
+    seen = {}
     for t in Task.all()
       if seen[t.project] != true
         seen[t.project] = true
@@ -445,7 +445,7 @@ class Task < Model
   # N-spec-files times. One callback ⇒ a single invocation per save
   # regardless of reload count.
   def touch_timestamps()
-    let now = DateTime.now().to_iso()
+    now = DateTime.now().to_iso()
     if self.created_at == null
       self.created_at = now
     end
@@ -475,15 +475,15 @@ class Task < Model
     if self._key == nil or self._key == ""
       return nil
     end
-    let new_status  = self.status ?? ""
+    new_status  = self.status ?? ""
     if self.last_notified_status == new_status
       return nil
     end
-    let prev = Task.find_by("_key", self._key) rescue nil
+    prev = Task.find_by("_key", self._key) rescue nil
     if prev == nil
       return nil
     end
-    let prev_status = prev.status ?? ""
+    prev_status = prev.status ?? ""
     if prev_status == new_status
       return nil
     end
@@ -495,7 +495,7 @@ class Task < Model
       new_status,
       self.change_author
     ) rescue null
-    let url = "/projects/" + (self.project ?? "") +
+    url = "/projects/" + (self.project ?? "") +
               "/tasks/" + (self.slug ?? "")
     web_push_send_to_all({
       "title":  self.title ?? self.slug ?? "Task",
@@ -507,17 +507,14 @@ class Task < Model
   # Count of tasks tagged `follow_up` per project. Used by the dashboard
   # column so operators can see which projects have pending follow-up work.
   static def follow_up_counts()
-    let h = {}
+    h = {}
     for t in Task.all()
-      if t.tags != nil
-        for tag in t.tags
-          if tag == "follow_up"
-            let p = t.project ?? ""
-            if p != ""
-              h[p] = (h[p] ?? 0) + 1
-            end
-          end
-        end
+      next if t.tags == nil
+      for tag in t.tags
+        next if tag != "follow_up"
+        p = t.project ?? ""
+        next if p == ""
+        h[p] = (h[p] ?? 0) + 1
       end
     end
     h
@@ -529,7 +526,7 @@ class Task < Model
   def _validate_tags()
     if self.tags != nil
       for tag in self.tags
-        let ok = false
+        ok = false
         for known in Task.known_tags()
           if tag == known
             ok = true
@@ -550,7 +547,7 @@ end
 # Call this from every before_each that wipes data; it raises before any
 # damage if SOLIDB_DATABASE doesn't end with `_test`.
 fn assert_test_db()
-  let db = getenv("SOLIDB_DATABASE") ?? ""
+  db = getenv("SOLIDB_DATABASE") ?? ""
   if not db.ends_with("_test")
     throw("Refusing to wipe data: SOLIDB_DATABASE='" + db +
           "' is not a *_test database. Check .env.test.")

@@ -1,11 +1,11 @@
 <div id="comments-thread" class="space-y-4">
-  <% let meta_lookup = (locals != nil and locals["attachments_meta"] != nil) ? locals["attachments_meta"] : {} %>
-  <% let me_email = (locals != nil and locals["current_user_email"] != nil) ? locals["current_user_email"] : "" %>
+  <% meta_lookup = (locals != nil and locals["attachments_meta"] != nil) ? locals["attachments_meta"] : {} %>
+  <% me_email = (locals != nil and locals["current_user_email"] != nil) ? locals["current_user_email"] : "" %>
   <% for comment in comments %>
-    <% let author = comment.author ?? "?" %>
-    <% let initial = (author == "" ? "?" : author.substring(0, 1).upcase()) %>
-    <% let blob_ids = comment.attachment_blob_ids ?? [] %>
-    <% let is_mine = (me_email != "" and author == me_email) %>
+    <% author = comment.author ?? "?" %>
+    <% initial = (author == "" ? "?" : author.substring(0, 1).upcase()) %>
+    <% blob_ids = comment.attachment_blob_ids ?? [] %>
+    <% is_mine = (me_email != "" and author == me_email) %>
     <div class="flex gap-3 group">
       <div class="avatar-bubble"><%= initial %></div>
       <div class="flex-1 min-w-0 rounded-lg bg-white/[0.03] border border-white/5 px-4 py-3">
@@ -30,11 +30,11 @@
         <% if blob_ids.length() > 0 %>
           <div class="mt-3 grid sm:grid-cols-2 gap-2">
             <% for blob_id in blob_ids %>
-              <% let meta = meta_lookup[blob_id] %>
-              <% let filename = (meta != nil and meta["name"] != nil) ? meta["name"] : blob_id %>
-              <% let ctype = (meta != nil and meta["type"] != nil) ? meta["type"] : "" %>
-              <% let href = "/comments/" + comment._key + "/attachment/" + blob_id %>
-              <% let is_image = ctype.starts_with("image/") %>
+              <% meta = meta_lookup[blob_id] %>
+              <% filename = (meta != nil and meta["name"] != nil) ? meta["name"] : blob_id %>
+              <% ctype = (meta != nil and meta["type"] != nil) ? meta["type"] : "" %>
+              <% href = "/comments/" + comment._key + "/attachment/" + blob_id %>
+              <% is_image = ctype.starts_with("image/") %>
               <% if is_image %>
                 <a href="<%= href %>" target="_blank" class="block rounded-lg overflow-hidden border border-white/5 hover:border-indigo-400/40 transition-colors group relative bg-slate-900">
                   <img src="<%= href %>?thumb=480"

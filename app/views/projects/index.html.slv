@@ -21,7 +21,7 @@
     <% else %>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in animate-fade-in-1">
         <% for p in projects %>
-          <% let _vc = version_counts[p["name"]] ?? { "total": 0, "active": 0 } %>
+          <% _vc = version_counts[p["name"]] ?? { "total": 0, "active": 0 } %>
           <article class="glass-card rounded-xl p-5 hover:border-indigo-400/40 transition-colors group">
             <div class="flex items-start justify-between gap-3 mb-3">
               <a href="/projects/<%= h(p["name"]) %>" class="text-lg font-semibold tracking-tight text-white group-hover:text-indigo-200 transition-colors truncate">

@@ -34,7 +34,7 @@
       <% end %>
     </optgroup>
   <% end %>
-  <% let cx_opts = codex_options ?? [] %>
+  <% cx_opts = codex_options ?? [] %>
   <% if cx_opts.length() > 0 %>
     <optgroup label="codex CLI">
       <% for m in cx_opts %>

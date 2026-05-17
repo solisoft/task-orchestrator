@@ -25,12 +25,12 @@
     <textarea name="description" rows="12" class="w-full rounded-xl bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-4 font-mono text-sm text-slate-100 resize-y" placeholder="Describe the feature, UI/UX brief, acceptance criteria..."><%= feature == nil ? "" : (feature.description ?? "") %></textarea>
   </div>
 
-  <% let _versions = locals["versions"] ?? [] %>
+  <% _versions = locals["versions"] ?? [] %>
   <% if _versions.length() > 0 or (feature != nil and (feature.version_id ?? "") != "") %>
     <div>
       <label class="block text-sm font-medium text-slate-300 mb-1">Cycle</label>
       <p class="text-xs text-slate-500 mb-2">Shape Up cycle / bet this feature belongs to. Leave on Unscheduled to keep it in the backlog.</p>
-      <% let _cur_vid = (feature == nil ? "" : (feature.version_id ?? "")) %>
+      <% _cur_vid = (feature == nil ? "" : (feature.version_id ?? "")) %>
       <select name="version_id" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none px-4 py-2 text-sm text-slate-100">
         <option value="" <%= _cur_vid == "" ? "selected" : "" %>>Unscheduled</option>
         <% for v in _versions %>
@@ -55,7 +55,7 @@
   <div>
     <label class="block text-sm font-medium text-slate-300 mb-1">Plan model</label>
     <p class="text-xs text-slate-500 mb-2">Model used when this feature&rsquo;s brief is turned into tasks. Leave blank to use the global default (<span class="font-mono"><%= default_plan_model %></span>).</p>
-    <% let _cur_pm = (feature == nil ? "" : (feature.plan_model ?? "")) %>
+    <% _cur_pm = (feature == nil ? "" : (feature.plan_model ?? "")) %>
     <%- partial("features/plan_model_select", {
       "name":             "plan_model",
       "current":          _cur_pm,

@@ -27,7 +27,7 @@ class Plan < Model
   end
 
   static def append_log(plan_id, text)
-    let plan = Plan.find_by_plan_id(plan_id)
+    plan = Plan.find_by_plan_id(plan_id)
     if plan != nil
       plan.log = (plan.log ?? "") + text
       plan.save()
@@ -35,7 +35,7 @@ class Plan < Model
   end
 
   static def append_status(plan_id, status)
-    let plan = Plan.find_by_plan_id(plan_id)
+    plan = Plan.find_by_plan_id(plan_id)
     if plan != nil
       plan.status = status
       plan.updated_at = DateTime.now().to_iso()
@@ -44,7 +44,7 @@ class Plan < Model
   end
 
   static def update_pending_question(plan_id, pq)
-    let plan = Plan.find_by_plan_id(plan_id)
+    plan = Plan.find_by_plan_id(plan_id)
     if plan != nil
       plan.pending_question = pq
       plan.save()
@@ -80,7 +80,7 @@ class Plan < Model
   # An empty list means "no filter applied — show every detected model".
   # Persisted under the `allowed_models` Setting key by the settings page.
   static def allowed_model_ids()
-    let raw = Setting.get_or("allowed_models", [])
+    raw = Setting.get_or("allowed_models", [])
     if raw == nil
       return []
     end
@@ -93,14 +93,14 @@ class Plan < Model
   # output, even if removed from the allowlist, so the persisted choice
   # remains visible in the dropdown.
   static def filter_allowed(ids, current)
-    let allow = Plan.allowed_model_ids()
+    allow = Plan.allowed_model_ids()
     if allow.length() == 0
       return ids
     end
-    let cur = (current ?? "").trim()
-    let out = []
+    cur = (current ?? "").trim()
+    out = []
     for id in ids
-      let keep = false
+      keep = false
       for a in allow
         if a == id
           keep = true
@@ -121,7 +121,7 @@ class Plan < Model
   # controller to reject `plan_model` writes that fall outside the
   # configured allowlist.
   static def is_allowed_model(id)
-    let allow = Plan.allowed_model_ids()
+    allow = Plan.allowed_model_ids()
     if allow.length() == 0
       return true
     end
@@ -153,18 +153,18 @@ class Plan < Model
   # Every branch passes through `allow_plan_model` so the result is
   # safe to splice into the `bin/plan-run` shell command line.
   static def resolve_plan_model(feature, form)
-    let f = form ?? {}
-    let form_model = (f["plan_model"] ?? "").trim()
+    f = form ?? {}
+    form_model = (f["plan_model"] ?? "").trim()
     if form_model != ""
-      let variant = (f["plan_variant"] ?? "").trim()
-      let is_opencode = form_model.index_of("/") > 0
+      variant = (f["plan_variant"] ?? "").trim()
+      is_opencode = form_model.index_of("/") > 0
       if is_opencode and variant != "" and variant != "default" and Plan._matches_segment(variant, "variant")
         return Plan.allow_plan_model(form_model + ":" + variant)
       end
       return Plan.allow_plan_model(form_model)
     end
     if feature != nil
-      let fm = (feature.plan_model ?? "").trim()
+      fm = (feature.plan_model ?? "").trim()
       if fm != ""
         return Plan.allow_plan_model(fm)
       end
@@ -179,7 +179,7 @@ class Plan < Model
   # Anything else collapses to the canonical default — never raises,
   # never echoes the bad value back.
   static def allow_plan_model(value)
-    let v = (value ?? "").trim()
+    v = (value ?? "").trim()
     for a in Plan.claude_model_ids()
       if v == a
         return v
@@ -201,7 +201,7 @@ class Plan < Model
     if not s.starts_with("codex/")
       return false
     end
-    let model = s.substring(6, s.length)
+    model = s.substring(6, s.length)
     if model.length() == 0
       return false
     end
@@ -216,15 +216,15 @@ class Plan < Model
     if s.length() == 0 or s.length() > 200
       return false
     end
-    let slash = s.index_of("/")
+    slash = s.index_of("/")
     if slash <= 0 or slash == s.length() - 1
       return false
     end
-    let provider = s.substring(0, slash)
-    let rest     = s.substring(slash + 1, s.length)
-    let colon    = rest.index_of(":")
-    let model    = rest
-    let variant  = ""
+    provider = s.substring(0, slash)
+    rest     = s.substring(slash + 1, s.length)
+    colon    = rest.index_of(":")
+    model    = rest
+    variant  = ""
     if colon > 0
       model   = rest.substring(0, colon)
       variant = rest.substring(colon + 1, rest.length)
@@ -242,10 +242,10 @@ class Plan < Model
     if s.length() == 0
       return false
     end
-    let i = 0
+    i = 0
     while i < s.length()
-      let c = s.substring(i, i + 1)
-      let ok = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
+      c = s.substring(i, i + 1)
+      ok = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
               or (c >= "0" and c <= "9") or c == "-" or c == "_"
       if not ok and kind == "model" and c == "."
         ok = true
@@ -262,7 +262,7 @@ class Plan < Model
   end
 
   def touch_timestamps()
-    let now = DateTime.now().to_iso()
+    now = DateTime.now().to_iso()
     if self.created_at == nil
       self.created_at = now
     end
@@ -274,22 +274,22 @@ class Plan < Model
     if self._key == nil or self._key == ""
       return nil
     end
-    let new_status = self.status ?? ""
+    new_status = self.status ?? ""
     if self.last_notified_status == new_status
       return nil
     end
-    let prev = Plan.find_by("_key", self._key) rescue nil
+    prev = Plan.find_by("_key", self._key) rescue nil
     if prev == nil
       return nil
     end
-    let prev_status = prev.status ?? ""
+    prev_status = prev.status ?? ""
     if prev_status == new_status
       return nil
     end
     self.last_notified_status = new_status
-    let ts = self.task_slug ?? ""
-    let fs = self.feature_slug ?? ""
-    let url = ""
+    ts = self.task_slug ?? ""
+    fs = self.feature_slug ?? ""
+    url = ""
     if ts != ""
       url = "/projects/" + (self.project ?? "") + "/tasks/" + ts
     elsif fs != ""
@@ -297,7 +297,7 @@ class Plan < Model
     else
       url = "/projects/" + (self.project ?? "")
     end
-    let title = self.prompt_preview(80)
+    title = self.prompt_preview(80)
     if title == nil or title == ""
       title = self.plan_id ?? "Plan"
     end
@@ -309,11 +309,11 @@ class Plan < Model
   end
 
   def prompt_emoji()
-    let s = (self.prompt ?? "").strip()
+    s = (self.prompt ?? "").strip()
     if s == ""
       return ""
     end
-    let n = 12
+    n = 12
     if s.length() < n
       n = s.length()
     end
@@ -323,7 +323,7 @@ class Plan < Model
   # Single-line teaser for the index summary row. Newlines collapsed to
   # spaces, hard-capped at `max` chars with an ellipsis when longer.
   def prompt_preview(max)
-    let s = (self.prompt ?? "").gsub("\n", " ").trim()
+    s = (self.prompt ?? "").gsub("\n", " ").trim()
     if s.length() <= max
       return s
     end
@@ -331,7 +331,7 @@ class Plan < Model
   end
 
   def write_pending_answer(qid, value)
-    let answer = { "id": qid, "value": value }
+    answer = { "id": qid, "value": value }
     self.pending_question = answer
     self.save()
   end
@@ -341,7 +341,7 @@ class Plan < Model
   # flows; the plans index page does NOT call this in the view loop —
   # plans_controller#index batches the lookup off the N+1 path.
   def linked_task()
-    let slug = (self.task_slug ?? "").trim()
+    slug = (self.task_slug ?? "").trim()
     if slug == ""
       return nil
     end
@@ -355,7 +355,7 @@ class Plan < Model
     if pid == nil
       return nil
     end
-    let res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
+    res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
     res["exit_code"] == 0
   end
 
@@ -365,7 +365,7 @@ class Plan < Model
     if self.updated_at == nil or self.updated_at == ""
       return nil
     end
-    let prior = DateTime.parse(self.updated_at).to_unix() rescue nil
+    prior = DateTime.parse(self.updated_at).to_unix() rescue nil
     if prior == nil
       return nil
     end
@@ -377,16 +377,16 @@ class Plan < Model
   # button (plan_retry) drives any re-spawn. Terminal statuses
   # (done / failed:*) pass through unchanged.
   def effective_status()
-    let s = self.status ?? ""
+    s = self.status ?? ""
     if s == "done" or s.starts_with("failed:")
       return s
     end
-    let alive = Plan._pid_alive(self.pid)
+    alive = Plan._pid_alive(self.pid)
     if alive == false
       return "failed:zombie (no live process)"
     end
     if alive == nil
-      let age = self._stale_seconds()
+      age = self._stale_seconds()
       if age != nil and age > 600
         return "failed:zombie (no heartbeat for " + str(age / 60) + "m)"
       end
@@ -402,7 +402,7 @@ end
 # AND the spec suite — which doesn't auto-load controller files — can
 # exercise the building blocks without going through HTTP.
 fn read_plan_state(plan_id)
-  let plan = Plan.find_by_plan_id(plan_id)
+  plan = Plan.find_by_plan_id(plan_id)
   if plan == nil
     return {
       "status":           "unknown",
@@ -434,28 +434,28 @@ end
 # client to navigate after the agent finishes — used for `done` so the
 # server-rendered post-agent view replaces the streaming UI.
 fn plan_stream_payload(plan_id, event_type, offset)
-  let state = read_plan_state(plan_id)
+  state = read_plan_state(plan_id)
   if state["status"] == "unknown"
     return { "event": "error", "terminal": true, "message": "unknown plan" }
   end
-  let cursor = offset
+  cursor = offset
   if cursor == nil or cursor < 0
     cursor = 0
   end
-  let log = state["log"] ?? ""
-  let size = log.length
+  log = state["log"] ?? ""
+  size = log.length
   # Cursor past end (truncate / restart) wraps back to 0 — we'd rather
   # double-paint a few bytes than skip them.
   if cursor > size
     cursor = 0
   end
-  let chunk = ""
+  chunk = ""
   if cursor < size
     chunk = log.substring(cursor, size)
   end
-  let status_token = state["status"]
-  let done = status_token == "done"
-  let failed = status_token.starts_with("failed:")
+  status_token = state["status"]
+  done = status_token == "done"
+  failed = status_token.starts_with("failed:")
   {
     "event":            event_type == "connect" ? "snapshot" : "delta",
     "log_chunk":        chunk,

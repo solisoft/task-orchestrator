@@ -7,19 +7,19 @@ describe("RunsController", fn()
 
   describe("GET /projects/:name/tasks/:slug/run", fn()
     test("returns 404 for unknown project", fn()
-      let response = get("/projects/nonexistent/tasks/some-task/run")
+      response = get("/projects/nonexistent/tasks/some-task/run")
       assert_eq(res_status(response), 404)
     end)
 
     test("returns 404 for unknown task", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_run_test/tasks/todo"])
-      let response = get("/projects/proj_run_test/tasks/nonexistent/run")
+      response = get("/projects/proj_run_test/tasks/nonexistent/run")
       assert_eq(res_status(response), 404)
     end)
 
     test("returns 200 for valid project and task", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_run_ok/tasks/todo"])
       Task.create({
         "_key":    "proj_run_ok--task-run",
@@ -28,26 +28,26 @@ describe("RunsController", fn()
         "title":   "Task Run",
         "status":  "todo"
       })
-      let response = get("/projects/proj_run_ok/tasks/task-run/run")
+      response = get("/projects/proj_run_ok/tasks/task-run/run")
       assert_eq(res_status(response), 200)
     end)
   end)
 
   describe("GET /projects/:name/tasks/:slug/run/log", fn()
     test("returns 404 for unknown project", fn()
-      let response = get("/projects/nonexistent/tasks/some-task/run/log")
+      response = get("/projects/nonexistent/tasks/some-task/run/log")
       assert_eq(res_status(response), 404)
     end)
 
     test("returns 404 for unknown task", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_log_test/tasks/todo"])
-      let response = get("/projects/proj_log_test/tasks/nonexistent/run/log")
+      response = get("/projects/proj_log_test/tasks/nonexistent/run/log")
       assert_eq(res_status(response), 404)
     end)
 
     test("returns 200 for valid project and task", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_log_ok/tasks/todo"])
       Task.create({
         "_key":    "proj_log_ok--task-log",
@@ -56,7 +56,7 @@ describe("RunsController", fn()
         "title":   "Task Log",
         "status":  "todo"
       })
-      let response = get("/projects/proj_log_ok/tasks/task-log/run/log")
+      response = get("/projects/proj_log_ok/tasks/task-log/run/log")
       assert_eq(res_status(response), 200)
     end)
   end)
@@ -71,7 +71,7 @@ describe("RunsController", fn()
     end)
 
     test("returns 422 for non-resumable task", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_resume/tasks/todo"])
       Task.create({
         "_key":    "proj_resume--resume-me",
@@ -80,7 +80,7 @@ describe("RunsController", fn()
         "title":   "Resume me",
         "status":  "done"
       })
-      let response = post("/projects/proj_resume/tasks/resume-me/run/resume", {})
+      response = post("/projects/proj_resume/tasks/resume-me/run/resume", {})
       assert_eq(res_status(response), 422)
       assert_contains(res_body(response), "not in a resumable state")
     end)

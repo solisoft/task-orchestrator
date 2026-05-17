@@ -24,21 +24,21 @@ def _tsn_count_my_lines()
   if not Trusted.exists(_tsn_log)
     return 0
   end
-  let body = (Trusted.read(_tsn_log) rescue "").trim()
+  body = (Trusted.read(_tsn_log) rescue "").trim()
   if body == ""
     return 0
   end
-  let n = 0
+  n = 0
   for line in body.split("\n")
     if line == ""
       next
     end
-    let entry = JSON.parse(line) rescue nil
+    entry = JSON.parse(line) rescue nil
     if entry == nil
       next
     end
-    let payload = entry["payload"] ?? {}
-    let url = (payload["url"] ?? "")
+    payload = entry["payload"] ?? {}
+    url = (payload["url"] ?? "")
     if url.starts_with("/projects/tsn/")
       n = n + 1
     end
@@ -47,11 +47,11 @@ def _tsn_count_my_lines()
 end
 
 def _tsn_my_payloads()
-  let out = []
+  out = []
   if not Trusted.exists(_tsn_log)
     return out
   end
-  let body = (Trusted.read(_tsn_log) rescue "").trim()
+  body = (Trusted.read(_tsn_log) rescue "").trim()
   if body == ""
     return out
   end
@@ -59,12 +59,12 @@ def _tsn_my_payloads()
     if line == ""
       next
     end
-    let entry = JSON.parse(line) rescue nil
+    entry = JSON.parse(line) rescue nil
     if entry == nil
       next
     end
-    let payload = entry["payload"] ?? {}
-    let url = (payload["url"] ?? "")
+    payload = entry["payload"] ?? {}
+    url = (payload["url"] ?? "")
     if url.starts_with("/projects/tsn/")
       out.push(payload)
     end
@@ -105,7 +105,7 @@ describe("Task status-change notification", fn()
 
   test("notifies exactly once on a status transition", fn()
     _tsn_seed_task("flip", "todo")
-    let t = Task.find_by_slug("tsn", "flip")
+    t = Task.find_by_slug("tsn", "flip")
     t.status = "queued"
     t.save()
     assert_eq(_tsn_count_my_lines(), 1)
@@ -113,7 +113,7 @@ describe("Task status-change notification", fn()
 
   test("does NOT notify when save() does not change status", fn()
     _tsn_seed_task("notitle", "todo")
-    let t = Task.find_by_slug("tsn", "notitle")
+    t = Task.find_by_slug("tsn", "notitle")
     t.title = "new title — same status"
     t.save()
     assert_eq(_tsn_count_my_lines(), 0)
@@ -121,12 +121,12 @@ describe("Task status-change notification", fn()
 
   test("dispatched payload carries title, new status, and click-through URL", fn()
     _tsn_seed_task("payload", "todo")
-    let t = Task.find_by_slug("tsn", "payload")
+    t = Task.find_by_slug("tsn", "payload")
     t.status = "review"
     t.save()
-    let payloads = _tsn_my_payloads()
+    payloads = _tsn_my_payloads()
     assert_eq(payloads.length(), 1)
-    let payload = payloads[0]
+    payload = payloads[0]
     assert_eq(payload["status"], "review")
     assert_eq(payload["url"], "/projects/tsn/tasks/payload")
     assert_eq(payload["title"], "title for payload")
@@ -134,10 +134,10 @@ describe("Task status-change notification", fn()
 
   test("notifies on every distinct transition (todo → queued → inprogress)", fn()
     _tsn_seed_task("multi", "todo")
-    let t = Task.find_by_slug("tsn", "multi")
+    t = Task.find_by_slug("tsn", "multi")
     t.status = "queued"
     t.save()
-    let t2 = Task.find_by_slug("tsn", "multi")
+    t2 = Task.find_by_slug("tsn", "multi")
     t2.status = "inprogress"
     t2.save()
     assert_eq(_tsn_count_my_lines(), 2)

@@ -1,13 +1,13 @@
-<% let token = status == nil ? nil : status["status"] %>
-<% let polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
-<% let todo_list = todos ?? [] %>
-<% let initial_offset = log_size %>
+<% token = status == nil ? nil : status["status"] %>
+<% polling = token != nil and not token.starts_with("done:") and not token.starts_with("failed:") %>
+<% todo_list = todos ?? [] %>
+<% initial_offset = log_size %>
 <%
   # When the SSR `tail` was capped (log_size > tail.length), the bytes
   # before the visible tail need to be backfilled on WS connect. The
   # client sends this byte position so the server includes a one-shot
   # `prefix_chunk` in the snapshot, which the client prepends above SSR.
-  let prefix_end = log_size - tail.length
+  prefix_end = log_size - tail.length
 %>
 
 <div id="run-panel"

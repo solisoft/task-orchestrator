@@ -15,7 +15,7 @@ describe("Feature model", fn()
 
   describe("Feature#stage", fn()
     test("draft brief with no tasks is in shape", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--idea", "project": "myapp", "slug": "idea",
         "title": "Idea", "status": "draft"
       })
@@ -23,7 +23,7 @@ describe("Feature model", fn()
     end)
 
     test("ready brief with no tasks is on the betting table", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--ready1", "project": "myapp", "slug": "ready1",
         "title": "Ready", "status": "ready"
       })
@@ -31,7 +31,7 @@ describe("Feature model", fn()
     end)
 
     test("feature with todo/queued/inprogress tasks moves to build", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--build1", "project": "myapp", "slug": "build1",
         "title": "Build", "status": "ready"
       })
@@ -42,7 +42,7 @@ describe("Feature model", fn()
     end)
 
     test("feature with tasks in review moves to ship", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--ship1", "project": "myapp", "slug": "ship1",
         "title": "Ship", "status": "in-progress"
       })
@@ -52,7 +52,7 @@ describe("Feature model", fn()
     end)
 
     test("done feature is always ship", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--done1", "project": "myapp", "slug": "done1",
         "title": "Done", "status": "done"
       })
@@ -61,7 +61,7 @@ describe("Feature model", fn()
     end)
 
     test("in-progress feature with no live tasks still reports build", fn()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--ip1", "project": "myapp", "slug": "ip1",
         "title": "InP", "status": "in-progress"
       })
@@ -70,7 +70,7 @@ describe("Feature model", fn()
 
     test("stage with no arg counts the feature's own tasks", fn()
       Task.delete_all()
-      let f = Feature.create({
+      f = Feature.create({
         "_key": "myapp--auto1", "project": "myapp", "slug": "auto1",
         "title": "Auto", "status": "ready"
       })
@@ -83,19 +83,19 @@ describe("Feature model", fn()
   end)
 
   test("statuses returns all valid statuses", fn()
-    let s = Feature.statuses()
+    s = Feature.statuses()
     assert_eq(s.length(), 4)
     assert_eq(s[0], "draft")
     assert_eq(s[3], "done")
   end)
 
   test("validates required fields", fn()
-    let f = Feature.create({})
+    f = Feature.create({})
     assert(f._errors != nil)
   end)
 
   test("validates status format", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -106,7 +106,7 @@ describe("Feature model", fn()
   end)
 
   test("creates a feature with valid data", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":        "myapp--dark-mode",
       "project":     "myapp",
       "slug":        "dark-mode",
@@ -122,7 +122,7 @@ describe("Feature model", fn()
   end)
 
   test("sets created_at when a feature is created", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -155,9 +155,9 @@ describe("Feature model", fn()
       "title":   "Test Feature",
       "status":  "draft"
     })
-    let f = Feature.find_by_slug("myapp", "feat1")
+    f = Feature.find_by_slug("myapp", "feat1")
     assert_not_null(f)
-    let missing = Feature.find_by_slug("myapp", "nonexistent")
+    missing = Feature.find_by_slug("myapp", "nonexistent")
     assert_null(missing)
   end)
 
@@ -183,14 +183,14 @@ describe("Feature model", fn()
       "title":   "Other Feature",
       "status":  "draft"
     })
-    let myapp_features = Feature.for_project("myapp")
+    myapp_features = Feature.for_project("myapp")
     assert_eq(myapp_features.length(), 2)
-    let other_features = Feature.for_project("other")
+    other_features = Feature.for_project("other")
     assert_eq(other_features.length(), 1)
   end)
 
   test("tasks returns linked tasks", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -215,12 +215,12 @@ describe("Feature model", fn()
       "feature_slug": "myapp--feat1",
       "author":       "test@example.com"
     })
-    let tasks = f.tasks()
+    tasks = f.tasks()
     assert_eq(tasks.length(), 2)
   end)
 
   test("comments returns associated comments", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -229,14 +229,14 @@ describe("Feature model", fn()
     })
     Comment.create_comment("myapp--feat1", "user@test.com", "Nice feature!")
     Comment.create_comment("myapp--feat1", "user2@test.com", "I agree")
-    let comments = f.comments()
+    comments = f.comments()
     assert_eq(comments.length(), 2)
     assert_eq(comments[0].body, "Nice feature!")
     assert_eq(comments[1].body, "I agree")
   end)
 
   test("updates feature fields and saves", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -247,7 +247,7 @@ describe("Feature model", fn()
     f.description = "Updated description"
     f.status = "ready"
     f.save()
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.title, "New Title")
     assert_eq(reloaded.description, "Updated description")
     assert_eq(reloaded.status, "ready")
@@ -261,15 +261,15 @@ describe("Feature model", fn()
       "title":   "To Delete",
       "status":  "draft"
     })
-    let f = Feature.find_by_slug("myapp", "feat1")
+    f = Feature.find_by_slug("myapp", "feat1")
     assert_not_null(f)
     f.delete()
-    let deleted = Feature.find_by_slug("myapp", "feat1")
+    deleted = Feature.find_by_slug("myapp", "feat1")
     assert_null(deleted)
   end)
 
   test("task has feature_slug and author fields", fn()
-    let task = Task.create({
+    task = Task.create({
       "_key":         "myapp--task1",
       "project":      "myapp",
       "slug":         "task1",
@@ -284,7 +284,7 @@ describe("Feature model", fn()
   end)
 
   test("recompute_status! flips to done when every linked task is done", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -308,12 +308,12 @@ describe("Feature model", fn()
       "feature_slug": "myapp--feat1"
     })
     assert(f.recompute_status!())
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "done")
   end)
 
   test("recompute_status! is a no-op when a linked task is still open", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -337,12 +337,12 @@ describe("Feature model", fn()
       "feature_slug": "myapp--feat1"
     })
     assert(not f.recompute_status!())
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "in-progress")
   end)
 
   test("recompute_status! ignores archived tasks", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -366,12 +366,12 @@ describe("Feature model", fn()
       "feature_slug": "myapp--feat1"
     })
     assert(f.recompute_status!())
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "done")
   end)
 
   test("recompute_status! refuses to complete a feature with no done task", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -387,12 +387,12 @@ describe("Feature model", fn()
       "feature_slug": "myapp--feat1"
     })
     assert(not f.recompute_status!())
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "ready")
   end)
 
   test("recompute_status! does nothing for a feature already done", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -410,7 +410,7 @@ describe("Feature model", fn()
       "title":   "Test Feature",
       "status":  "in-progress"
     })
-    let t = Task.create({
+    t = Task.create({
       "_key":         "myapp--solo",
       "project":      "myapp",
       "slug":         "solo",
@@ -418,14 +418,14 @@ describe("Feature model", fn()
       "status":       "done",
       "feature_slug": "myapp--feat1"
     })
-    let refreshed = Feature.refresh_for_task(t)
+    refreshed = Feature.refresh_for_task(t)
     assert_not_null(refreshed)
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "done")
   end)
 
   test("refresh_for_task returns nil for a task with no feature_slug", fn()
-    let t = Task.create({
+    t = Task.create({
       "_key":    "myapp--orphan",
       "project": "myapp",
       "slug":    "orphan",
@@ -436,7 +436,7 @@ describe("Feature model", fn()
   end)
 
   test("persists plan_model on the feature row", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":       "myapp--feat1",
       "project":    "myapp",
       "slug":       "feat1",
@@ -445,7 +445,7 @@ describe("Feature model", fn()
       "plan_model": "claude-opus-4-7"
     })
     assert(f._errors == nil)
-    let reloaded = Feature.find_by_slug("myapp", "feat1")
+    reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.plan_model, "claude-opus-4-7")
   end)
 
@@ -480,40 +480,40 @@ describe("Feature model", fn()
     end)
 
     test("returns results matching title", fn()
-      let result = Feature.search("", "dark", 0, 10)
+      result = Feature.search("", "dark", 0, 10)
       assert_eq(result["total"], 2)
       assert_eq(result["results"].length(), 2)
     end)
 
     test("returns results matching description", fn()
-      let result = Feature.search("", "reusable", 0, 10)
+      result = Feature.search("", "reusable", 0, 10)
       assert_eq(result["total"], 1)
       assert_eq(result["results"].length(), 1)
       assert_eq(result["results"][0].title, "Search bar component")
     end)
 
     test("scopes search to a project", fn()
-      let result = Feature.search("proj1", "dark", 0, 10)
+      result = Feature.search("proj1", "dark", 0, 10)
       assert_eq(result["total"], 1)
       assert_eq(result["results"].length(), 1)
       assert_eq(result["results"][0].title, "Dark mode support")
     end)
 
     test("returns empty array when nothing matches", fn()
-      let result = Feature.search("", "nonexistent", 0, 10)
+      result = Feature.search("", "nonexistent", 0, 10)
       assert_eq(result["total"], 0)
       assert_eq(result["results"].length(), 0)
     end)
 
     test("respects limit", fn()
-      let result = Feature.search("", "", 0, 1)
+      result = Feature.search("", "", 0, 1)
       assert_eq(result["results"].length(), 1)
       assert_eq(result["total"], 3)
     end)
 
     test("respects offset", fn()
-      let first = Feature.search("", "", 0, 1)
-      let second = Feature.search("", "", 1, 1)
+      first = Feature.search("", "", 0, 1)
+      second = Feature.search("", "", 1, 1)
       assert_eq(first["results"].length(), 1)
       assert_eq(second["results"].length(), 1)
       # Ensure offset returns a different feature than the first page
@@ -521,13 +521,13 @@ describe("Feature model", fn()
     end)
 
     test("returns all features when query is empty and no project scope", fn()
-      let result = Feature.search("", "", 0, 100)
+      result = Feature.search("", "", 0, 100)
       assert_eq(result["total"], 3)
       assert_eq(result["results"].length(), 3)
     end)
 
     test("returns project-scoped features when query is empty", fn()
-      let result = Feature.search("proj2", "", 0, 10)
+      result = Feature.search("proj2", "", 0, 10)
       assert_eq(result["total"], 1)
       assert_eq(result["results"].length(), 1)
       assert_eq(result["results"][0].title, "Dark theme for dashboard")
@@ -539,7 +539,7 @@ describe("Feature model", fn()
     Feature.create({ "_key": "p1--f1", "project": "p1", "slug": "f1", "title": "F1", "status": "draft" })
     Feature.create({ "_key": "p1--f2", "project": "p1", "slug": "f2", "title": "F2", "status": "draft" })
     Feature.create({ "_key": "p2--f3", "project": "p2", "slug": "f3", "title": "F3", "status": "draft" })
-    let features = Feature.for_project("p1")
+    features = Feature.for_project("p1")
     assert_eq(features.length(), 2)
   end)
 
@@ -556,20 +556,24 @@ describe("Feature model", fn()
   test("Feature.tasks returns linked tasks", fn()
     Feature.delete_all()
     Task.delete_all()
-    let f = Feature.create({ "_key": "proj--with-tasks", "project": "proj", "slug": "with-tasks", "title": "With tasks", "status": "draft" })
-    Task.create({ "_key": "proj--t1", "project": "proj", "slug": "t1", "title": "T1", "status": "todo", "feature_slug": "proj--with-tasks" })
-    Task.create({ "_key": "proj--t2", "project": "proj", "slug": "t2", "title": "T2", "status": "done", "feature_slug": "proj--with-tasks" })
-    let tasks = f.tasks()
+    f = Feature.create({ "_key": "proj--with-tasks", "project": "proj",
+      "slug": "with-tasks", "title": "With tasks", "status": "draft" })
+    Task.create({ "_key": "proj--t1", "project": "proj", "slug": "t1",
+      "title": "T1", "status": "todo", "feature_slug": "proj--with-tasks" })
+    Task.create({ "_key": "proj--t2", "project": "proj", "slug": "t2",
+      "title": "T2", "status": "done", "feature_slug": "proj--with-tasks" })
+    tasks = f.tasks()
     assert_eq(tasks.length(), 2)
   end)
 
   test("Feature.comments returns linked comments", fn()
     Feature.delete_all()
     Comment.delete_all()
-    let f = Feature.create({ "_key": "proj--with-comments", "project": "proj", "slug": "with-comments", "title": "With comments", "status": "draft" })
+    f = Feature.create({ "_key": "proj--with-comments", "project": "proj",
+      "slug": "with-comments", "title": "With comments", "status": "draft" })
     Comment.create_comment("proj--with-comments", "user@test.com", "First!")
     Comment.create_comment("proj--with-comments", "user@test.com", "Second!")
-    let comments = f.comments()
+    comments = f.comments()
     assert_eq(comments.length(), 2)
   end)
 
@@ -579,15 +583,18 @@ describe("Feature model", fn()
 
   test("recompute_status! returns false when already done", fn()
     Feature.delete_all()
-    let f = Feature.create({ "_key": "proj--already-done", "project": "proj", "slug": "already-done", "title": "Done", "status": "done" })
+    f = Feature.create({ "_key": "proj--already-done", "project": "proj",
+      "slug": "already-done", "title": "Done", "status": "done" })
     assert(not f.recompute_status!())
   end)
 
   test("recompute_status! returns false when only archived tasks exist", fn()
     Feature.delete_all()
     Task.delete_all()
-    let f = Feature.create({ "_key": "proj--archived-only", "project": "proj", "slug": "archived-only", "title": "Archived only", "status": "in-progress" })
-    Task.create({ "_key": "proj--arch", "project": "proj", "slug": "arch", "title": "Arch", "status": "archived", "feature_slug": "proj--archived-only" })
+    f = Feature.create({ "_key": "proj--archived-only", "project": "proj",
+      "slug": "archived-only", "title": "Archived only", "status": "in-progress" })
+    Task.create({ "_key": "proj--arch", "project": "proj", "slug": "arch",
+      "title": "Arch", "status": "archived", "feature_slug": "proj--archived-only" })
     assert(not f.recompute_status!())
   end)
 end)
@@ -604,7 +611,7 @@ describe("Feature row author column", fn()
   end)
 
   test("persists author when Feature.create receives one", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--by-author",
       "project": "myapp",
       "slug":    "by-author",
@@ -613,7 +620,7 @@ describe("Feature row author column", fn()
       "author":  "author@example.com"
     })
     assert(f._errors == nil)
-    let reloaded = Feature.find_by_slug("myapp", "by-author")
+    reloaded = Feature.find_by_slug("myapp", "by-author")
     assert_eq(reloaded.author, "author@example.com")
   end)
 end)
@@ -625,17 +632,17 @@ end)
 # we can build an Origin header that matches the CSRF check's request
 # authority regardless of which worker we're running on.
 def _publish_origin_for_worker()
-  let probe = get("/login")
-  let url = probe["url"] ?? ""
+  probe = get("/login")
+  url = probe["url"] ?? ""
   # Strip everything after the authority: "http://host:port" — split on the
   # first "/" past the "http://" prefix without using index_of's offset arg
   # (Soli's string API doesn't accept a starting offset).
-  let prefix = "http://"
+  prefix = "http://"
   if not url.starts_with(prefix)
     return url
   end
-  let rest = url.substring(prefix.length(), url.length())
-  let slash = rest.index_of("/")
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
   if slash > 0
     return prefix + rest.substring(0, slash)
   end
@@ -672,13 +679,13 @@ describe("FeaturesController#publish", fn()
       "status":       "proposed",
       "feature_slug": "proj--brief"
     })
-    let response = post("/features/proj--brief/publish", {}, {
+    response = post("/features/proj--brief/publish", {}, {
       "headers": { "Origin": _publish_origin_for_worker() }
     })
     assert_eq(res_status(response), 302)
     # The bundled parent task inherits feature.plan_model so the agent
     # run picks up the user's preferred model without a manual override.
-    let parent = Task.find_by_slug("proj", "brief-with-model")
+    parent = Task.find_by_slug("proj", "brief-with-model")
     assert_not_null(parent)
     assert_eq(parent.model, "claude-opus-4-7")
     assert_eq(parent.status, "todo")
@@ -701,11 +708,11 @@ describe("FeaturesController#publish", fn()
       "status":       "proposed",
       "feature_slug": "proj--brief-no-model"
     })
-    let response = post("/features/proj--brief-no-model/publish", {}, {
+    response = post("/features/proj--brief-no-model/publish", {}, {
       "headers": { "Origin": _publish_origin_for_worker() }
     })
     assert_eq(res_status(response), 302)
-    let parent = Task.find_by_slug("proj", "brief-no-model")
+    parent = Task.find_by_slug("proj", "brief-no-model")
     assert_not_null(parent)
     # Empty/missing feature.plan_model falls through as "" so the agent
     # uses the global default at run-time.
@@ -731,7 +738,7 @@ describe("Plan model resolution", fn()
 
   test("resolve_plan_model prefers the form override over feature + setting", fn()
     Setting.set("plan_model", "claude-sonnet-4-6")
-    let f = Feature.create({
+    f = Feature.create({
       "_key":       "myapp--feat1",
       "project":    "myapp",
       "slug":       "feat1",
@@ -739,13 +746,13 @@ describe("Plan model resolution", fn()
       "status":     "draft",
       "plan_model": "claude-haiku-4-5-20251001"
     })
-    let resolved = Plan.resolve_plan_model(f, { "plan_model": "claude-opus-4-7" })
+    resolved = Plan.resolve_plan_model(f, { "plan_model": "claude-opus-4-7" })
     assert_eq(resolved, "claude-opus-4-7")
   end)
 
   test("resolve_plan_model falls back to feature.plan_model when form is empty", fn()
     Setting.set("plan_model", "claude-sonnet-4-6")
-    let f = Feature.create({
+    f = Feature.create({
       "_key":       "myapp--feat1",
       "project":    "myapp",
       "slug":       "feat1",
@@ -753,37 +760,37 @@ describe("Plan model resolution", fn()
       "status":     "draft",
       "plan_model": "claude-opus-4-7"
     })
-    let resolved = Plan.resolve_plan_model(f, { "plan_model": "" })
+    resolved = Plan.resolve_plan_model(f, { "plan_model": "" })
     assert_eq(resolved, "claude-opus-4-7")
   end)
 
   test("resolve_plan_model falls back to the global setting when neither form nor feature has a value", fn()
     Setting.set("plan_model", "claude-opus-4-7")
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
       "title":   "F",
       "status":  "draft"
     })
-    let resolved = Plan.resolve_plan_model(f, {})
+    resolved = Plan.resolve_plan_model(f, {})
     assert_eq(resolved, "claude-opus-4-7")
   end)
 
   test("resolve_plan_model falls back to the canonical default when nothing is set anywhere", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
       "title":   "F",
       "status":  "draft"
     })
-    let resolved = Plan.resolve_plan_model(f, {})
+    resolved = Plan.resolve_plan_model(f, {})
     assert_eq(resolved, "claude-sonnet-4-6")
   end)
 
   test("resolve_plan_model rejects an unknown form model and falls back to the default", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "myapp--feat1",
       "project": "myapp",
       "slug":    "feat1",
@@ -791,17 +798,17 @@ describe("Plan model resolution", fn()
       "status":  "draft"
     })
     # Shell-injection attempt — must be scrubbed by `allow_plan_model`.
-    let resolved = Plan.resolve_plan_model(f, { "plan_model": "evil; rm -rf /" })
+    resolved = Plan.resolve_plan_model(f, { "plan_model": "evil; rm -rf /" })
     assert_eq(resolved, "claude-sonnet-4-6")
   end)
 
   test("resolve_plan_model accepts an opencode model id verbatim", fn()
-    let resolved = Plan.resolve_plan_model(nil, { "plan_model": "deepseek/deepseek-chat" })
+    resolved = Plan.resolve_plan_model(nil, { "plan_model": "deepseek/deepseek-chat" })
     assert_eq(resolved, "deepseek/deepseek-chat")
   end)
 
   test("resolve_plan_model stitches a variant onto an opencode id", fn()
-    let resolved = Plan.resolve_plan_model(nil, {
+    resolved = Plan.resolve_plan_model(nil, {
       "plan_model":   "deepseek/deepseek-chat",
       "plan_variant": "high"
     })
@@ -815,12 +822,12 @@ describe("Plan model resolution", fn()
   end)
 
   test("resolve_plan_model accepts a codex model id", fn()
-    let resolved = Plan.resolve_plan_model(nil, { "plan_model": "codex/gpt-4o" })
+    resolved = Plan.resolve_plan_model(nil, { "plan_model": "codex/gpt-4o" })
     assert_eq(resolved, "codex/gpt-4o")
   end)
 
   test("resolve_plan_model accepts a codex model id with variant", fn()
-    let resolved = Plan.resolve_plan_model(nil, {
+    resolved = Plan.resolve_plan_model(nil, {
       "plan_model": "codex/o3-mini",
       "plan_variant": "high"
     })
@@ -836,17 +843,17 @@ describe("Feature model status transitions", fn()
   end)
 
   test("a feature with no tasks stays in its initial status", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key": "proj--empty", "project": "proj", "slug": "empty",
       "title": "Empty", "status": "draft"
     })
     assert(not f.recompute_status!())
-    let reloaded = Feature.find_by_slug("proj", "empty")
+    reloaded = Feature.find_by_slug("proj", "empty")
     assert_eq(reloaded.status, "draft")
   end)
 
   test("a feature with all tasks done becomes done", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key": "proj--all-done", "project": "proj", "slug": "all-done",
       "title": "All Done", "status": "in-progress"
     })
@@ -863,7 +870,7 @@ describe("Feature model status transitions", fn()
   end)
 
   test("a feature with mixed status stays in-progress", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key": "proj--mixed", "project": "proj", "slug": "mixed",
       "title": "Mixed", "status": "in-progress"
     })
@@ -892,79 +899,79 @@ describe("FeaturesController CRUD", fn()
   end)
 
   test("POST /features creates a feature and redirects", fn()
-    let response = post("/features", {
+    response = post("/features", {
       "title": "New Feature", "project": "proj", "description": "desc", "status": "draft"
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "new-feature")
+    f = Feature.find_by_slug("proj", "new-feature")
     assert_not_null(f)
     assert_eq(f.title, "New Feature")
   end)
 
   test("POST /features persists version_id when provided", fn()
     Version.delete_all()
-    let v = Version.create({
+    v = Version.create({
       "project": "proj", "name": "Cycle 1", "status": "active"
     })
     assert(v._errors == nil)
-    let response = post("/features", {
+    response = post("/features", {
       "title": "Bet One", "project": "proj", "status": "draft",
       "version_id": v._key
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "bet-one")
+    f = Feature.find_by_slug("proj", "bet-one")
     assert_not_null(f)
     assert_eq(f.version_id, v._key)
   end)
 
   test("POST /features/:id/update updates version_id", fn()
     Version.delete_all()
-    let v = Version.create({
+    v = Version.create({
       "project": "proj", "name": "Cycle Edit", "status": "planned"
     })
     Feature.create({
       "_key": "proj--reassign", "project": "proj", "slug": "reassign",
       "title": "Reassign", "status": "draft"
     })
-    let response = post("/features/proj--reassign/update", {
+    response = post("/features/proj--reassign/update", {
       "title": "Reassign", "version_id": v._key
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "reassign")
+    f = Feature.find_by_slug("proj", "reassign")
     assert_eq(f.version_id, v._key)
   end)
 
   test("POST /features/:id/assign-cycle reassigns the cycle", fn()
     Version.delete_all()
-    let v = Version.create({
+    v = Version.create({
       "project": "proj", "name": "Inline Cycle", "status": "active"
     })
     Feature.create({
       "_key": "proj--inline", "project": "proj", "slug": "inline",
       "title": "Inline", "status": "draft"
     })
-    let response = post("/features/proj--inline/assign-cycle", {
+    response = post("/features/proj--inline/assign-cycle", {
       "version_id": v._key
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "inline")
+    f = Feature.find_by_slug("proj", "inline")
     assert_eq(f.version_id, v._key)
   end)
 
   test("POST /features/:id/assign-cycle with empty version_id clears it", fn()
     Version.delete_all()
-    let v = Version.create({
+    v = Version.create({
       "project": "proj", "name": "Clear Cycle", "status": "active"
     })
     Feature.create({
       "_key": "proj--clear", "project": "proj", "slug": "clear",
       "title": "Clear", "status": "draft", "version_id": v._key
     })
-    let response = post("/features/proj--clear/assign-cycle", {
+    response = post("/features/proj--clear/assign-cycle", {
       "version_id": ""
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "clear")
+    f = Feature.find_by_slug("proj", "clear")
     assert_eq(f.version_id ?? "", "")
   end)
 
@@ -973,7 +980,7 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--badcycle", "project": "proj", "slug": "badcycle",
       "title": "Bad", "status": "draft"
     })
-    let response = post("/features/proj--badcycle/assign-cycle", {
+    response = post("/features/proj--badcycle/assign-cycle", {
       "version_id": "no--such--cycle"
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
@@ -981,14 +988,14 @@ describe("FeaturesController CRUD", fn()
 
   test("POST /features/:id/assign-cycle rejects cross-project cycle", fn()
     Version.delete_all()
-    let other = Version.create({
+    other = Version.create({
       "project": "other-proj", "name": "Other", "status": "active"
     })
     Feature.create({
       "_key": "proj--mismatch", "project": "proj", "slug": "mismatch",
       "title": "Mismatch", "status": "draft"
     })
-    let response = post("/features/proj--mismatch/assign-cycle", {
+    response = post("/features/proj--mismatch/assign-cycle", {
       "version_id": other._key
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
@@ -999,10 +1006,10 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--prom", "project": "proj", "slug": "prom",
       "title": "Prom", "status": "draft"
     })
-    let response = post("/features/proj--prom/promote", {},
+    response = post("/features/proj--prom/promote", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "prom")
+    f = Feature.find_by_slug("proj", "prom")
     assert_eq(f.status, "ready")
   end)
 
@@ -1011,46 +1018,46 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--prom-r", "project": "proj", "slug": "prom-r",
       "title": "PromR", "status": "ready"
     })
-    let response = post("/features/proj--prom-r/promote", {},
+    response = post("/features/proj--prom-r/promote", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "prom-r")
+    f = Feature.find_by_slug("proj", "prom-r")
     assert_eq(f.status, "ready")
   end)
 
   test("POST /features/:id/promote can also set the cycle in one step", fn()
     Version.delete_all()
-    let v = Version.create({
+    v = Version.create({
       "project": "proj", "name": "Promote Cycle", "status": "planned"
     })
     Feature.create({
       "_key": "proj--prom-c", "project": "proj", "slug": "prom-c",
       "title": "PromC", "status": "draft"
     })
-    let response = post("/features/proj--prom-c/promote", {
+    response = post("/features/proj--prom-c/promote", {
       "version_id": v._key
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "prom-c")
+    f = Feature.find_by_slug("proj", "prom-c")
     assert_eq(f.status, "ready")
     assert_eq(f.version_id, v._key)
   end)
 
   test("POST /features/:id/promote returns 404 for unknown feature", fn()
-    let response = post("/features/nope--feat/promote", {},
+    response = post("/features/nope--feat/promote", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
 
   test("POST /features/:id/assign-cycle returns 404 for unknown feature", fn()
-    let response = post("/features/no-such--feature/assign-cycle", {
+    response = post("/features/no-such--feature/assign-cycle", {
       "version_id": ""
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
 
   test("POST /features returns 422 when project is missing", fn()
-    let response = post("/features", { "title": "No Project" },
+    response = post("/features", { "title": "No Project" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)
@@ -1060,10 +1067,10 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--update-me", "project": "proj", "slug": "update-me",
       "title": "Original", "status": "draft"
     })
-    let response = post("/features/proj--update-me/update", { "title": "Updated Title" },
+    response = post("/features/proj--update-me/update", { "title": "Updated Title" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "update-me")
+    f = Feature.find_by_slug("proj", "update-me")
     assert_not_null(f)
     assert_eq(f.title, "Updated Title")
   end)
@@ -1073,14 +1080,14 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--delete-me", "project": "proj", "slug": "delete-me",
       "title": "Delete Me", "status": "draft"
     })
-    let response = post("/features/proj--delete-me/destroy", {},
+    response = post("/features/proj--delete-me/destroy", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
     assert_null(Feature.find_by_slug("proj", "delete-me"))
   end)
 
   test("POST /features/:id/destroy returns 404 for unknown feature", fn()
-    let response = post("/features/no-such-feature/destroy", {},
+    response = post("/features/no-such-feature/destroy", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1094,7 +1101,7 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--remove-t", "project": "proj", "slug": "remove-t",
       "title": "Remove T", "status": "proposed", "feature_slug": "proj--remove-f"
     })
-    let response = post("/features/proj--remove-f/tasks/remove-t/remove", {},
+    response = post("/features/proj--remove-f/tasks/remove-t/remove", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
     assert_null(Task.find_by_slug("proj", "remove-t"))
@@ -1109,7 +1116,7 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--remove-t2", "project": "proj", "slug": "remove-t2",
       "title": "Remove T2", "status": "todo", "feature_slug": "proj--remove-f2"
     })
-    let response = post("/features/proj--remove-f2/tasks/remove-t2/remove", {},
+    response = post("/features/proj--remove-f2/tasks/remove-t2/remove", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)
@@ -1119,7 +1126,7 @@ describe("FeaturesController CRUD", fn()
       "_key": "proj--remove-f3", "project": "proj", "slug": "remove-f3",
       "title": "Remove F3", "status": "draft"
     })
-    let response = post("/features/proj--remove-f3/tasks/no-such-task/remove", {},
+    response = post("/features/proj--remove-f3/tasks/no-such-task/remove", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1140,18 +1147,18 @@ describe("FeaturesController GET routes", fn()
       "_key": "proj--show-me", "project": "proj", "slug": "show-me",
       "title": "Show Me", "status": "draft"
     })
-    let response = get("/features/proj--show-me")
+    response = get("/features/proj--show-me")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Show Me")
   end)
 
   test("GET /features/:id returns 404 for unknown feature", fn()
-    let response = get("/features/no-such-feature")
+    response = get("/features/no-such-feature")
     assert_eq(res_status(response), 404)
   end)
 
   test("GET /features/new returns 200", fn()
-    let response = get("/features/new")
+    response = get("/features/new")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "New Feature Brief")
   end)
@@ -1161,13 +1168,13 @@ describe("FeaturesController GET routes", fn()
       "_key": "proj--edit-me", "project": "proj", "slug": "edit-me",
       "title": "Edit Me", "status": "draft"
     })
-    let response = get("/features/proj--edit-me/edit")
+    response = get("/features/proj--edit-me/edit")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Edit Me")
   end)
 
   test("POST /features/:id/cancel_plan cancels active plan", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key": "proj--cancel-f", "project": "proj", "slug": "cancel-f",
       "title": "Cancel F", "status": "draft"
     })
@@ -1176,10 +1183,10 @@ describe("FeaturesController GET routes", fn()
       "feature_slug": "proj--cancel-f", "status": "starting",
       "prompt": "Feature brief: Cancel F", "pid": nil, "tasks_imported": false
     })
-    let response = post("/features/proj--cancel-f/cancel_plan", {},
+    response = post("/features/proj--cancel-f/cancel_plan", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let plan = Plan.find_by_plan_id("plan--cancel")
+    plan = Plan.find_by_plan_id("plan--cancel")
     assert_not_null(plan)
     assert(plan.status.starts_with("failed:"))
   end)
@@ -1189,7 +1196,7 @@ describe("FeaturesController GET routes", fn()
       "_key": "proj--no-proposed", "project": "proj", "slug": "no-proposed",
       "title": "No Proposed", "status": "ready"
     })
-    let response = post("/features/proj--no-proposed/publish", {},
+    response = post("/features/proj--no-proposed/publish", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
   end)
@@ -1199,7 +1206,7 @@ describe("FeaturesController GET routes", fn()
       "_key": "proj--refine", "project": "proj", "slug": "refine",
       "title": "Refine", "status": "draft"
     })
-    let response = post("/features/proj--refine/refine_tasks", { "refinement": "" },
+    response = post("/features/proj--refine/refine_tasks", { "refinement": "" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)
@@ -1215,30 +1222,30 @@ describe("FeaturesController WS stream access control", fn()
 
   test("read_plan_state returns stream_token for a plan that has one", fn()
     # Plan._key IS the plan_id (set to "plan-NNN" by spawn_plan_agent).
-    let plan = Plan.create({
+    plan = Plan.create({
       "_key":         "plan-token-test",
       "project":      "proj",
       "plan_id":      "plan-token-test",
       "status":       "running",
       "stream_token": "secret-token-abc"
     })
-    let state = read_plan_state("plan-token-test")
+    state = read_plan_state("plan-token-test")
     assert_eq(state["stream_token"], "secret-token-abc")
   end)
 
   test("read_plan_state returns empty stream_token for a plan without one", fn()
-    let plan = Plan.create({
+    plan = Plan.create({
       "_key":    "plan-no-token",
       "project": "proj",
       "plan_id": "plan-no-token",
       "status":  "running"
     })
-    let state = read_plan_state("plan-no-token")
+    state = read_plan_state("plan-no-token")
     assert_eq(state["stream_token"], "")
   end)
 
   test("generate_tasks_log renders data-stream-token from the plan", fn()
-    let f = Feature.create({
+    f = Feature.create({
       "_key":    "proj--feat-log-token",
       "project": "proj",
       "slug":    "feat-log-token",
@@ -1246,7 +1253,7 @@ describe("FeaturesController WS stream access control", fn()
       "status":  "ready"
     })
     # _key must match what spawn_plan_agent sets: just the plan_id.
-    let plan = Plan.create({
+    plan = Plan.create({
       "_key":         "plan-log-token",
       "project":      "proj",
       "plan_id":      "plan-log-token",
@@ -1256,11 +1263,11 @@ describe("FeaturesController WS stream access control", fn()
     })
     User.register("test@example.com", "password123", "Test User")
     login("test@example.com", "password123")
-    let response = get("/features/proj--feat-log-token/generate_tasks_log/plan-log-token", {}, {
+    response = get("/features/proj--feat-log-token/generate_tasks_log/plan-log-token", {}, {
       "headers": { "Origin": _publish_origin_for_worker() }
     })
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "data-stream-token=\"visible-token-xyz\"")
   end)
 end)
@@ -1275,7 +1282,7 @@ describe("FeaturesController#update edge cases", fn()
   end)
 
   test("POST /features/:id/update returns 404 for unknown feature", fn()
-    let response = post("/features/no-such/update", { "title": "x" },
+    response = post("/features/no-such/update", { "title": "x" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1285,13 +1292,13 @@ describe("FeaturesController#update edge cases", fn()
       "_key": "proj--blank-title", "project": "proj", "slug": "blank-title",
       "title": "Original", "status": "draft"
     })
-    let response = post("/features/proj--blank-title/update", { "title": "" },
+    response = post("/features/proj--blank-title/update", { "title": "" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)
 
   test("GET /features/:id/edit returns 404 for unknown feature", fn()
-    let response = get("/features/no-such/edit")
+    response = get("/features/no-such/edit")
     assert_eq(res_status(response), 404)
   end)
 end)
@@ -1306,7 +1313,7 @@ describe("FeaturesController#generate_tasks 404 + 422", fn()
   end)
 
   test("returns 404 for unknown feature", fn()
-    let response = post("/features/no-such-feature/generate_tasks", {},
+    response = post("/features/no-such-feature/generate_tasks", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1316,7 +1323,7 @@ describe("FeaturesController#generate_tasks 404 + 422", fn()
       "_key": "proj--no-desc", "project": "proj", "slug": "no-desc",
       "title": "No Desc", "status": "draft"
     })
-    let response = post("/features/proj--no-desc/generate_tasks", {},
+    response = post("/features/proj--no-desc/generate_tasks", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)
@@ -1332,13 +1339,13 @@ describe("FeaturesController#regenerate_tasks + refine_tasks 404", fn()
   end)
 
   test("regenerate_tasks returns 404 for unknown feature", fn()
-    let response = post("/features/no-such/regenerate_tasks", {},
+    response = post("/features/no-such/regenerate_tasks", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
 
   test("refine_tasks returns 404 for unknown feature", fn()
-    let response = post("/features/no-such/refine_tasks", { "refinement": "more" },
+    response = post("/features/no-such/refine_tasks", { "refinement": "more" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1355,7 +1362,7 @@ describe("FeaturesController#cancel_plan edges", fn()
   end)
 
   test("returns 404 for unknown feature", fn()
-    let response = post("/features/no-such/cancel_plan", {},
+    response = post("/features/no-such/cancel_plan", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
   end)
@@ -1365,7 +1372,7 @@ describe("FeaturesController#cancel_plan edges", fn()
       "_key": "proj--no-plan", "project": "proj", "slug": "no-plan",
       "title": "No Plan", "status": "draft"
     })
-    let response = post("/features/proj--no-plan/cancel_plan", {},
+    response = post("/features/proj--no-plan/cancel_plan", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
   end)
@@ -1379,10 +1386,10 @@ describe("FeaturesController#cancel_plan edges", fn()
       "_key": "plan-cancel-done", "project": "proj", "plan_id": "plan-cancel-done",
       "status": "done", "feature_slug": "proj--done-plan", "tasks_imported": false
     })
-    let response = post("/features/proj--done-plan/cancel_plan", {},
+    response = post("/features/proj--done-plan/cancel_plan", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let plan = Plan.find_by_plan_id("plan-cancel-done")
+    plan = Plan.find_by_plan_id("plan-cancel-done")
     assert_eq(plan.status, "done")
     assert(plan.tasks_imported == true)
   end)
@@ -1400,7 +1407,7 @@ describe("FeaturesController#generate_tasks_log", fn()
   end)
 
   test("returns 404 for unknown feature", fn()
-    let response = get("/features/no-such/generate_tasks_log/plan-x")
+    response = get("/features/no-such/generate_tasks_log/plan-x")
     assert_eq(res_status(response), 404)
   end)
 
@@ -1414,9 +1421,9 @@ describe("FeaturesController#generate_tasks_log", fn()
       "status": "running", "feature_slug": "proj--polling",
       "pid": 1, "log": "doing work", "stream_token": "tk"
     })
-    let response = get("/features/proj--polling/generate_tasks_log/plan-poll")
+    response = get("/features/proj--polling/generate_tasks_log/plan-poll")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "generate-progress")
     assert_contains(body, "doing work")
   end)
@@ -1430,7 +1437,7 @@ describe("FeaturesController#generate_tasks_log", fn()
       "_key": "plan-boom", "project": "proj", "plan_id": "plan-boom",
       "status": "failed:exit-1", "feature_slug": "proj--boom-f", "log": "broke"
     })
-    let response = get("/features/proj--boom-f/generate_tasks_log/plan-boom")
+    response = get("/features/proj--boom-f/generate_tasks_log/plan-boom")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Plan failed")
   end)
@@ -1446,11 +1453,11 @@ describe("FeaturesController#generate_tasks_log", fn()
       "body": "## Task 1: First import\n\nDo this.\n\n## Task 2: Second import\n\nAnd this.",
       "tasks_imported": false
     })
-    let response = get("/features/proj--done-import/generate_tasks_log/plan-done-import")
+    response = get("/features/proj--done-import/generate_tasks_log/plan-done-import")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--done-import", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--done-import", "status": "proposed" }).all()
     assert_eq(proposed.length(), 2)
-    let plan = Plan.find_by_plan_id("plan-done-import")
+    plan = Plan.find_by_plan_id("plan-done-import")
     assert(plan.tasks_imported == true)
   end)
 
@@ -1476,9 +1483,9 @@ describe("FeaturesController#generate_tasks_log", fn()
       },
       "pid": 1
     })
-    let response = get("/features/proj--qs/generate_tasks_log/plan-q-single")
+    response = get("/features/proj--qs/generate_tasks_log/plan-q-single")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "Pick one?")
     assert_contains(body, "Alpha")
     assert_contains(body, "Beta")
@@ -1506,9 +1513,9 @@ describe("FeaturesController#generate_tasks_log", fn()
       },
       "pid": 1
     })
-    let response = get("/features/proj--qm/generate_tasks_log/plan-q-multi")
+    response = get("/features/proj--qm/generate_tasks_log/plan-q-multi")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "Pick many?")
     assert_contains(body, "Submit selection")
   end)
@@ -1523,9 +1530,9 @@ describe("FeaturesController#generate_tasks_log", fn()
       "status": "done", "feature_slug": "proj--solo-import",
       "body": "# Just one heading\n\nbody content here", "tasks_imported": false
     })
-    let response = get("/features/proj--solo-import/generate_tasks_log/plan-solo")
+    response = get("/features/proj--solo-import/generate_tasks_log/plan-solo")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--solo-import", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--solo-import", "status": "proposed" }).all()
     assert_eq(proposed.length(), 1)
   end)
 end)
@@ -1542,7 +1549,7 @@ describe("FeaturesController#plan_answer", fn()
   end)
 
   test("returns 404 for unknown feature", fn()
-    let response = post("/features/no-such/plan-answer/plan-x",
+    response = post("/features/no-such/plan-answer/plan-x",
       { "qid": "q", "value": "yes" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 404)
@@ -1553,7 +1560,7 @@ describe("FeaturesController#plan_answer", fn()
       "_key": "proj--ans-empty", "project": "proj", "slug": "ans-empty",
       "title": "Ans Empty", "status": "ready"
     })
-    let response = post("/features/proj--ans-empty/plan-answer/plan-x",
+    response = post("/features/proj--ans-empty/plan-answer/plan-x",
       { "qid": "", "value": "ok" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
@@ -1564,7 +1571,7 @@ describe("FeaturesController#plan_answer", fn()
       "_key": "proj--ans-value-empty", "project": "proj", "slug": "ans-value-empty",
       "title": "Ans Value Empty", "status": "ready"
     })
-    let response = post("/features/proj--ans-value-empty/plan-answer/plan-x",
+    response = post("/features/proj--ans-value-empty/plan-answer/plan-x",
       { "qid": "q", "value": "" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
@@ -1580,11 +1587,11 @@ describe("FeaturesController#plan_answer", fn()
       "status": "running", "feature_slug": "proj--ans-running",
       "pid": 1, "stream_token": "tk"
     })
-    let response = post("/features/proj--ans-running/plan-answer/plan-ans-running",
+    response = post("/features/proj--ans-running/plan-answer/plan-ans-running",
       { "qid": "q1", "value": "yes" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 200)
-    let plan = Plan.find_by_plan_id("plan-ans-running")
+    plan = Plan.find_by_plan_id("plan-ans-running")
     assert_eq(plan.pending_question["id"], "q1")
     assert_eq(plan.pending_question["value"], "yes")
   end)
@@ -1599,11 +1606,11 @@ describe("FeaturesController#plan_answer", fn()
       "status": "done", "feature_slug": "proj--ans-done",
       "body": "## Task 1: Late\n\nAfter the fact.", "tasks_imported": false
     })
-    let response = post("/features/proj--ans-done/plan-answer/plan-ans-done",
+    response = post("/features/proj--ans-done/plan-answer/plan-ans-done",
       { "qid": "q1", "value": "yes" },
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 200)
-    let imported = Task.where({ "feature_slug": "proj--ans-done", "status": "proposed" }).all()
+    imported = Task.where({ "feature_slug": "proj--ans-done", "status": "proposed" }).all()
     assert_eq(imported.length(), 1)
   end)
 end)
@@ -1634,9 +1641,9 @@ describe("FeaturesController#show wider state", fn()
       "title": "Linked One", "status": "todo", "feature_slug": "proj--mix"
     })
     Comment.create_comment("proj--mix", "show@test.com", "Looks nice")
-    let response = get("/features/proj--mix")
+    response = get("/features/proj--mix")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "Proposed One")
     assert_contains(body, "Linked One")
     assert_contains(body, "Looks nice")
@@ -1652,11 +1659,11 @@ describe("FeaturesController#show wider state", fn()
       "status": "done", "feature_slug": "proj--finalize",
       "body": "## Task 1: From plan\n\nDetails.", "tasks_imported": false
     })
-    let response = get("/features/proj--finalize")
+    response = get("/features/proj--finalize")
     assert_eq(res_status(response), 200)
-    let plan = Plan.find_by_plan_id("plan-finalize")
+    plan = Plan.find_by_plan_id("plan-finalize")
     assert(plan.tasks_imported == true)
-    let imported = Task.where({ "feature_slug": "proj--finalize", "status": "proposed" }).all()
+    imported = Task.where({ "feature_slug": "proj--finalize", "status": "proposed" }).all()
     assert_eq(imported.length(), 1)
   end)
 
@@ -1672,9 +1679,9 @@ describe("FeaturesController#show wider state", fn()
       "status": "done", "prompt": "Feature brief: Prefix Match\n\nyes",
       "body":  "## Task 1: Prefix Imported\n\nbody.", "tasks_imported": false
     })
-    let response = get("/features/proj--prefix-match")
+    response = get("/features/proj--prefix-match")
     assert_eq(res_status(response), 200)
-    let plan = Plan.find_by_plan_id("plan-prefix")
+    plan = Plan.find_by_plan_id("plan-prefix")
     assert(plan.tasks_imported == true)
   end)
 end)
@@ -1689,7 +1696,7 @@ describe("FeaturesController#new with project param", fn()
   end)
 
   test("GET /features/new with ?project= renders without crashing on a missing project", fn()
-    let response = get("/features/new?project=nonexistent")
+    response = get("/features/new?project=nonexistent")
     assert_eq(res_status(response), 200)
   end)
 end)
@@ -1704,14 +1711,14 @@ describe("FeaturesController#create + update error paths", fn()
   end)
 
   test("POST /features stores plan_model when supplied via the form", fn()
-    let response = post("/features", {
+    response = post("/features", {
       "title":      "With Model",
       "project":    "projmodel",
       "status":     "draft",
       "plan_model": "claude-opus-4-7"
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("projmodel", "with-model")
+    f = Feature.find_by_slug("projmodel", "with-model")
     assert_not_null(f)
     assert_eq(f.plan_model, "claude-opus-4-7")
   end)
@@ -1721,11 +1728,11 @@ describe("FeaturesController#create + update error paths", fn()
       "_key": "proj--upd-model", "project": "proj", "slug": "upd-model",
       "title": "Upd Model", "status": "draft"
     })
-    let response = post("/features/proj--upd-model/update", {
+    response = post("/features/proj--upd-model/update", {
       "title": "Upd Model", "plan_model": "claude-haiku-4-5-20251001"
     }, { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let f = Feature.find_by_slug("proj", "upd-model")
+    f = Feature.find_by_slug("proj", "upd-model")
     assert_eq(f.plan_model, "claude-haiku-4-5-20251001")
   end)
 end)
@@ -1750,10 +1757,10 @@ describe("FeaturesController#publish with description", fn()
       "title": "Build it", "body_md": "details", "status": "proposed",
       "feature_slug": "proj--with-desc"
     })
-    let response = post("/features/proj--with-desc/publish", {},
+    response = post("/features/proj--with-desc/publish", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 302)
-    let parent = Task.find_by_slug("proj", "featured")
+    parent = Task.find_by_slug("proj", "featured")
     assert_not_null(parent)
     # The combined body starts with the feature title + description block.
     assert_contains(parent.body_md, "# Featured")
@@ -1789,10 +1796,10 @@ describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks",
       "_key": "proj--once", "project": "proj", "slug": "once",
       "title": "Once", "status": "proposed", "feature_slug": "proj--idem"
     })
-    let response = get("/features/proj--idem/generate_tasks_log/plan-idem")
+    response = get("/features/proj--idem/generate_tasks_log/plan-idem")
     assert_eq(res_status(response), 200)
     # Already-imported plan must not re-import: still exactly one task.
-    let tasks = Task.where({ "feature_slug": "proj--idem", "status": "proposed" }).all()
+    tasks = Task.where({ "feature_slug": "proj--idem", "status": "proposed" }).all()
     assert_eq(tasks.length(), 1)
   end)
 
@@ -1806,13 +1813,13 @@ describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks",
       "status": "done", "feature_slug": "proj--h2",
       "body": "## Some subheading\n\nbody.", "tasks_imported": false
     })
-    let response = get("/features/proj--h2/generate_tasks_log/plan-h2")
+    response = get("/features/proj--h2/generate_tasks_log/plan-h2")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--h2", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--h2", "status": "proposed" }).all()
     assert_eq(proposed.length(), 1)
     assert_eq(proposed[0].title, "Some subheading")
     # A draft feature flips to "ready" once tasks are imported.
-    let f = Feature.find_by_slug("proj", "h2")
+    f = Feature.find_by_slug("proj", "h2")
     assert_eq(f.status, "ready")
   end)
 
@@ -1826,9 +1833,9 @@ describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks",
       "status": "done", "feature_slug": "proj--noheading",
       "body": "just one short paragraph", "tasks_imported": false
     })
-    let response = get("/features/proj--noheading/generate_tasks_log/plan-nh")
+    response = get("/features/proj--noheading/generate_tasks_log/plan-nh")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--noheading", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--noheading", "status": "proposed" }).all()
     assert_eq(proposed.length(), 1)
     assert_eq(proposed[0].title, "just one short paragraph")
   end)
@@ -1838,17 +1845,17 @@ describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks",
       "_key": "proj--long", "project": "proj", "slug": "long",
       "title": "Long Line", "description": "x", "status": "draft"
     })
-    let long = "this is a deliberately very long single line that " +
-               "should be truncated by the fallback title helper " +
-               "because it exceeds sixty characters"
+    long = "this is a deliberately very long single line that " +
+        "should be truncated by the fallback title helper " +
+        "because it exceeds sixty characters"
     Plan.create({
       "_key": "plan-long", "project": "proj", "plan_id": "plan-long",
       "status": "done", "feature_slug": "proj--long",
       "body": long, "tasks_imported": false
     })
-    let response = get("/features/proj--long/generate_tasks_log/plan-long")
+    response = get("/features/proj--long/generate_tasks_log/plan-long")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--long", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--long", "status": "proposed" }).all()
     assert_eq(proposed.length(), 1)
     # Title is truncated with an ellipsis suffix.
     assert(proposed[0].title.ends_with("..."))
@@ -1877,9 +1884,9 @@ describe("FeaturesController#generate_tasks_log idempotency + parser fallbacks",
       },
       "pid": 1
     })
-    let response = get("/features/proj--qm-desc/generate_tasks_log/plan-qm-desc")
+    response = get("/features/proj--qm-desc/generate_tasks_log/plan-qm-desc")
     assert_eq(res_status(response), 200)
-    let body = res_body(response)
+    body = res_body(response)
     assert_contains(body, "the fruit")
     assert_contains(body, "also a fruit")
   end)
@@ -1908,7 +1915,7 @@ describe("FeaturesController#show with active plan", fn()
       "status": "running", "feature_slug": "proj--with-active",
       "pid": 1, "stream_token": "tk"
     })
-    let response = get("/features/proj--with-active")
+    response = get("/features/proj--with-active")
     assert_eq(res_status(response), 200)
   end)
 
@@ -1927,7 +1934,7 @@ describe("FeaturesController#show with active plan", fn()
       "prompt": "Feature brief: Prefix Active\n\nx",
       "pid": 1, "stream_token": "tk"
     })
-    let response = get("/features/proj--prefix-active")
+    response = get("/features/proj--prefix-active")
     assert_eq(res_status(response), 200)
   end)
 end)
@@ -1959,9 +1966,9 @@ describe("FeaturesController#generate_tasks_log slug collision", fn()
       "status": "done", "feature_slug": "proj--collide-f",
       "body": "## Task 1: Collide task\n\nbody.", "tasks_imported": false
     })
-    let response = get("/features/proj--collide-f/generate_tasks_log/plan-collide")
+    response = get("/features/proj--collide-f/generate_tasks_log/plan-collide")
     assert_eq(res_status(response), 200)
-    let proposed = Task.where({ "feature_slug": "proj--collide-f", "status": "proposed" }).all()
+    proposed = Task.where({ "feature_slug": "proj--collide-f", "status": "proposed" }).all()
     assert_eq(proposed.length(), 1)
     # New task takes the "collide-task-2" slug to avoid colliding with the seeded one.
     assert_eq(proposed[0].slug, "collide-task-2")
@@ -1992,7 +1999,7 @@ describe("FeaturesController#remove_task wrong feature link", fn()
       "_key": "proj--alpha-task", "project": "proj", "slug": "alpha-task",
       "title": "Alpha Task", "status": "proposed", "feature_slug": "proj--alpha"
     })
-    let response = post("/features/proj--beta/tasks/alpha-task/remove", {},
+    response = post("/features/proj--beta/tasks/alpha-task/remove", {},
       { "headers": { "Origin": _publish_origin_for_worker() } })
     assert_eq(res_status(response), 422)
   end)

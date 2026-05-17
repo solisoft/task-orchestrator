@@ -11,7 +11,7 @@
     </a>
   </div>
 
-  <% let _drafts = features_by_stage["shape"] ?? [] %>
+  <% _drafts = features_by_stage["shape"] ?? [] %>
   <% if _drafts.length() == 0 %>
     <div class="rounded-2xl glass-card border border-white/5 px-8 py-14 text-center animate-fade-in-1">
       <p class="text-slate-300 font-medium mb-1">No drafts</p>
@@ -29,7 +29,7 @@
             <a href="/features/<%= h(f._key) %>" class="text-sm font-semibold text-slate-100 hover:text-white truncate"><%= h(f.title) %></a>
             <%- partial("shared/feature_stage_dots", { "stage": "shape" }) %>
           </div>
-          <% let _desc = (f.description ?? "").trim() %>
+          <% _desc = (f.description ?? "").trim() %>
           <% if _desc != "" %>
             <p class="text-xs text-slate-500 line-clamp-2 mb-3"><%= h(_desc.substring(0, _desc.length() > 160 ? 160 : _desc.length())) %><% if _desc.length() > 160 %>&hellip;<% end %></p>
           <% end %>

@@ -1,7 +1,7 @@
 <%
-  let failed = status.starts_with("failed")
-  let pq = pending_question
-  let has_question = pq != nil and pq["input"] != nil and pq["input"]["questions"] != nil
+  failed = status.starts_with("failed")
+  pq = pending_question
+  has_question = pq != nil and pq["input"] != nil and pq["input"]["questions"] != nil
 %>
 <% if failed %>
   <span class="inline-flex items-center gap-2 rounded-full border bg-red-500/15 text-red-300 border-red-500/30 px-2 py-0.5">x <%= status %></span>

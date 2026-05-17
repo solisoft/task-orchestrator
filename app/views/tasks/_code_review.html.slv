@@ -14,10 +14,10 @@
   #   - reviews                           — [CodeReview, ...] newest first
 %>
 <%
-  let _reviews = reviews ?? []
-  let _running = nil
+  _reviews = reviews ?? []
+  _running = nil
   for _r in _reviews
-    let _s = _r.status ?? ""
+    _s = _r.status ?? ""
     if _running == nil and _s != "done" and not _s.starts_with("failed:")
       _running = _r
     end
@@ -95,12 +95,12 @@
       </h3>
       <div class="space-y-2">
         <% for r in _reviews %>
-          <% let r_status = r.status ?? "" %>
-          <% let r_failed = r_status.starts_with("failed:") %>
-          <% let r_done = r_status == "done" %>
-          <% let r_verdict = r.verdict() %>
-          <% let r_body = (r.body ?? "").trim() %>
-          <% let r_log = (r.log ?? "").trim() %>
+          <% r_status = r.status ?? "" %>
+          <% r_failed = r_status.starts_with("failed:") %>
+          <% r_done = r_status == "done" %>
+          <% r_verdict = r.verdict() %>
+          <% r_body = (r.body ?? "").trim() %>
+          <% r_log = (r.log ?? "").trim() %>
           <details class="rounded-lg bg-slate-900/40 border border-white/5">
             <summary class="cursor-pointer select-none flex items-baseline justify-between gap-3 px-3 py-2 text-xs hover:bg-white/[0.02]">
               <div class="flex items-baseline gap-2 min-w-0">

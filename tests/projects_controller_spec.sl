@@ -9,104 +9,104 @@ describe("ProjectsController", fn()
 
   describe("GET /projects", fn()
     test("returns 200 and renders heading", fn()
-      let response = get("/projects")
+      response = get("/projects")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Projects")
     end)
 
     test("lists each project on disk", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_alpha/tasks/todo"])
       System.run_sync(["mkdir", "-p", root + "/proj_beta/tasks/todo"])
-      let response = get("/projects")
+      response = get("/projects")
       assert_contains(res_body(response), "proj_alpha")
       assert_contains(res_body(response), "proj_beta")
     end)
 
     test("renders cycles shortcut link for each project", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_cycles/tasks/todo"])
-      let response = get("/projects")
+      response = get("/projects")
       assert_contains(res_body(response), "/projects/proj_cycles?tab=cycles")
     end)
   end)
 
   describe("GET /projects/:name", fn()
     test("returns 404 for unknown project", fn()
-      let response = get("/projects/nonexistent_project_xyz")
+      response = get("/projects/nonexistent_project_xyz")
       assert_eq(res_status(response), 404)
     end)
 
     test("returns 200 for project that exists on disk", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_show/tasks/todo"])
-      let response = get("/projects/proj_show")
+      response = get("/projects/proj_show")
       assert_eq(res_status(response), 200)
     end)
 
     test("renders the project name in the page", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/my_test_proj/tasks/todo"])
-      let response = get("/projects/my_test_proj")
+      response = get("/projects/my_test_proj")
       assert_contains(res_body(response), "my_test_proj")
     end)
 
     test("defaults to the Build tab", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_kanban/tasks/todo"])
-      let response = get("/projects/proj_kanban")
+      response = get("/projects/proj_kanban")
       assert_contains(res_body(response), "Build")
       assert_contains(res_body(response), "Swimlanes")
     end)
 
     test("flat fallback still shows the kanban columns", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_kanban2/tasks/todo"])
-      let response = get("/projects/proj_kanban2?tab=build&view=flat")
+      response = get("/projects/proj_kanban2?tab=build&view=flat")
       assert_contains(res_body(response), "todo")
     end)
   end)
 
   describe("tab parameter", fn()
     test("renders with archived tab when ?tab=archived", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_tab/tasks/todo"])
-      let response = get("/projects/proj_tab?tab=archived")
+      response = get("/projects/proj_tab?tab=archived")
       assert_eq(res_status(response), 200)
     end)
 
     test("legacy ?tab=board redirects to Build (alias)", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_aliasboard/tasks/todo"])
-      let response = get("/projects/proj_aliasboard?tab=board")
+      response = get("/projects/proj_aliasboard?tab=board")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Build")
     end)
 
     test("legacy ?tab=roadmap renders Cycles (alias)", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_aliasroad/tasks/todo"])
-      let response = get("/projects/proj_aliasroad?tab=roadmap")
+      response = get("/projects/proj_aliasroad?tab=roadmap")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Cycles")
     end)
 
     test("?tab=shape renders draft features", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_shape/tasks/todo"])
       Feature.delete_all()
       Feature.create({
         "_key": "proj_shape--idea-a", "project": "proj_shape",
         "slug": "idea-a", "title": "Idea A", "status": "draft"
       })
-      let response = get("/projects/proj_shape?tab=shape")
+      response = get("/projects/proj_shape?tab=shape")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Idea A")
       assert_contains(res_body(response), "Promote to bet")
     end)
 
     test("?tab=bet renders ready features with cycle picker", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_bet/tasks/todo"])
       Feature.delete_all()
       Version.delete_all()
@@ -115,14 +115,14 @@ describe("ProjectsController", fn()
         "slug": "brief-r", "title": "Brief R", "status": "ready"
       })
       Version.create({ "project": "proj_bet", "name": "C1", "status": "active" })
-      let response = get("/projects/proj_bet?tab=bet")
+      response = get("/projects/proj_bet?tab=bet")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Brief R")
       assert_contains(res_body(response), "Generate tasks")
     end)
 
     test("?tab=build renders feature swimlanes by default", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_build/tasks/todo"])
       Feature.delete_all()
       Task.delete_all()
@@ -135,23 +135,23 @@ describe("ProjectsController", fn()
         "slug": "task-ip", "title": "Task IP", "status": "todo",
         "feature_slug": "proj_build--feat-ip"
       })
-      let response = get("/projects/proj_build?tab=build")
+      response = get("/projects/proj_build?tab=build")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Feature IP")
       assert_contains(res_body(response), "Task IP")
     end)
 
     test("?tab=build&view=flat falls back to the legacy board partial", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_flat/tasks/todo"])
-      let response = get("/projects/proj_flat?tab=build&view=flat")
+      response = get("/projects/proj_flat?tab=build&view=flat")
       assert_eq(res_status(response), 200)
       # The flat board renders the per-status kanban columns nav (e.g. "todo")
       assert_contains(res_body(response), "id=\"board\"")
     end)
 
     test("?tab=ship renders shipped features with their PR links", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_ship/tasks/todo"])
       Feature.delete_all()
       Task.delete_all()
@@ -165,16 +165,16 @@ describe("ProjectsController", fn()
         "feature_slug": "proj_ship--feat-s",
         "pr_url": "https://github.com/acme/repo/pull/42"
       })
-      let response = get("/projects/proj_ship?tab=ship")
+      response = get("/projects/proj_ship?tab=ship")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Feature Ship")
       assert_contains(res_body(response), "github.com/acme/repo/pull/42")
     end)
 
     test("?tab=features (legacy) aliases to Build", fn()
-      let root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
+      root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync(["mkdir", "-p", root + "/proj_alias_feats/tasks/todo"])
-      let response = get("/projects/proj_alias_feats?tab=features")
+      response = get("/projects/proj_alias_feats?tab=features")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Build")
     end)

@@ -20,21 +20,21 @@ def _psn_count_my_lines()
   if not Trusted.exists(_psn_log)
     return 0
   end
-  let body = (Trusted.read(_psn_log) rescue "").trim()
+  body = (Trusted.read(_psn_log) rescue "").trim()
   if body == ""
     return 0
   end
-  let n = 0
+  n = 0
   for line in body.split("\n")
     if line == ""
       next
     end
-    let entry = JSON.parse(line) rescue nil
+    entry = JSON.parse(line) rescue nil
     if entry == nil
       next
     end
-    let payload = entry["payload"] ?? {}
-    let url = (payload["url"] ?? "")
+    payload = entry["payload"] ?? {}
+    url = (payload["url"] ?? "")
     if url.starts_with("/projects/psn/") or url == "/projects/psn"
       n = n + 1
     end
@@ -43,11 +43,11 @@ def _psn_count_my_lines()
 end
 
 def _psn_my_payloads()
-  let out = []
+  out = []
   if not Trusted.exists(_psn_log)
     return out
   end
-  let body = (Trusted.read(_psn_log) rescue "").trim()
+  body = (Trusted.read(_psn_log) rescue "").trim()
   if body == ""
     return out
   end
@@ -55,12 +55,12 @@ def _psn_my_payloads()
     if line == ""
       next
     end
-    let entry = JSON.parse(line) rescue nil
+    entry = JSON.parse(line) rescue nil
     if entry == nil
       next
     end
-    let payload = entry["payload"] ?? {}
-    let url = (payload["url"] ?? "")
+    payload = entry["payload"] ?? {}
+    url = (payload["url"] ?? "")
     if url.starts_with("/projects/psn/") or url == "/projects/psn"
       out.push(payload)
     end
@@ -112,9 +112,9 @@ describe("Plan status-change notification", fn()
   test("dispatched payload carries title, new status, and URL", fn()
     _psn_seed_plan("payload", "starting")
     Plan.append_status("psn--payload", "done")
-    let payloads = _psn_my_payloads()
+    payloads = _psn_my_payloads()
     assert_eq(payloads.length(), 1)
-    let payload = payloads[0]
+    payload = payloads[0]
     assert_eq(payload["status"], "done")
     assert_eq(payload["url"], "/projects/psn")
     assert_eq(payload["title"], "prompt for payload")
@@ -137,7 +137,7 @@ describe("Plan status-change notification", fn()
       "prompt":     "prompt with task"
     })
     Plan.append_status("psn--with-task", "done")
-    let payloads = _psn_my_payloads()
+    payloads = _psn_my_payloads()
     assert_eq(payloads.length(), 1)
     assert_eq(payloads[0]["url"], "/projects/psn/tasks/SEC-100")
   end)
@@ -152,7 +152,7 @@ describe("Plan status-change notification", fn()
       "prompt":       "prompt with feature"
     })
     Plan.append_status("psn--with-feat", "done")
-    let payloads = _psn_my_payloads()
+    payloads = _psn_my_payloads()
     assert_eq(payloads.length(), 1)
     assert_eq(payloads[0]["url"], "/projects/psn/features/feat-42")
   end)

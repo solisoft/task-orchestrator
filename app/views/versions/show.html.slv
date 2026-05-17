@@ -20,21 +20,21 @@
           <dt class="w-24 text-slate-500 flex-shrink-0">Status</dt>
           <dd class="text-slate-200"><%= h(version.status ?? "planned") %></dd>
         </div>
-        <% let _vcn = (version.code_name ?? "").trim() %>
+        <% _vcn = (version.code_name ?? "").trim() %>
         <% if _vcn != "" %>
           <div class="flex gap-4">
             <dt class="w-24 text-slate-500 flex-shrink-0">Code name</dt>
             <dd class="text-slate-200 italic">&ldquo;<%= h(_vcn) %>&rdquo;</dd>
           </div>
         <% end %>
-        <% let _vdd = (version.due_date ?? "").trim() %>
+        <% _vdd = (version.due_date ?? "").trim() %>
         <% if _vdd != "" %>
           <div class="flex gap-4">
             <dt class="w-24 text-slate-500 flex-shrink-0">Due date</dt>
             <dd class="text-slate-200"><%= h(_vdd) %></dd>
           </div>
         <% end %>
-        <% let _vdesc = (version.description ?? "").trim() %>
+        <% _vdesc = (version.description ?? "").trim() %>
         <% if _vdesc != "" %>
           <div class="flex gap-4">
             <dt class="w-24 text-slate-500 flex-shrink-0">Description</dt>

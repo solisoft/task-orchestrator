@@ -1,6 +1,6 @@
 <div class="min-h-screen text-white">
   <div class="max-w-3xl mx-auto px-6 py-8">
-    <% let _proj_for_crumbs = project ?? nil %>
+    <% _proj_for_crumbs = project ?? nil %>
     <% if _proj_for_crumbs != nil %>
       <%- partial("shared/breadcrumbs", { "crumbs": [
         { "label": "Projects", "href": "/projects" },

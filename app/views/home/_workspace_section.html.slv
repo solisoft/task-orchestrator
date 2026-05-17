@@ -1,7 +1,7 @@
-<% let _accent = accent ?? "indigo" %>
-<% let _border_class = "border-" + _accent + "-500/20" %>
-<% let _badge_bg    = "bg-" + _accent + "-500/15" %>
-<% let _badge_text  = "text-" + _accent + "-300" %>
+<% _accent = accent ?? "indigo" %>
+<% _border_class = "border-" + _accent + "-500/20" %>
+<% _badge_bg    = "bg-" + _accent + "-500/15" %>
+<% _badge_text  = "text-" + _accent + "-300" %>
 
 <section class="rounded-2xl glass-card border <%= _border_class %> overflow-hidden">
   <header class="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/5">

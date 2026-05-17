@@ -13,8 +13,9 @@ describe("CodeReview.find_by_review_id", fn()
   end)
 
   test("returns the matching row", fn()
-    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s", "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
-    let found = CodeReview.find_by_review_id("r1")
+    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s",
+      "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
+    found = CodeReview.find_by_review_id("r1")
     assert_not_null(found)
     assert_eq(found.review_id, "r1")
   end)
@@ -31,10 +32,13 @@ describe("CodeReview.for_task", fn()
   end)
 
   test("returns reviews for the given project and slug", fn()
-    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s", "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
-    CodeReview.create({ "_key": "p--s--r2", "project": "p", "slug": "s", "review_id": "r2", "status": "done", "log": "", "body": "", "pending": false })
-    CodeReview.create({ "_key": "p--other--r1", "project": "p", "slug": "other", "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
-    let reviews = CodeReview.for_task("p", "s")
+    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s",
+      "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
+    CodeReview.create({ "_key": "p--s--r2", "project": "p", "slug": "s",
+      "review_id": "r2", "status": "done", "log": "", "body": "", "pending": false })
+    CodeReview.create({ "_key": "p--other--r1", "project": "p", "slug": "other",
+      "review_id": "r1", "status": "done", "log": "", "body": "", "pending": false })
+    reviews = CodeReview.for_task("p", "s")
     assert_eq(reviews.length(), 2)
   end)
 
@@ -50,10 +54,11 @@ describe("CodeReview.append_log", fn()
   end)
 
   test("appends text to the log column", fn()
-    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s", "review_id": "r1", "status": "starting", "log": "", "body": "", "pending": false })
+    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s",
+      "review_id": "r1", "status": "starting", "log": "", "body": "", "pending": false })
     CodeReview.append_log("r1", "line one\n")
     CodeReview.append_log("r1", "line two\n")
-    let row = CodeReview.find_by_review_id("r1")
+    row = CodeReview.find_by_review_id("r1")
     assert_eq(row.log, "line one\nline two\n")
   end)
 
@@ -70,9 +75,10 @@ describe("CodeReview.append_status", fn()
   end)
 
   test("updates the status", fn()
-    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s", "review_id": "r1", "status": "starting", "log": "", "body": "", "pending": false })
+    CodeReview.create({ "_key": "p--s--r1", "project": "p", "slug": "s",
+      "review_id": "r1", "status": "starting", "log": "", "body": "", "pending": false })
     CodeReview.append_status("r1", "done")
-    let row = CodeReview.find_by_review_id("r1")
+    row = CodeReview.find_by_review_id("r1")
     assert_eq(row.status, "done")
   end)
 end)
@@ -84,36 +90,42 @@ describe("CodeReview.effective_status", fn()
   end)
 
   test("returns 'done' as-is", fn()
-    let r = CodeReview.create({ "_key": "p--s--done", "project": "p", "slug": "s", "review_id": "done", "status": "done", "log": "", "body": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--done", "project": "p", "slug": "s",
+      "review_id": "done", "status": "done", "log": "", "body": "", "pending": false})
     assert_eq(r.effective_status(), "done")
   end)
 
   test("returns 'failed:*' as-is", fn()
-    let r = CodeReview.create({ "_key": "p--s--fail", "project": "p", "slug": "s", "review_id": "fail", "status": "failed:rc=1", "log": "", "body": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--fail", "project": "p", "slug": "s",
+      "review_id": "fail", "status": "failed:rc=1", "log": "", "body": "", "pending": false})
     assert_eq(r.effective_status(), "failed:rc=1")
   end)
 
   test("returns starting when pid is live", fn()
-    let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
-    let live_pid = spawn["stdout"].trim().to_int()
-    let r = CodeReview.create({ "_key": "p--s--alive", "project": "p", "slug": "s", "review_id": "alive", "status": "starting", "pid": live_pid, "log": "", "body": "", "pending": false })
+    spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+    live_pid = spawn["stdout"].trim().to_int()
+    r = CodeReview.create({ "_key": "p--s--alive", "project": "p", "slug": "s",
+      "review_id": "alive", "status": "starting", "pid": live_pid, "log": "", "body": "", "pending": false})
     assert_eq(r.effective_status(), "starting")
   end)
 
   test("synthesizes zombie when pid is dead", fn()
     # PID 2^31-1 always gives ESRCH on Linux
-    let r = CodeReview.create({ "_key": "p--s--zombie", "project": "p", "slug": "s", "review_id": "zombie", "status": "starting", "pid": 2147483647, "log": "", "body": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--zombie", "project": "p", "slug": "s",
+      "review_id": "zombie", "status": "starting", "pid": 2147483647, "log": "", "body": "", "pending": false})
     assert(r.effective_status().starts_with("failed:zombie"))
   end)
 
   test("falls back to heartbeat when no pid and old updated_at", fn()
-    let r = CodeReview.create({ "_key": "p--s--hb", "project": "p", "slug": "s", "review_id": "hb", "status": "starting", "log": "", "body": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--hb", "project": "p", "slug": "s",
+      "review_id": "hb", "status": "starting", "log": "", "body": "", "pending": false})
     r.updated_at = "2020-01-01T00:00:00Z"
     assert(r.effective_status().starts_with("failed:zombie"))
   end)
 
   test("keeps starting when no pid and recent updated_at", fn()
-    let r = CodeReview.create({ "_key": "p--s--fresh", "project": "p", "slug": "s", "review_id": "fresh", "status": "starting", "log": "", "body": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--fresh", "project": "p", "slug": "s",
+      "review_id": "fresh", "status": "starting", "log": "", "body": "", "pending": false})
     assert_eq(r.effective_status(), "starting")
   end)
 end)
@@ -128,8 +140,8 @@ describe("CodeReview._pid_alive", fn()
   end)
 
   test("returns true for live pid", fn()
-    let spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
-    let live_pid = spawn["stdout"].trim().to_int()
+    spawn = System.run_sync(["bash", "-c", "nohup sleep 5 >/dev/null 2>&1 & echo $!; disown"])
+    live_pid = spawn["stdout"].trim().to_int()
     assert_eq(CodeReview._pid_alive(live_pid), true)
   end)
 end)
@@ -141,22 +153,29 @@ describe("CodeReview.verdict", fn()
   end)
 
   test("returns nil when body is empty", fn()
-    let r = CodeReview.create({ "_key": "p--s--empty", "project": "p", "slug": "s", "review_id": "empty", "status": "done", "body": "", "log": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--empty", "project": "p", "slug": "s",
+      "review_id": "empty", "status": "done", "body": "", "log": "", "pending": false})
     assert_null(r.verdict())
   end)
 
   test("parses **Verdict:** marker", fn()
-    let r = CodeReview.create({ "_key": "p--s--v01", "project": "p", "slug": "s", "review_id": "v01", "status": "done", "body": "# Report\n\n**Verdict:** Approved\n\nSome notes.", "log": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--v01", "project": "p", "slug": "s",
+      "review_id": "v01", "status": "done",
+      "body": "# Report\n\n**Verdict:** Approved\n\nSome notes.",
+      "log": "", "pending": false })
     assert_eq(r.verdict(), "Approved")
   end)
 
   test("parses Verdict: marker without bold", fn()
-    let r = CodeReview.create({ "_key": "p--s--v02", "project": "p", "slug": "s", "review_id": "v02", "status": "done", "body": "# Report\nVerdict: Rejected\n\nExplanation.", "log": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--v02", "project": "p", "slug": "s",
+      "review_id": "v02", "status": "done",
+      "body": "# Report\nVerdict: Rejected\n\nExplanation.", "log": "", "pending": false })
     assert_eq(r.verdict(), "Rejected")
   end)
 
   test("returns nil when body has no verdict marker", fn()
-    let r = CodeReview.create({ "_key": "p--s--v03", "project": "p", "slug": "s", "review_id": "v03", "status": "done", "body": "# Report\nNo verdict here.", "log": "", "pending": false })
+    r = CodeReview.create({ "_key": "p--s--v03", "project": "p", "slug": "s",
+      "review_id": "v03", "status": "done", "body": "# Report\nNo verdict here.", "log": "", "pending": false})
     assert_null(r.verdict())
   end)
 end)
@@ -168,35 +187,39 @@ describe("code_review_stream_payload", fn()
   end)
 
   test("returns error for unknown review", fn()
-    let p = code_review_stream_payload("no-such-review", "connect", 0)
+    p = code_review_stream_payload("no-such-review", "connect", 0)
     assert_eq(p["event"], "error")
     assert_eq(p["terminal"], true)
   end)
 
   test("connect returns snapshot with full log", fn()
-    CodeReview.create({ "_key": "p--s--cs1", "project": "p", "slug": "s", "review_id": "cs1", "status": "starting", "log": "boot\nready\n", "body": "", "pending": false, "pid": nil })
-    let p = code_review_stream_payload("cs1", "connect", 0)
+    CodeReview.create({ "_key": "p--s--cs1", "project": "p", "slug": "s",
+      "review_id": "cs1", "status": "starting", "log": "boot\nready\n", "body": "", "pending": false, "pid": nil})
+    p = code_review_stream_payload("cs1", "connect", 0)
     assert_eq(p["event"], "snapshot")
     assert_eq(p["log_chunk"], "boot\nready\n")
     assert_eq(p["terminal"], false)
   end)
 
   test("message returns delta", fn()
-    CodeReview.create({ "_key": "p--s--cd1", "project": "p", "slug": "s", "review_id": "cd1", "status": "starting", "log": "abcdef", "body": "", "pending": false, "pid": nil })
-    let p = code_review_stream_payload("cd1", "message", 3)
+    CodeReview.create({ "_key": "p--s--cd1", "project": "p", "slug": "s",
+      "review_id": "cd1", "status": "starting", "log": "abcdef", "body": "", "pending": false, "pid": nil})
+    p = code_review_stream_payload("cd1", "message", 3)
     assert_eq(p["event"], "delta")
     assert_eq(p["log_chunk"], "def")
   end)
 
   test("sets terminal=true on done", fn()
-    CodeReview.create({ "_key": "p--s--term1", "project": "p", "slug": "s", "review_id": "term1", "status": "done", "log": "all good\n", "body": "", "pending": false, "pid": nil })
-    let p = code_review_stream_payload("term1", "message", 0)
+    CodeReview.create({ "_key": "p--s--term1", "project": "p", "slug": "s",
+      "review_id": "term1", "status": "done", "log": "all good\n", "body": "", "pending": false, "pid": nil})
+    p = code_review_stream_payload("term1", "message", 0)
     assert_eq(p["terminal"], true)
   end)
 
   test("sets terminal=true on failed", fn()
-    CodeReview.create({ "_key": "p--s--fail", "project": "p", "slug": "s", "review_id": "fail", "status": "failed:timeout", "log": "error\n", "body": "", "pending": false, "pid": nil })
-    let p = code_review_stream_payload("fail", "message", 0)
+    CodeReview.create({ "_key": "p--s--fail", "project": "p", "slug": "s",
+      "review_id": "fail", "status": "failed:timeout", "log": "error\n", "body": "", "pending": false, "pid": nil})
+    p = code_review_stream_payload("fail", "message", 0)
     assert_eq(p["terminal"], true)
   end)
 end)

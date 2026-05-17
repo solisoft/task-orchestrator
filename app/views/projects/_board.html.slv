@@ -1,5 +1,5 @@
 <div id="board">
-  <% let _limit_error = locals["limit_error"] ?? nil %>
+  <% _limit_error = locals["limit_error"] ?? nil %>
   <% if _limit_error != nil %>
     <div class="mb-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
       ⛔ <%= _limit_error %>
@@ -8,9 +8,9 @@
   <!-- tab strip -->
   <nav class="flex items-center gap-1 border-b border-white/10 mb-4 overflow-x-auto animate-fade-in">
     <% for status in statuses %>
-      <% let col = columns[status] ?? [] %>
-      <% let count = col.length %>
-      <% let is_active = status == active_tab %>
+      <% col = columns[status] ?? [] %>
+      <% count = col.length %>
+      <% is_active = status == active_tab %>
       <a href="/projects/<%= project["name"] %>?tab=<%= status %>"
          class="<%= is_active ? "tab-active text-white" : "text-slate-400 hover:text-slate-200" %> tab-animated inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors">
         <%= status %>
@@ -38,7 +38,7 @@
           <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>" class="flex-1 min-w-0">
             <div class="text-sm text-slate-100 leading-snug"><%= task.title %></div>
             <div class="text-xs font-mono text-slate-500 mt-0.5 truncate"><%= task.slug %></div>
-            <% let _author = (task.author ?? "").trim() %>
+            <% _author = (task.author ?? "").trim() %>
             <% if _author != "" %>
               <span class="text-[10px] font-mono text-slate-600"><%= _author %></span>
             <% end %>
@@ -50,14 +50,14 @@
             <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/run" title="View run log" class="px-2 py-1 text-sm text-slate-400 hover:text-indigo-300 hover:bg-indigo-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity">📜</a>
           <% end %>
           <% if active_tab == "todo" or active_tab == "inprogress" or active_tab == "queued" or active_tab == "review" or active_tab == "done" or active_tab == "failed" or active_tab == "archived" %>
-            <% let t = totals[task.slug] %>
+            <% t = totals[task.slug] %>
             <% if t != nil and (t["total_cost_usd"] > 0 or t["duration_ms"] > 0) %>
               <span class="text-[10px] font-mono text-slate-400" title="time spent">
                 <%= Math.round(t["duration_ms"] / 1000.0 * 100) / 100 %>s
               </span>
               <% if t["total_cost_usd"] > 0 %>
-                <% let cost = t["total_cost_usd"] %>
-                <% let cost_rounded = round_dollar(cost) %>
+                <% cost = t["total_cost_usd"] %>
+                <% cost_rounded = round_dollar(cost) %>
                 <span class="text-[10px] font-mono text-emerald-400/70" title="cost used">
                   $<%= cost_rounded %>
                 </span>

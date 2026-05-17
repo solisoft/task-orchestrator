@@ -12,11 +12,11 @@
           <div class="flex items-center gap-3 mb-2">
             <span class="status-pill status-pill-<%= feature.status %>"><%= feature.status %></span>
             <span class="text-xs text-slate-500 font-mono"><%= feature.project %></span>
-            <% let _created = format_date(feature.created_at) %>
+            <% _created = format_date(feature.created_at) %>
             <% if _created != "" %>
               <span class="text-xs text-slate-500">Created <%= _created %></span>
             <% end %>
-            <% let _author = (feature.author ?? "").trim() %>
+            <% _author = (feature.author ?? "").trim() %>
             <% if _author != "" %>
               <span class="text-xs text-slate-500">by <%= _author %></span>
             <% end %>
@@ -40,10 +40,10 @@
 
     <% if feature.status != "done" %>
     <div id="generate-tasks-area">
-      <% let _plan_status = (latest_plan != nil ? (latest_plan.status ?? "") : "") %>
-      <% let _plan_running = (active_plan != nil) %>
-      <% let _plan_failed  = _plan_status.starts_with("failed:") %>
-      <% let _plan_done    = (latest_plan != nil and _plan_status == "done") %>
+      <% _plan_status = (latest_plan != nil ? (latest_plan.status ?? "") : "") %>
+      <% _plan_running = (active_plan != nil) %>
+      <% _plan_failed  = _plan_status.starts_with("failed:") %>
+      <% _plan_done    = (latest_plan != nil and _plan_status == "done") %>
       <% if _plan_running %>
         <div class="mb-6 rounded-2xl glass-card p-6 relative overflow-hidden animate-fade-in animate-fade-in-1 card-glow">
           <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none"></div>
@@ -65,7 +65,7 @@
               </form>
             </div>
             <p class="text-xs text-slate-500 mb-3">Streaming live &mdash; proposed tasks will appear below as the planner finishes.</p>
-            <% let _ap_log = active_plan.log ?? "" %>
+            <% _ap_log = active_plan.log ?? "" %>
             <div id="generate-progress"
                  data-stream-url="/ws/feature-generate-stream"
                  data-stream-feature-id="<%= feature._key %>"
@@ -253,9 +253,9 @@
                      hx-swap="innerHTML"
                      onclick="openTaskSidebar()"
                      class="text-sm font-semibold text-slate-100 hover:text-indigo-200 transition-colors block truncate"><%= task.title %></a>
-                  <% let _bm = task.body_md ?? "" %>
+                  <% _bm = task.body_md ?? "" %>
                   <% if _bm != "" %>
-                    <% let _preview = _bm %>
+                    <% _preview = _bm %>
                     <% if _preview.length() > 160 %>
                       <% _preview = _preview.substring(0, 160) + "…" %>
                     <% end %>

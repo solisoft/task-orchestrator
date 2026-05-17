@@ -1,12 +1,12 @@
-<% let _crumbs = locals["crumbs"] ?? [] %>
+<% _crumbs = locals["crumbs"] ?? [] %>
 <% if _crumbs.length() > 0 %>
   <nav aria-label="Breadcrumb" class="text-sm text-slate-500 mb-3">
-    <% let _idx = 0 %>
-    <% let _last = _crumbs.length() - 1 %>
+    <% _idx = 0 %>
+    <% _last = _crumbs.length() - 1 %>
     <% for c in _crumbs %>
       <% if _idx > 0 %><span class="mx-2 text-slate-700">/</span><% end %>
-      <% let _href  = c["href"]  ?? "" %>
-      <% let _label = c["label"] ?? "" %>
+      <% _href  = c["href"]  ?? "" %>
+      <% _label = c["label"] ?? "" %>
       <% if _idx == _last or _href == "" %>
         <span class="text-slate-300" aria-current="page"><%= h(_label) %></span>
       <% else %>

@@ -24,19 +24,19 @@ class Run
   end
 
   static def run_log_path(repo, slug)
-    run_state_root() + "/" + repo + "/" + slug + ".log"
+    Run.run_state_root() + "/" + repo + "/" + slug + ".log"
   end
 
   static def run_status_path(repo, slug)
-    run_state_root() + "/" + repo + "/" + slug + ".status"
+    Run.run_state_root() + "/" + repo + "/" + slug + ".status"
   end
 
   static def run_pr_path(repo, slug)
-    run_state_root() + "/" + repo + "/" + slug + ".pr"
+    Run.run_state_root() + "/" + repo + "/" + slug + ".pr"
   end
 
   static def run_pid_path(repo, slug)
-    run_state_root() + "/" + repo + "/" + slug + ".pid"
+    Run.run_state_root() + "/" + repo + "/" + slug + ".pid"
   end
 
   # Mirror of `bin/task-run`'s worktree layout: $TASK_ORCH_WORKTREES (or
@@ -56,7 +56,7 @@ class Run
   end
 
   static def run_worktree_exists(repo, slug)
-    Trusted.is_dir(run_worktree_path(repo, slug))
+    Trusted.is_dir(Run.run_worktree_path(repo, slug))
   end
 
   # nil  = no pidfile (run never launched, finished cleanly, or pre-pidfile launch).
@@ -64,7 +64,7 @@ class Run
   # false = pidfile present but the process is gone — the wrapper got SIGKILLed
   #        before it could write `failed:` to the status journal.
   static def _run_pid_alive(repo, slug)
-    let path = run_pid_path(repo, slug)
+    let path = Run.run_pid_path(repo, slug)
     if not Trusted.exists(path)
       return nil
     end
@@ -80,7 +80,7 @@ class Run
   # stat-able. Fallback heartbeat for runs launched before the pidfile
   # convention shipped (no .pid on disk to probe).
   static def _run_log_age_seconds(repo, slug)
-    let path = run_log_path(repo, slug)
+    let path = Run.run_log_path(repo, slug)
     if not Trusted.exists(path)
       return nil
     end
@@ -113,7 +113,7 @@ class Run
 
   # Most recent status line, or nil if no run has happened.
   static def run_current_status(repo, slug)
-    let path = run_status_path(repo, slug)
+    let path = Run.run_status_path(repo, slug)
     if not Trusted.exists(path)
       return nil
     end
@@ -144,19 +144,19 @@ class Run
     # the agent reached a terminal success state and the wrapper just
     # exited before the journal got a terminal write. Skip synthesis so
     # the kanban doesn't paint a `done` row red.
-    if not _is_terminal_status(token)
-      if _task_row_status(repo, slug) == "done"
+    if not Run._is_terminal_status(token)
+      if Run._task_row_status(repo, slug) == "done"
         return { "at": at, "status": token }
       end
-      let alive = _run_pid_alive(repo, slug)
+      let alive = Run._run_pid_alive(repo, slug)
       if alive == false
         return { "at": at, "status": "failed:agent died (no live process)" }
       end
       if alive == nil
-        let age = _run_log_age_seconds(repo, slug)
+        let age = Run._run_log_age_seconds(repo, slug)
         if age != nil and age > 600
           return { "at": at,
-                   "status": "failed:agent died (no heartbeat for " + str(age / 60) + "m)" }
+                  "status": "failed:agent died (no heartbeat for " + str(age / 60) + "m)" }
         end
       end
     end
@@ -167,7 +167,7 @@ class Run
   # Tail the last N bytes of the log. Returns "" if the log doesn't exist
   # (e.g. task hasn't been queued yet).
   static def run_log_tail(repo, slug, max_bytes)
-    let path = run_log_path(repo, slug)
+    let path = Run.run_log_path(repo, slug)
     if not Trusted.exists(path)
       return ""
     end
@@ -182,7 +182,7 @@ class Run
   # this to send a starting byte offset alongside the snapshot, so the
   # client knows where to ask for deltas from.
   static def run_log_size(repo, slug)
-    let path = run_log_path(repo, slug)
+    let path = Run.run_log_path(repo, slug)
     if not Trusted.exists(path)
       return 0
     end
@@ -196,7 +196,7 @@ class Run
   # `{ "chunk": String, "offset": Int }` so the caller can both send the
   # delta and advance its cursor in one call.
   static def run_log_delta(repo, slug, offset)
-    let path = run_log_path(repo, slug)
+    let path = Run.run_log_path(repo, slug)
     if not Trusted.exists(path)
       return { "chunk": "", "offset": 0 }
     end
@@ -236,21 +236,21 @@ class Run
     if cursor == nil or cursor < 0
       cursor = 0
     end
-    let status = run_current_status(repo, slug)
+    let status = Run.run_current_status(repo, slug)
     let token = status == nil ? nil : status["status"]
     let terminal = token != nil and (token.starts_with("done:") or token.starts_with("failed:"))
-    let delta = run_log_delta(repo, slug, cursor)
+    let delta = Run.run_log_delta(repo, slug, cursor)
     let frame = {
       "event":      event_type == "connect" ? "snapshot" : "delta",
       "log_chunk":  delta["chunk"],
       "log_offset": delta["offset"],
       "status":     status,
-      "pr_url":     run_pr_url(repo, slug),
-      "todos":      run_latest_todos(repo, slug),
+      "pr_url":     Run.run_pr_url(repo, slug),
+      "todos":      Run.run_latest_todos(repo, slug),
       "terminal":   terminal
     }
     if event_type == "connect" and prefix_end != nil and prefix_end > 0
-      frame["prefix_chunk"] = run_log_prefix(repo, slug, prefix_end)
+      frame["prefix_chunk"] = Run.run_log_prefix(repo, slug, prefix_end)
     end
     frame
   end
@@ -263,7 +263,7 @@ class Run
     if end_offset == nil or end_offset <= 0
       return ""
     end
-    let path = run_log_path(repo, slug)
+    let path = Run.run_log_path(repo, slug)
     if not Trusted.exists(path)
       return ""
     end
@@ -277,7 +277,7 @@ class Run
   # Path to the per-task raw JSON-lines transcript. The .log next to it is
   # the human-rendered view (post-`_stream-format.jq`); this is the source.
   static def run_log_jsonl_path(repo, slug)
-    run_log_path(repo, slug) + ".jsonl"
+    Run.run_log_path(repo, slug) + ".jsonl"
   end
 
   # Latest TodoWrite payload from the run's raw stream, or [] if no todo
@@ -291,7 +291,7 @@ class Run
   # events outside the window are intentionally invisible — the panel
   # shows the agent's *current* plan, not a history.
   static def run_latest_todos(repo, slug)
-    let path = run_log_jsonl_path(repo, slug)
+    let path = Run.run_log_jsonl_path(repo, slug)
     if not Trusted.exists(path)
       return []
     end
@@ -311,7 +311,7 @@ class Run
       if line != "" and line.contains("\"todo")
         let obj = JSON.parse(line) rescue nil
         if obj != nil
-          let todos = _extract_todos_from_event(obj)
+          let todos = Run._extract_todos_from_event(obj)
           if todos != nil
             latest = todos
             i = -1
@@ -321,7 +321,7 @@ class Run
       i = i - 1
     end
     if latest.length == 0
-      return _synthesize_todos_from_spec(repo, slug)
+      return Run._synthesize_todos_from_spec(repo, slug)
     end
     latest
   end
@@ -334,7 +334,7 @@ class Run
   # than from the agent's own plan. Returns [] when the spec or the
   # section is missing.
   static def _synthesize_todos_from_spec(repo, slug)
-    let spec_path = run_worktree_path(repo, slug) + "/tasks/todo/" + slug + ".md"
+    let spec_path = Run.run_worktree_path(repo, slug) + "/tasks/todo/" + slug + ".md"
     if not Trusted.exists(spec_path)
       return []
     end
@@ -342,7 +342,7 @@ class Run
     if body == ""
       return []
     end
-    _parse_acceptance_criteria(body)
+    Run._parse_acceptance_criteria(body)
   end
 
   # Extract bullets from a markdown body's `## Acceptance Criteria`
@@ -405,7 +405,7 @@ class Run
 
   # PR URL if `task-run` opened one, else nil.
   static def run_pr_url(repo, slug)
-    let path = run_pr_path(repo, slug)
+    let path = Run.run_pr_path(repo, slug)
     if not Trusted.exists(path)
       return nil
     end
@@ -444,10 +444,10 @@ class Run
   # nothing on disk (stale `failed:` journal line, zombie pidfile) is
   # allowed to flip the indicator back to red.
   static def run_indicator(repo, slug)
-    if _task_row_status(repo, slug) == "done"
+    if Run._task_row_status(repo, slug) == "done"
       return "done"
     end
-    let s = run_current_status(repo, slug)
+    let s = Run.run_current_status(repo, slug)
     if s == nil
       return nil
     end
@@ -472,10 +472,10 @@ class Run
   # `master`. Mirrors the fallback `bin/task-run` does in local-only
   # mode so the merge UI agrees with what the runner branched off of.
   static def project_main_branch(project_path)
-    if _git_branch_exists(project_path, "main")
+    if Run._git_branch_exists(project_path, "main")
       return "main"
     end
-    if _git_branch_exists(project_path, "master")
+    if Run._git_branch_exists(project_path, "master")
       return "master"
     end
     return "main"
@@ -492,7 +492,7 @@ class Run
 
   # Does the per-task branch (`task/<slug>`) exist locally?
   static def task_branch_exists(project_path, slug)
-    _git_branch_exists(project_path, task_branch_name(slug))
+    Run._git_branch_exists(project_path, Run.task_branch_name(slug))
   end
 
   # Does the per-task branch exist *inside the worktree* for this task?
@@ -500,14 +500,14 @@ class Run
   # so callers can route users to `cd` there instead of re-checking out
   # in the main project tree.
   static def task_worktree_branch_exists(repo, slug)
-    let wt = run_worktree_path(repo, slug)
+    let wt = Run.run_worktree_path(repo, slug)
     if not Trusted.is_dir(wt)
       return false
     end
     let res = System.run_sync([
       "git", "-C", wt,
       "show-ref", "--verify", "--quiet",
-      "refs/heads/" + task_branch_name(slug)
+      "refs/heads/" + Run.task_branch_name(slug)
     ])
     res["exit_code"] == 0
   end
@@ -521,19 +521,19 @@ class Run
   # or if merge-base(branch, main) == branch tip (branch created from
   # an ancestor of main but never advanced past it — nothing merged).
   static def task_branch_merged(project_path, slug)
-    let main = project_main_branch(project_path)
-    if not task_branch_exists(project_path, slug)
+    let main = Run.project_main_branch(project_path)
+    if not Run.task_branch_exists(project_path, slug)
       return false
     end
-    let branch_sha = _git_rev_parse(project_path, task_branch_name(slug))
-    let main_sha   = _git_rev_parse(project_path, main)
+    let branch_sha = Run._git_rev_parse(project_path, Run.task_branch_name(slug))
+    let main_sha   = Run._git_rev_parse(project_path, main)
     if branch_sha == "" or main_sha == "" or branch_sha == main_sha
       return false
     end
     let res = System.run_sync([
       "git", "-C", project_path,
       "merge-base", "--is-ancestor",
-      task_branch_name(slug), main
+      Run.task_branch_name(slug), main
     ])
     if res["exit_code"] != 0
       return false
@@ -541,7 +541,7 @@ class Run
     let merge_base_res = System.run_sync([
       "git", "-C", project_path,
       "merge-base",
-      task_branch_name(slug), main
+      Run.task_branch_name(slug), main
     ])
     if merge_base_res["exit_code"] != 0
       return false
@@ -591,17 +591,17 @@ class Run
   # is clean — we will not switch branches or stash for the user.
   # Returns `{ "ok": true }` or `{ "ok": false, "error": <reason> }`.
   static def merge_task_branch(project_path, slug)
-    let main = project_main_branch(project_path)
-    let branch = task_branch_name(slug)
-    let current = project_current_branch(project_path)
+    let main = Run.project_main_branch(project_path)
+    let branch = Run.task_branch_name(slug)
+    let current = Run.project_current_branch(project_path)
     if current != main
       return { "ok": false,
-               "error": "current branch is '" + current + "', not '" + main +
+              "error": "current branch is '" + current + "', not '" + main +
                         "'. Checkout " + main + " first." }
     end
-    if project_worktree_dirty(project_path)
+    if Run.project_worktree_dirty(project_path)
       return { "ok": false,
-               "error": "working tree has uncommitted changes — commit or stash first." }
+              "error": "working tree has uncommitted changes — commit or stash first." }
     end
     let res = System.run_sync([
       "git", "-C", project_path,
@@ -622,21 +622,21 @@ class Run
   # Only works when the worktree is on the `task/<slug>` branch and has
   # uncommitted changes. Returns `{ "ok": true }` or `{ "ok": false, "error": <reason> }`.
   static def commit_and_push(worktree_path, slug)
-    let branch = task_branch_name(slug)
-    let current = project_current_branch(worktree_path)
+    let branch = Run.task_branch_name(slug)
+    let current = Run.project_current_branch(worktree_path)
     if current != branch
       return { "ok": false,
-               "error": "current branch is '" + current + "', not '" + branch +
+              "error": "current branch is '" + current + "', not '" + branch +
                         "'. Checkout " + branch + " first." }
     end
-    if not project_worktree_dirty(worktree_path)
+    if not Run.project_worktree_dirty(worktree_path)
       return { "ok": false,
-               "error": "working tree has no uncommitted changes — nothing to commit." }
+              "error": "working tree has no uncommitted changes — nothing to commit." }
     end
     let add = System.run_sync(["git", "-C", worktree_path, "add", "-A"])
     if add["exit_code"] != 0
       return { "ok": false,
-               "error": "git add failed: " + (add["stderr"] ?? "unknown error") }
+              "error": "git add failed: " + (add["stderr"] ?? "unknown error") }
     end
     let msg = "fix(review): address PR feedback for " + branch
     let commit = System.run_sync(["git", "-C", worktree_path, "commit", "-m", msg])
@@ -664,34 +664,16 @@ class Run
   # on the model side; this is the filesystem half.
   static def clear_run_state(repo, slug)
     for path in [
-      run_log_path(repo, slug),
-      run_log_path(repo, slug) + ".jsonl",
-      run_status_path(repo, slug),
-      run_pr_path(repo, slug),
-      run_pid_path(repo, slug)
+      Run.run_log_path(repo, slug),
+      Run.run_log_path(repo, slug) + ".jsonl",
+      Run.run_status_path(repo, slug),
+      Run.run_pr_path(repo, slug),
+      Run.run_pid_path(repo, slug)
     ]
       if Trusted.exists(path)
         Trusted.delete(path) rescue System.run_sync(["rm", "-f", path])
       end
     end
-  end
-
-  # Does `task/<slug>` exist as a branch inside the per-task worktree?
-  # Controller-callable (lives in a model file because controllers can't
-  # import from app/helpers — Soli's sandbox rejects it, and `Trusted.*` /
-  # `System.run_sync` use here would also trip the controller lint).
-  static def task_worktree_branch_exists(repo, slug)
-    let wt = run_worktree_path(repo, slug)
-    if not run_worktree_exists(repo, slug)
-      return false
-    end
-    let branch = "task/" + slug
-    let res = System.run_sync([
-      "git", "-C", wt,
-      "show-ref", "--verify", "--quiet",
-      "refs/heads/" + branch
-    ])
-    res["exit_code"] == 0
   end
 
   # Plan-notes writer — path is a server-built nonce under /tmp, so the

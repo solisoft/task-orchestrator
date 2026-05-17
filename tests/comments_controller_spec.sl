@@ -2,14 +2,14 @@
 # Routes sit inside the `authenticate` middleware block.
 
 fn _comments_origin()
-  let probe = get("/login")
-  let url = probe["url"] ?? ""
-  let prefix = "http://"
+  probe = get("/login")
+  url = probe["url"] ?? ""
+  prefix = "http://"
   if not url.starts_with(prefix)
     return url
   end
-  let rest = url.substring(prefix.length(), url.length())
-  let slash = rest.index_of("/")
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
   if slash > 0
     return prefix + rest.substring(0, slash)
   end
@@ -27,7 +27,7 @@ describe("CommentsController", fn()
   describe("POST /features/:id/comments", fn()
     test("redirects to login without authentication", fn()
       as_guest()
-      let response = post("/features/feat-1/comments", { "body": "Hello" })
+      response = post("/features/feat-1/comments", { "body": "Hello" })
       assert_eq(res_status(response), 302)
     end)
 
@@ -35,10 +35,10 @@ describe("CommentsController", fn()
       User.register("commenter@test.com", "password", "Commenter")
       login("commenter@test.com", "password")
       Feature.create({ "_key": "proj--feat", "project": "proj", "slug": "feat", "title": "Feature", "status": "draft" })
-      let response = post("/features/proj--feat/comments", { "body": "Great feature!" },
+      response = post("/features/proj--feat/comments", { "body": "Great feature!" },
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 200)
-      let comments = Comment.for_feature("proj--feat")
+      comments = Comment.for_feature("proj--feat")
       assert_eq(comments.length(), 1)
       assert_eq(comments[0].body, "Great feature!")
     end)
@@ -47,11 +47,11 @@ describe("CommentsController", fn()
       User.register("commenter@test.com", "password", "Commenter")
       login("commenter@test.com", "password")
       Feature.create({ "_key": "proj--feat", "project": "proj", "slug": "feat", "title": "Feature", "status": "draft" })
-      let response = post("/features/proj--feat/comments", { "body": "Header check" },
+      response = post("/features/proj--feat/comments", { "body": "Header check" },
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 200)
-      let headers = response["headers"] ?? {}
-      let key = headers["X-Comment-Key"] ?? headers["x-comment-key"] ?? ""
+      headers = response["headers"] ?? {}
+      key = headers["X-Comment-Key"] ?? headers["x-comment-key"] ?? ""
       assert(key != "")
     end)
 
@@ -65,7 +65,7 @@ describe("CommentsController", fn()
         "title":   "Empty",
         "status":  "draft"
       })
-      let response = post("/features/proj--empty-body/comments", { "body": "" },
+      response = post("/features/proj--empty-body/comments", { "body": "" },
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 422)
       assert_eq(Comment.for_feature("proj--empty-body").length(), 0)
@@ -81,7 +81,7 @@ describe("CommentsController", fn()
         "title":   "WS",
         "status":  "draft"
       })
-      let response = post("/features/proj--ws-body/comments", { "body": "   \n  " },
+      response = post("/features/proj--ws-body/comments", { "body": "   \n  " },
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 422)
       assert_eq(Comment.for_feature("proj--ws-body").length(), 0)
@@ -92,7 +92,7 @@ describe("CommentsController", fn()
     test("returns 404 for an unknown comment key", fn()
       User.register("destroyer@test.com", "password", "Destroyer")
       login("destroyer@test.com", "password")
-      let response = post("/comments/no-such-comment/delete", {},
+      response = post("/comments/no-such-comment/delete", {},
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 404)
     end)
@@ -108,9 +108,9 @@ describe("CommentsController", fn()
         "status":  "draft"
       })
       Comment.create_comment("proj--shared", "owner@test.com", "Mine")
-      let key = Comment.for_feature("proj--shared")[0]._key
+      key = Comment.for_feature("proj--shared")[0]._key
       login("intruder@test.com", "password")
-      let response = post("/comments/" + key + "/delete", {},
+      response = post("/comments/" + key + "/delete", {},
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 403)
       # Comment must still exist.
@@ -122,13 +122,13 @@ describe("CommentsController", fn()
       login("owner@test.com", "password")
       Feature.create({ "_key": "proj--mine", "project": "proj", "slug": "mine", "title": "Mine", "status": "draft" })
       Comment.create_comment("proj--mine", "owner@test.com", "Going away")
-      let key = Comment.for_feature("proj--mine")[0]._key
-      let response = post("/comments/" + key + "/delete", {},
+      key = Comment.for_feature("proj--mine")[0]._key
+      response = post("/comments/" + key + "/delete", {},
         { "headers": { "Origin": _comments_origin() } })
       assert_eq(res_status(response), 302)
       assert_eq(Comment.for_feature("proj--mine").length(), 0)
-      let headers = response["headers"] ?? {}
-      let loc = headers["Location"] ?? headers["location"] ?? ""
+      headers = response["headers"] ?? {}
+      loc = headers["Location"] ?? headers["location"] ?? ""
       assert_contains(loc, "/features/proj--mine")
     end)
   end)
