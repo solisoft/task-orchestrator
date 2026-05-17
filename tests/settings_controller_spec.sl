@@ -12,7 +12,6 @@
 # cascade into nested describes, so this helper is invoked from each
 # nested describe's own before_each.
 def _spec_setup()
-  assert_test_db()
   Setting.delete_all()
   AgentConfig.delete_all()
   ThemePreset.delete_all() rescue nil
@@ -53,7 +52,7 @@ end
 describe("SettingsController", fn()
 
   describe("GET /settings", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("returns 200", fn()
       let response = get("/settings")
@@ -92,7 +91,7 @@ describe("SettingsController", fn()
   end)
 
   describe("POST /settings", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("redirects on success", fn()
       let response = csrf_post("/settings", {
@@ -196,7 +195,7 @@ describe("SettingsController", fn()
   end)
 
   describe("plan_model", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("renders a plan_model select on the form", fn()
       let response = get("/settings")
@@ -237,7 +236,7 @@ describe("SettingsController", fn()
   end)
 
   describe("review_model", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("renders a review_model select on the form", fn()
       let response = get("/settings")
@@ -288,7 +287,7 @@ describe("SettingsController", fn()
   end)
 
   describe("allowed_models", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("renders an Available models fieldset", fn()
       let response = get("/settings")
@@ -390,7 +389,7 @@ describe("SettingsController", fn()
   end)
 
   describe("codex agent", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("renders codex in the agent type dropdown", fn()
       let response = get("/settings")
@@ -434,7 +433,7 @@ describe("SettingsController", fn()
   end)
 
   describe("plan_model with codex models", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("accepts a codex model id as plan_model", fn()
       csrf_post("/settings", { "plan_model": "codex/gpt-4o" })
@@ -448,7 +447,7 @@ describe("SettingsController", fn()
   end)
 
   describe("theme", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("defaults to dark when nothing is persisted", fn()
       let response = get("/settings")
@@ -497,7 +496,7 @@ describe("SettingsController", fn()
   end)
 
   describe("theme presets", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("defaults to dark when nothing is persisted", fn()
       let response = get("/settings")
@@ -582,7 +581,7 @@ describe("SettingsController", fn()
   end)
 
   describe("POST /settings/theme", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("returns 204 and persists a built-in preset", fn()
       let response = csrf_post("/settings/theme", { "theme": "dracula" })
@@ -615,7 +614,7 @@ describe("SettingsController", fn()
   end)
 
   describe("Setting theme helpers", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("Setting.current_theme_class returns 'dark' by default", fn()
       assert_eq(Setting.current_theme_class(), "dark")
@@ -650,7 +649,7 @@ describe("SettingsController", fn()
   end)
 
   describe("layout theme rendering", fn()
-    before_each(fn() _spec_setup() end)
+    before_each(fn() assert_test_db() _spec_setup() end)
 
     test("renders html.dark when theme is dark", fn()
       Setting.set("theme", "dark")

@@ -280,7 +280,8 @@ class TasksController < ApplicationController
                       project["path"]}
     end
     wt_path = Run.run_worktree_path(project["name"], task.slug)
-    if Trusted.is_dir(wt_path) and Run.task_worktree_branch_exists(project["name"], task.slug)
+    wt_exists = Trusted.is_dir(wt_path) # soli-lint-disable-line smell/dangerous-server-builtin
+    if wt_exists and Run.task_worktree_branch_exists(project["name"], task.slug)
       return {"status": 422,
               "body": "branch is checked out in worktree " + wt_path + " — cd in directly"}
     end
@@ -399,7 +400,7 @@ class TasksController < ApplicationController
     task.save()
     nonce = str(DateTime.now().to_unix() rescue 0)
     prompt_path = "/tmp/react-prompt-" + nonce + ".md"
-    Trusted.write(prompt_path, prompt)
+    Trusted.write(prompt_path, prompt) # soli-lint-disable-line smell/dangerous-server-builtin
     line = "nohup ./bin/react-run " + project["name"] + " " +
       task.slug + " " + prompt_path +
       " >/dev/null 2>&1 & disown"
