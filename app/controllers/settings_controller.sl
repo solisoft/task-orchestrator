@@ -1,59 +1,59 @@
 # Settings — global app config (active agent + per-agent run caps).
 # Backed by the `Setting` key/value model.
-
 class SettingsController < ApplicationController
-  current_user:        Any
-  title:               Any
-  agent_type:          Any
-  agents:              Any
-  agents_config:       Any
-  limits:              Any
-  plan_model:          Any
-  review_model:        Any
-  claude_options:      Any
-  opencode_options:    Any
-  codex_options:       Any
-  opencode_models:     Any
-  codex_models:        Any
-  claude_model_ids:    Any
+  current_user: Any
+  title: Any
+  agent_type: Any
+  agents: Any
+  agents_config: Any
+  limits: Any
+  plan_model: Any
+  review_model: Any
+  claude_options: Any
+  opencode_options: Any
+  codex_options: Any
+  opencode_models: Any
+  codex_models: Any
+  claude_model_ids: Any
   claude_model_labels: Any
-  allowed_set:         Any
-  allowed_orphans:     Any
-  presets:             Any
+  allowed_set: Any
+  allowed_orphans: Any
+  presets: Any
 
   def show(req)
     _email = session_get("user_email") ?? ""
     current_plan_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
-    pmd                = plan_model_picker_data(current_plan_model)
+    pmd = plan_model_picker_data(current_plan_model)
     # Settings is the only page that needs the full opencode universe (to
     # render the allowlist checkbox panel). The shell-out is paid here, not
     # in `plan_model_picker_data`, so every other page stays cheap.
     opencode_all = list_opencode_models()
-    codex_all    = list_codex_models()
-    allowed      = Plan.allowed_model_ids()
-    claude_ids   = Plan.claude_model_ids()
-    @current_user        = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
-    @title               = "Settings"
-    @agent_type          = Setting.get_or("agent_type", Task.known_agents()[0])
-    @agents              = Task.known_agents()
-    @agents_config       = this._settings_load_agents_config()
-    @limits              = this._settings_load_limits()
-    @plan_model          = current_plan_model
-    @review_model        = Plan.default_review_model()
-    @claude_options      = pmd["claude_options"]
-    @opencode_options    = pmd["opencode_options"]
-    @codex_options       = pmd["codex_options"]
-    @opencode_models     = opencode_all
-    @codex_models        = codex_all
-    @claude_model_ids    = claude_ids
+    codex_all = list_codex_models()
+    allowed = Plan.allowed_model_ids()
+    claude_ids = Plan.claude_model_ids()
+    @current_user = _email == "" ? nil : (User.find_by_email(_email) rescue nil)
+    @title = "Settings"
+    @agent_type = Setting.get_or("agent_type", Task.known_agents()[0])
+    @agents = Task.known_agents()
+    @agents_config = this._settings_load_agents_config()
+    @limits = this._settings_load_limits()
+    @plan_model = current_plan_model
+    @review_model = Plan.default_review_model()
+    @claude_options = pmd["claude_options"]
+    @opencode_options = pmd["opencode_options"]
+    @codex_options = pmd["codex_options"]
+    @opencode_models = opencode_all
+    @codex_models = codex_all
+    @claude_model_ids = claude_ids
     @claude_model_labels = Plan.claude_model_labels()
-    @allowed_set         = this._settings_allowed_set(allowed)
-    @allowed_orphans     = this._settings_allowed_orphans(allowed, claude_ids, opencode_all, codex_all)
-    @presets             = ThemePreset.all_with_builtins()
+    @allowed_set = this._settings_allowed_set(allowed)
+    @allowed_orphans = this._settings_allowed_orphans(allowed, claude_ids, opencode_all, codex_all)
+    @presets = ThemePreset.all_with_builtins()
     render("settings/show")
   end
 
   def update(req)
+
     # Read from `req["all"]` — the framework's merged view of route params,
     # query string, JSON body, and URL-encoded form body. Reading from
     # `req["form"]` alone would miss JSON requests (the test client uses
@@ -61,26 +61,21 @@ class SettingsController < ApplicationController
     # POSTs from the settings page. The merged hash covers both.
     form = this._settings_form(req)
     agent_type = (form["agent_type"] ?? "").trim()
-    if agent_type != "" and this._settings_known_agent(agent_type)
-      Setting.set("agent_type", agent_type)
-    end
+    Setting.set("agent_type", agent_type) if agent_type != "" && this._settings_known_agent(agent_type)
     theme = (form["theme"] ?? "").trim()
-    if theme != "" and this._settings_known_theme(theme)
-      Setting.set("theme", theme)
-    end
+    Setting.set("theme", theme) if theme != "" && this._settings_known_theme(theme)
+
     # The allowlist write has to land BEFORE the plan_model write, because
     # `Plan.is_allowed_model` reads it back when validating the candidate.
     # Otherwise a single POST that both narrows the allowlist and switches
     # plan_model would validate against the previous allowlist state.
-    if form["allowed_models_present"] != nil
-      Setting.set("allowed_models", this._settings_collect_allowed(form))
-    end
+    Setting.set("allowed_models", this._settings_collect_allowed(form)) if form["allowed_models_present"].present?
     raw_plan_model = (form["plan_model"] ?? "").trim()
     if raw_plan_model != ""
       variant = (form["plan_variant"] ?? "").trim()
       candidate = raw_plan_model
       is_opencode = raw_plan_model.index_of("/") > 0
-      if is_opencode and variant != "" and variant != "default" and _matches_charset(variant, "variant")
+      if is_opencode && variant != "" && variant != "default" && _matches_charset(variant, "variant")
         candidate = raw_plan_model + ":" + variant
       end
       resolved = Plan.allow_plan_model(candidate)
@@ -89,34 +84,30 @@ class SettingsController < ApplicationController
       # default — don't persist that, it'd silently overwrite the saved
       # choice on every junk POST), AND it must be on the user's
       # `allowed_models` allowlist (no-op when the allowlist is empty).
-      if resolved == candidate and Plan.is_allowed_model(resolved)
-        Setting.set("plan_model", resolved)
-      end
+      Setting.set("plan_model", resolved) if resolved == candidate && Plan.is_allowed_model(resolved)
     end
     raw_review_model = (form["review_model"] ?? "").trim()
     if raw_review_model != ""
       variant = (form["review_variant"] ?? "").trim()
       candidate = raw_review_model
       is_opencode = raw_review_model.index_of("/") > 0
-      if is_opencode and variant != "" and variant != "default" and _matches_charset(variant, "variant")
+      if is_opencode && variant != "" && variant != "default" && _matches_charset(variant, "variant")
         candidate = raw_review_model + ":" + variant
       end
       resolved = Plan.allow_plan_model(candidate)
-      if resolved == candidate and Plan.is_allowed_model(resolved)
-        Setting.set("review_model", resolved)
-      end
+      Setting.set("review_model", resolved) if resolved == candidate && Plan.is_allowed_model(resolved)
     end
     for a in Task.known_agents()
       enabled_key = "enabled_" + a
       enabled_val = form[enabled_key]
-      if enabled_val != nil and (enabled_val == "1" or enabled_val == "true")
+      if enabled_val.present? && (enabled_val == "1" || enabled_val == "true")
         AgentConfig.set(a, true)
       else
         AgentConfig.set(a, false)
       end
     end
     for a in Task.known_agents()
-      Setting.set("limit_daily_"  + a, this._settings_parse_limit(form["limit_daily_"  + a]))
+      Setting.set("limit_daily_" + a, this._settings_parse_limit(form["limit_daily_" + a]))
       Setting.set("limit_weekly_" + a, this._settings_parse_limit(form["limit_weekly_" + a]))
     end
     redirect("/settings")
@@ -125,48 +116,56 @@ class SettingsController < ApplicationController
   def set_theme(req)
     form = this._settings_form(req)
     theme = (form["theme"] ?? "").trim()
-    if theme == "" or not this._settings_known_theme(theme)
-      return { "status": 422, "body": "Unknown theme" }
+    if theme == "" || !this._settings_known_theme(theme)
+      return {"status": 422, "body": "Unknown theme"}
     end
+
     Setting.set("theme", theme)
-    return { "status": 204, "body": "" }
+    return {"status": 204, "body": ""}
   end
 
   def create_preset(req)
     json = req["json"]
-    if json == nil
-      return { "status": 400, "body": "JSON expected" }
+    if json.nil?
+      return {"status": 400, "body": "JSON expected"}
     end
+
     name = (json["name"] ?? "").trim()
     css_vars = json["css_vars"]
-    if name == "" or css_vars == nil
-      return { "status": 422, "body": "name and css_vars are required" }
+    if name == "" || css_vars.nil?
+      return {"status": 422, "body": "name and css_vars are required"}
     end
+
     key = "custom:" + name
     Setting.set_theme_preset(key, css_vars)
-    ThemePreset.create({ "_key": key, "name": name, "css_vars": css_vars })
+    ThemePreset.create({
+      "_key": key,
+      "name": name,
+      "css_vars": css_vars
+    })
     redirect("/settings")
   end
 
   def update_preset(req)
     name = req.params["name"]
     json = req["json"]
-    if json == nil
-      return { "status": 400, "body": "JSON expected" }
+    if json.nil?
+      return {"status": 400, "body": "JSON expected"}
     end
+
     key = "custom:" + name
     existing = ThemePreset.find_by("_key", key)
-    if existing == nil
-      return { "status": 404, "body": "Preset not found" }
+    if existing.nil?
+      return {"status": 404, "body": "Preset not found"}
     end
+
     css_vars = json["css_vars"]
-    if css_vars == nil
-      return { "status": 422, "body": "css_vars is required" }
+    if css_vars.nil?
+      return {"status": 422, "body": "css_vars is required"}
     end
+
     existing.css_vars = css_vars
-    if json["name"] != nil and json["name"].trim() != ""
-      existing.name = json["name"].trim()
-    end
+    existing.name = json["name"].trim() if json["name"].present? && json["name"].trim() != ""
     existing.save()
     Setting.set_theme_preset(key, css_vars)
     redirect("/settings")
@@ -176,9 +175,7 @@ class SettingsController < ApplicationController
     name = req.params["name"]
     key = "custom:" + name
     existing = ThemePreset.find_by("_key", key)
-    if existing != nil
-      existing.delete()
-    end
+    existing.delete() if existing.present?
     Setting.remove_theme_preset(key)
     redirect("/settings")
   end
@@ -188,17 +185,11 @@ class SettingsController < ApplicationController
   # form posts, JSON API calls, and the test client.
   def _settings_form(req)
     merged = req["all"]
-    if merged != nil
-      return merged
-    end
+    return merged if merged.present?
     form = req["form"]
-    if form != nil
-      return form
-    end
+    return form if form.present?
     json = req["json"]
-    if json != nil
-      return json
-    end
+    return json if json.present?
     return req["params"] ?? {}
   end
 
@@ -213,9 +204,7 @@ class SettingsController < ApplicationController
     h = {}
     for a in Task.known_agents()
       v = configs[a]
-      if v == nil
-        v = true
-      end
+      v = true if v.nil?
       h[a] = v
     end
     h
@@ -230,10 +219,7 @@ class SettingsController < ApplicationController
     settings = Setting.all_as_hash()
     h = {}
     for a in Task.known_agents()
-      h[a] = {
-        "daily":  settings["limit_daily_"  + a] ?? 0,
-        "weekly": settings["limit_weekly_" + a] ?? 0
-      }
+      h[a] = {"daily": settings["limit_daily_" + a] ?? 0, "weekly": settings["limit_weekly_" + a] ?? 0}
     end
     h
   end
@@ -242,39 +228,28 @@ class SettingsController < ApplicationController
   # unparseable / negative all collapse to `0` (= "unlimited"), so a
   # fat-fingered "abc" never accidentally locks the user out.
   def _settings_parse_limit(raw)
-    if raw == nil
-      return 0
-    end
+    return 0 if raw.nil?
     s = str(raw).trim()
-    if s == ""
-      return 0
-    end
+    return 0 if s == ""
     n = int(s) rescue 0
-    if n < 0
-      return 0
-    end
+    return 0 if n < 0
     return n
   end
 
   def _settings_known_agent(name)
     for a in Task.known_agents()
-      if a == name
-        return true
-      end
+      return true if a == name
     end
     return false
   end
 
   def _settings_known_theme(name)
-    if name.starts_with("custom:")
-      return true
-    end
+    return true if name.starts_with("custom:")
+
     # Accept any built-in preset key (dark / light / dracula / nord / …).
     # Custom user presets ride the `custom:` prefix.
     for p in ThemePreset.built_in_presets()
-      if p["_key"] == name
-        return true
-      end
+      return true if p["_key"] == name
     end
     return false
   end
@@ -286,29 +261,17 @@ class SettingsController < ApplicationController
   # allowlist must never carry a value that wouldn't survive the
   # shell-safety gate downstream.
   def _settings_collect_allowed(form)
-    out  = []
+    out = []
     seen = {}
     for key in form.keys()
-      if not key.starts_with("allowed_")
-        next
-      end
-      if key == "allowed_models_present"
-        next
-      end
+      next if !key.starts_with("allowed_")
+      next if key == "allowed_models_present"
       val = form[key]
-      if val != "1" and val != "true" and val != true
-        next
-      end
+      next if val != "1" && val != "true" && val != true
       id = key.substring("allowed_".length(), key.length)
-      if id == ""
-        next
-      end
-      if Plan.allow_plan_model(id) != id
-        next
-      end
-      if seen[id] == true
-        next
-      end
+      next if id == ""
+      next if Plan.allow_plan_model(id) != id
+      next if seen[id] == true
       seen[id] = true
       out.push(id)
     end
@@ -343,9 +306,7 @@ class SettingsController < ApplicationController
     end
     out = []
     for id in (allowed ?? [])
-      if known[id] != true
-        out.push(id)
-      end
+      out.push(id) if known[id] != true
     end
     out
   end

@@ -1,20 +1,19 @@
 # Auth controller — session-based login / logout.
-
 class AuthController < ApplicationController
-  title:       Any
-  error:       Any
-  email:       Any
-  return_to:   Any
+  title: Any
+  error: Any
+  email: Any
+  return_to: Any
   hide_header: Any
 
   # GET /login
   def login_form(req)
     merged = req["params"] ?? req["query"] ?? {}
-    @title          = "Sign in"
-    @error          = nil
-    @email          = ""
-    @return_to      = this._sanitize_return_to(merged["return_to"] ?? "")
-    @hide_header    = true
+    @title = "Sign in"
+    @error = nil
+    @email = ""
+    @return_to = this._sanitize_return_to(merged["return_to"] ?? "")
+    @hide_header = true
     render("auth/login")
   end
 
@@ -24,16 +23,16 @@ class AuthController < ApplicationController
     email = (form["email"] ?? "").trim().downcase()
     password = (form["password"] ?? "")
     return_to = this._sanitize_return_to(form["return_to"] ?? "")
-    @title          = "Sign in"
-    @email          = email
-    @return_to      = return_to
-    @hide_header    = true
-    if email == "" or password == ""
+    @title = "Sign in"
+    @email = email
+    @return_to = return_to
+    @hide_header = true
+    if email == "" || password == ""
       @error = "Email and password are required."
       return render("auth/login")
     end
     user = User.authenticate(email, password)
-    if user == nil
+    if user.nil?
       @error = "Invalid email or password."
       return render("auth/login")
     end
@@ -52,12 +51,12 @@ class AuthController < ApplicationController
   # so the controller can validate user-submitted values from the form.
   def _sanitize_return_to(raw)
     v = (raw ?? "").to_string()
-    if v == "" then return "" end
-    if !v.starts_with("/") then return "" end
-    if v.starts_with("//") then return "" end
-    if v.contains("://") then return "" end
-    if v == "/login" then return "" end
-    if v.starts_with("/login?") then return "" end
+    return "" if v == ""
+    return "" if !v.starts_with("/")
+    return "" if v.starts_with("//")
+    return "" if v.contains("://")
+    return "" if v == "/login"
+    return "" if v.starts_with("/login?")
     return v
   end
 end

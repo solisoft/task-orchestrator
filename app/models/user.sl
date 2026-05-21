@@ -2,13 +2,13 @@
 #
 # Identity: `_key` = email (unique). Supports session-based auth via
 # email + password-hash lookup.
-
 class User < Model
-  validates("email",         { "presence": true,
-                              "format": "^[^@]+@[^@]+\\.[^@]+$" })
-  validates("password_hash", { "presence": true })
-  validates("display_name",  { "presence": true })
-
+  validates(
+    "email",
+    {"presence": true, "format": "^[^@]+@[^@]+\\.[^@]+$"}
+  )
+  validates("password_hash", {"presence": true})
+  validates("display_name", {"presence": true})
   before_save("touch_timestamps")
 
   static def find_by_email(email)
@@ -19,13 +19,9 @@ class User < Model
   static def authenticate(email, password)
     normalized = email.trim().downcase()
     user = User.find_by_email(normalized)
-    if user == nil
-      return nil
-    end
+    return nil if user.nil?
     candidate = User._hash_password(password)
-    if candidate == user.password_hash
-      return user
-    end
+    return user if candidate == user.password_hash
     nil
   end
 
@@ -34,10 +30,10 @@ class User < Model
   static def register(email, password, display_name)
     normalized = email.trim().downcase()
     User.create({
-      "_key":          normalized,
-      "email":         normalized,
+      "_key": normalized,
+      "email": normalized,
       "password_hash": User._hash_password(password),
-      "display_name":  display_name
+      "display_name": display_name
     })
   end
 
@@ -62,9 +58,7 @@ class User < Model
 
   def touch_timestamps()
     now = DateTime.now().to_iso()
-    if self.created_at == nil
-      self.created_at = now
-    end
-    self.updated_at = now
+    this.created_at = now if this.created_at.nil?
+    this.updated_at = now
   end
 end

@@ -41,9 +41,7 @@ end
 # Truncate text to a maximum length with ellipsis
 
 fn truncate_text(text: String, length: Int, suffix: String) -> String
-  if len(text) <= length
-    return text
-  end
+  return text if len(text) <= length
 
   suffix_len = len(suffix)
   prefix_len = length - suffix_len
@@ -60,9 +58,7 @@ end
 # Capitalize first letter of a string
 
 fn capitalize(text: String) -> String
-  if len(text) == 0
-    return text
-  end
+  return text if len(text) == 0
 
   return text.substring(0, 1).upcase() + text.substring(1, len(text))
 end
@@ -74,13 +70,9 @@ end
 
 fn _is_safe_link_url(url)
   lower = url.downcase()
-  if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("mailto:")
-    return true
-  end
+  return true if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("mailto:")
 
-  if lower.starts_with("/") || lower.starts_with("#") || lower.starts_with("?")
-    return true
-  end
+  return true if lower.starts_with("/") || lower.starts_with("#") || lower.starts_with("?")
 
   # No allowed scheme prefix; treat as relative *only* if there is no
   # scheme separator (`:`) before the first /?#. Anything else is a
@@ -88,34 +80,24 @@ fn _is_safe_link_url(url)
 
   cut = len(lower)
   s = lower.index_of("/")
-  if s != -1 && s < cut
-    cut = s
-  end
+  cut = s if s != -1 && s < cut
 
   q = lower.index_of("?")
-  if q != -1 && q < cut
-    cut = q
-  end
+  cut = q if q != -1 && q < cut
 
   h_idx = lower.index_of("#")
-  if h_idx != -1 && h_idx < cut
-    cut = h_idx
-  end
+  cut = h_idx if h_idx != -1 && h_idx < cut
 
   has_colon = false
   for i in 0 .. cut
-    if lower[i] == ":"
-      has_colon = true
-    end
+    has_colon = true if lower[i] == ":"
   end
 
   return !has_colon
 end
 
 fn _safe_link_url(url)
-  if _is_safe_link_url(url)
-    return url
-  end
+  return url if _is_safe_link_url(url)
 
   return "#"
 end
@@ -139,9 +121,7 @@ end
 # Pluralize a word based on count
 
 fn pluralize(count: Int, singular: String, plural: String) -> String
-  if count == 1
-    return str(count) + " " + singular
-  end
+  return str(count) + " " + singular if count == 1
 
   return str(count) + " " + plural
 end
@@ -149,9 +129,7 @@ end
 # Simple pluralize (adds 's')
 
 fn pluralize_simple(count: Int, word: String) -> String
-  if count == 1
-    return str(count) + " " + word
-  end
+  return str(count) + " " + word if count == 1
 
   return str(count) + " " + word + "s"
 end
@@ -165,25 +143,17 @@ end
 # can call this unconditionally on optional fields.
 
 fn format_date(iso)
-  if iso == null
-    return ""
-  end
+  return "" if iso.nil?
 
-  if iso == ""
-    return ""
-  end
+  return "" if iso == ""
 
   dt = DateTime.parse(iso) rescue null
-  if dt == null
-    return ""
-  end
+  return "" if dt.nil?
 
   months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
   m = dt.month()
-  if m < 1 || m > 12
-    return ""
-  end
+  return "" if m < 1 || m > 12
 
   return str(dt.day()) + " " + months[m - 1] + " " + str(dt.year())
 end

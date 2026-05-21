@@ -18,22 +18,21 @@
 
 # order: 20
 # scope_only: true
-
-def authenticate(req: Any) -> Any
+fn authenticate(req) -> Any
   email = session_get("user_email") ?? ""
   if email == ""
-    return { "continue": false, "response": _redirect_to_login(req) }
+    return {"continue": false, "response": _redirect_to_login(req)}
   end
 
   user = User.find_by_email(email)
-  if user == nil
+  if user.nil?
     session_delete("user_email")
-    return { "continue": false, "response": _redirect_to_login(req) }
+    return {"continue": false, "response": _redirect_to_login(req)}
   end
 
   req["current_user"] = user
 
-  return { "continue": true, "request": req }
+  return {"continue": true, "request": req}
 end
 
 # Build the 302 to /login, preserving where the user was headed so the
@@ -41,50 +40,48 @@ end
 # stamps `?return_to=...` for GETs of internal paths — POSTs lose their
 # body anyway, and skipping non-GET avoids redirecting form submissions
 # back into themselves.
-def _redirect_to_login(req: Any) -> Any
+fn _redirect_to_login(req) -> Any
   location = "/login"
   method = (req["method"] ?? "GET").to_string().upcase()
   if method == "GET"
     path = req["path"] ?? ""
     qs = req["query_string"] ?? ""
     target = path
-    if qs != "" then target = target + "?" + qs end
-    if _safe_return_to(target)
-      location = "/login?return_to=" + _url_encode(target)
-    end
+    target = target + "?" + qs if qs != ""
+    location = "/login?return_to=" + _url_encode(target) if _safe_return_to(target)
   end
   return {
     "status": 302,
-    "headers": { "Location": location },
+    "headers": {"Location": location},
     "body": ""
   }
 end
 
 # Open-redirect guard. Allow only internal paths: must start with "/",
 # must not start with "//" (scheme-relative), must not contain a scheme.
-def _safe_return_to(path)
-  if path == nil or path == "" then return false end
-  if !path.starts_with("/") then return false end
-  if path.starts_with("//") then return false end
-  if path.contains("://") then return false end
-  if path == "/login" then return false end
-  if path.starts_with("/login?") then return false end
+fn _safe_return_to(path)
+  return false if path.nil? || path == ""
+  return false if !path.starts_with("/")
+  return false if path.starts_with("//")
+  return false if path.contains("://")
+  return false if path == "/login"
+  return false if path.starts_with("/login?")
   return true
 end
 
 # Minimal percent-encoder for the return_to query value. We only need
 # to escape characters that would break the URL parse — the path itself
 # is already URL-safe shape, but ?, &, #, = and space must be encoded.
-def _url_encode(s)
+fn _url_encode(s)
   out = ""
   for ch in s.chars()
     mapped = ch
-    if ch == " " then mapped = "%20" end
-    if ch == "?" then mapped = "%3F" end
-    if ch == "&" then mapped = "%26" end
-    if ch == "=" then mapped = "%3D" end
-    if ch == "#" then mapped = "%23" end
-    if ch == "%" then mapped = "%25" end
+    mapped = "%20" if ch == " "
+    mapped = "%3F" if ch == "?"
+    mapped = "%26" if ch == "&"
+    mapped = "%3D" if ch == "="
+    mapped = "%23" if ch == "#"
+    mapped = "%25" if ch == "%"
     out = out + mapped
   end
   return out

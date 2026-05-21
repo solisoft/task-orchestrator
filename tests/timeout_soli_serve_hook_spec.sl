@@ -16,110 +16,133 @@ const _hook_path = "./.claude/hooks/timeout-soli-serve.sh"
 #   { "exit_code": <int>, "stdout": <str>, "stderr": <str>, "parsed": <hash|nil> }
 # `parsed` is the JSON-decoded stdout, or nil when stdout is empty
 # (the hook's silent pass-through signal).
-def _invoke(command)
-  payload = JSON.stringify({ "tool_input": { "command": command } })
+fn _invoke(command)
+  payload = JSON.stringify({"tool_input": {"command": command}})
   # bash -c reads the payload from $1 and pipes it into the hook, so we
   # never have to wrestle with shell-quoting raw JSON.
   res = System.run_sync([
-    "bash", "-c",
+    "bash",
+    "-c",
     "printf %s \"$1\" | " + _hook_path,
-    "--", payload
+    "--",
+    payload
   ])
   out = (res["stdout"] ?? "").trim()
   parsed = nil
-  if out != ""
-    parsed = JSON.parse(out) rescue nil
-  end
+  parsed = JSON.parse(out) rescue nil if out != ""
   return {
     "exit_code": res["exit_code"],
-    "stdout":    out,
-    "stderr":    res["stderr"] ?? "",
-    "parsed":    parsed
+    "stdout": out,
+    "stderr": res["stderr"] ?? "",
+    "parsed": parsed
   }
 end
 
 # Convenience: pull the rewritten command out of the hook's JSON output.
-def _rewritten(res)
+fn _rewritten(res)
   return res["parsed"]["hookSpecificOutput"]["updatedInput"]["command"]
 end
 
-describe("timeout-soli-serve hook", fn()
-  describe("rewrites unwrapped `soli serve`", fn()
-    test("wraps the original bug case: `soli serve ... | head -N`", fn()
-      res = _invoke("soli serve . --port 5099 --dev 2>&1 | head -20")
-      assert_eq(res["exit_code"], 0)
-      assert_eq(
-        _rewritten(res),
-        "timeout 120s soli serve . --port 5099 --dev 2>&1 | head -20"
-      )
-    end)
+describe("timeout-soli-serve hook", fn() {
+  describe("rewrites unwrapped `soli serve`", fn() {
+    test(
+      "wraps the original bug case: `soli serve ... | head -N`",
+      fn() {
+        res = _invoke("soli serve . --port 5099 --dev 2>&1 | head -20")
+        assert_eq(res["exit_code"], 0)
+        assert_eq(_rewritten(res), "timeout 120s soli serve . --port 5099 --dev 2>&1 | head -20")
+      }
+    )
 
-    test("wraps a backgrounded `soli serve ... &` too (safety net)", fn()
-      # Even when the agent did the right thing and backgrounded the
-      # serve, we still wrap. If they forget the matching `kill`, the
-      # 120s timeout still bounds the leak.
-      res = _invoke("soli serve . --port 5099 --dev > /tmp/s.log 2>&1 &")
-      assert_eq(_rewritten(res),
-        "timeout 120s soli serve . --port 5099 --dev > /tmp/s.log 2>&1 &")
-    end)
+    test(
+      "wraps a backgrounded `soli serve ... &` too (safety net)",
+      fn() {
 
-    test("wraps `soli serve` after a `cd && ...`", fn()
+        # Even when the agent did the right thing and backgrounded the
+        # serve, we still wrap. If they forget the matching `kill`, the
+        # 120s timeout still bounds the leak.
+        res = _invoke("soli serve . --port 5099 --dev > /tmp/s.log 2>&1 &")
+        assert_eq(_rewritten(res), "timeout 120s soli serve . --port 5099 --dev > /tmp/s.log 2>&1 &")
+      }
+    )
+
+    test("wraps `soli serve` after a `cd && ...`", fn() {
       res = _invoke("cd /tmp/proj && soli serve . --dev")
       assert_eq(_rewritten(res), "cd /tmp/proj && timeout 120s soli serve . --dev")
-    end)
+    })
 
-    test("wraps each occurrence when `soli serve` appears multiple times", fn()
-      res = _invoke("soli serve . --port 1 & soli serve . --port 2")
-      assert_eq(_rewritten(res),
-        "timeout 120s soli serve . --port 1 & timeout 120s soli serve . --port 2")
-    end)
+    test(
+      "wraps each occurrence when `soli serve` appears multiple times",
+      fn() {
+        res = _invoke("soli serve . --port 1 & soli serve . --port 2")
+        assert_eq(_rewritten(res), "timeout 120s soli serve . --port 1 & timeout 120s soli serve . --port 2")
+      }
+    )
 
-    test("emits hookSpecificOutput with permissionDecision=allow", fn()
-      res = _invoke("soli serve .")
-      hso = res["parsed"]["hookSpecificOutput"]
-      assert_eq(hso["hookEventName"], "PreToolUse")
-      assert_eq(hso["permissionDecision"], "allow")
-    end)
-  end)
+    test(
+      "emits hookSpecificOutput with permissionDecision=allow",
+      fn() {
+        res = _invoke("soli serve .")
+        hso = res["parsed"]["hookSpecificOutput"]
+        assert_eq(hso["hookEventName"], "PreToolUse")
+        assert_eq(hso["permissionDecision"], "allow")
+      }
+    )
+  })
 
-  describe("passes through (exit 0, no stdout)", fn()
-    test("when the command is already `timeout <N>s soli serve ...`", fn()
-      res = _invoke("timeout 60s soli serve . --port 5099 --dev")
-      assert_eq(res["exit_code"], 0)
-      assert_eq(res["stdout"], "")
-      assert_null(res["parsed"])
-    end)
+  describe("passes through (exit 0, no stdout)", fn() {
+    test(
+      "when the command is already `timeout <N>s soli serve ...`",
+      fn() {
+        res = _invoke("timeout 60s soli serve . --port 5099 --dev")
+        assert_eq(res["exit_code"], 0)
+        assert_eq(res["stdout"], "")
+        assert_null(res["parsed"])
+      }
+    )
 
-    test("when the command is `timeout 5m soli serve` (other duration units)", fn()
-      res = _invoke("timeout 5m soli serve . --dev")
-      assert_eq(res["stdout"], "")
-    end)
+    test(
+      "when the command is `timeout 5m soli serve` (other duration units)",
+      fn() {
+        res = _invoke("timeout 5m soli serve . --dev")
+        assert_eq(res["stdout"], "")
+      }
+    )
 
-    test("when `soli serve` doesn't appear at all", fn()
+    test("when `soli serve` doesn't appear at all", fn() {
       res = _invoke("ls -la")
       assert_eq(res["exit_code"], 0)
       assert_eq(res["stdout"], "")
-    end)
+    })
 
-    test("for other `soli` subcommands like `soli test` or `soli lint`", fn()
-      r1 = _invoke("soli test tests/foo_spec.sl")
-      r2 = _invoke("soli lint app/controllers/")
-      assert_eq(r1["stdout"], "")
-      assert_eq(r2["stdout"], "")
-    end)
+    test(
+      "for other `soli` subcommands like `soli test` or `soli lint`",
+      fn() {
+        r1 = _invoke("soli test tests/foo_spec.sl")
+        r2 = _invoke("soli lint app/controllers/")
+        assert_eq(r1["stdout"], "")
+        assert_eq(r2["stdout"], "")
+      }
+    )
 
-    test("for a no-op JSON payload (empty command field)", fn()
-      # The hook should never crash on a missing/empty command. This
-      # protects against PreToolUse firing for non-Bash matchers that
-      # somehow leak through, or malformed inputs.
-      payload = JSON.stringify({ "tool_input": { "command": "" } })
-      res = System.run_sync([
-        "bash", "-c",
-        "printf %s \"$1\" | " + _hook_path,
-        "--", payload
-      ])
-      assert_eq(res["exit_code"], 0)
-      assert_eq((res["stdout"] ?? "").trim(), "")
-    end)
-  end)
-end)
+    test(
+      "for a no-op JSON payload (empty command field)",
+      fn() {
+
+        # The hook should never crash on a missing/empty command. This
+        # protects against PreToolUse firing for non-Bash matchers that
+        # somehow leak through, or malformed inputs.
+        payload = JSON.stringify({"tool_input": {"command": ""}})
+        res = System.run_sync([
+          "bash",
+          "-c",
+          "printf %s \"$1\" | " + _hook_path,
+          "--",
+          payload
+        ])
+        assert_eq(res["exit_code"], 0)
+        assert_eq((res["stdout"] ?? "").trim(), "")
+      }
+    )
+  })
+})

@@ -12,148 +12,142 @@
 # Mocking: same filesystem-sentinel pattern as task_status_notification_spec.
 # Counts are filtered by project name (`psn`) since other specs run
 # concurrently against the same log file.
-
-const _psn_log      = "/tmp/_task_orch_web_push.log"
+const _psn_log = "/tmp/_task_orch_web_push.log"
 const _psn_sentinel = "/tmp/_task_orch_web_push.active"
 
-def _psn_count_my_lines()
-  if not Trusted.exists(_psn_log)
-    return 0
-  end
+fn _psn_count_my_lines
+  return 0 if !Trusted.exists(_psn_log)
   body = (Trusted.read(_psn_log) rescue "").trim()
-  if body == ""
-    return 0
-  end
+  return 0 if body == ""
   n = 0
   for line in body.split("\n")
-    if line == ""
-      next
-    end
+    next if line == ""
     entry = JSON.parse(line) rescue nil
-    if entry == nil
-      next
-    end
+    next if entry.nil?
     payload = entry["payload"] ?? {}
     url = (payload["url"] ?? "")
-    if url.starts_with("/projects/psn/") or url == "/projects/psn"
-      n = n + 1
-    end
+    n = n + 1 if url.starts_with("/projects/psn/") || url == "/projects/psn"
   end
   return n
 end
 
-def _psn_my_payloads()
+fn _psn_my_payloads
   out = []
-  if not Trusted.exists(_psn_log)
-    return out
-  end
+  return out if !Trusted.exists(_psn_log)
   body = (Trusted.read(_psn_log) rescue "").trim()
-  if body == ""
-    return out
-  end
+  return out if body == ""
   for line in body.split("\n")
-    if line == ""
-      next
-    end
+    next if line == ""
     entry = JSON.parse(line) rescue nil
-    if entry == nil
-      next
-    end
+    next if entry.nil?
     payload = entry["payload"] ?? {}
     url = (payload["url"] ?? "")
-    if url.starts_with("/projects/psn/") or url == "/projects/psn"
-      out.push(payload)
-    end
+    out.push(payload) if url.starts_with("/projects/psn/") || url == "/projects/psn"
   end
   return out
 end
 
-def _psn_seed_plan(plan_id, status)
+fn _psn_seed_plan(plan_id, status)
   Plan.create({
-    "_key":    "psn--" + plan_id,
+    "_key": "psn--" + plan_id,
     "project": "psn",
     "plan_id": plan_id,
-    "status":  status,
-    "prompt":  "prompt for " + plan_id
+    "status": status,
+    "prompt": "prompt for " + plan_id
   })
 end
 
-def _psn_reset()
-  for p in Plan.where({ "project": "psn" }).all()
+fn _psn_reset
+  for p in Plan.where({"project": "psn"}).all()
     Plan.delete(p._key) rescue null
   end
   Trusted.delete(_psn_log) rescue null
   Trusted.write(_psn_sentinel, "1")
 end
 
-describe("Plan status-change notification", fn()
-  before_each(fn()
+describe("Plan status-change notification", fn() {
+  before_each(fn() {
     assert_test_db()
     _psn_reset()
-  end)
+  })
 
-  test("does NOT notify on brand-new plan creation", fn()
+  test("does NOT notify on brand-new plan creation", fn() {
     _psn_seed_plan("first", "starting")
     assert_eq(_psn_count_my_lines(), 0)
-  end)
+  })
 
-  test("notifies exactly once on append_status transition", fn()
-    _psn_seed_plan("flip", "starting")
-    Plan.append_status("psn--flip", "done")
-    assert_eq(_psn_count_my_lines(), 1)
-  end)
+  test(
+    "notifies exactly once on append_status transition",
+    fn() {
+      _psn_seed_plan("flip", "starting")
+      Plan.append_status("psn--flip", "done")
+      assert_eq(_psn_count_my_lines(), 1)
+    }
+  )
 
-  test("does NOT notify when append_log does not change status", fn()
-    _psn_seed_plan("logonly", "starting")
-    Plan.append_log("psn--logonly", "some log text")
-    assert_eq(_psn_count_my_lines(), 0)
-  end)
+  test(
+    "does NOT notify when append_log does not change status",
+    fn() {
+      _psn_seed_plan("logonly", "starting")
+      Plan.append_log("psn--logonly", "some log text")
+      assert_eq(_psn_count_my_lines(), 0)
+    }
+  )
 
-  test("dispatched payload carries title, new status, and URL", fn()
-    _psn_seed_plan("payload", "starting")
-    Plan.append_status("psn--payload", "done")
-    payloads = _psn_my_payloads()
-    assert_eq(payloads.length(), 1)
-    payload = payloads[0]
-    assert_eq(payload["status"], "done")
-    assert_eq(payload["url"], "/projects/psn")
-    assert_eq(payload["title"], "prompt for payload")
-  end)
+  test(
+    "dispatched payload carries title, new status, and URL",
+    fn() {
+      _psn_seed_plan("payload", "starting")
+      Plan.append_status("psn--payload", "done")
+      payloads = _psn_my_payloads()
+      assert_eq(payloads.length(), 1)
+      payload = payloads[0]
+      assert_eq(payload["status"], "done")
+      assert_eq(payload["url"], "/projects/psn")
+      assert_eq(payload["title"], "prompt for payload")
+    }
+  )
 
-  test("notifies on every distinct transition (starting → done → failed)", fn()
-    _psn_seed_plan("multi", "starting")
-    Plan.append_status("psn--multi", "done")
-    Plan.append_status("psn--multi", "failed:reason")
-    assert_eq(_psn_count_my_lines(), 2)
-  end)
+  test(
+    "notifies on every distinct transition (starting → done → failed)",
+    fn() {
+      _psn_seed_plan("multi", "starting")
+      Plan.append_status("psn--multi", "done")
+      Plan.append_status("psn--multi", "failed:reason")
+      assert_eq(_psn_count_my_lines(), 2)
+    }
+  )
 
-  test("URL links to task when task_slug is set", fn()
+  test("URL links to task when task_slug is set", fn() {
     Plan.create({
-      "_key":       "psn--with-task",
-      "project":    "psn",
-      "plan_id":    "with-task",
-      "status":     "starting",
-      "task_slug":  "SEC-100",
-      "prompt":     "prompt with task"
+      "_key": "psn--with-task",
+      "project": "psn",
+      "plan_id": "with-task",
+      "status": "starting",
+      "task_slug": "SEC-100",
+      "prompt": "prompt with task"
     })
     Plan.append_status("psn--with-task", "done")
     payloads = _psn_my_payloads()
     assert_eq(payloads.length(), 1)
     assert_eq(payloads[0]["url"], "/projects/psn/tasks/SEC-100")
-  end)
+  })
 
-  test("URL links to feature when feature_slug is set and task_slug is not", fn()
-    Plan.create({
-      "_key":         "psn--with-feat",
-      "project":      "psn",
-      "plan_id":      "with-feat",
-      "status":       "starting",
-      "feature_slug": "feat-42",
-      "prompt":       "prompt with feature"
-    })
-    Plan.append_status("psn--with-feat", "done")
-    payloads = _psn_my_payloads()
-    assert_eq(payloads.length(), 1)
-    assert_eq(payloads[0]["url"], "/projects/psn/features/feat-42")
-  end)
-end)
+  test(
+    "URL links to feature when feature_slug is set and task_slug is not",
+    fn() {
+      Plan.create({
+        "_key": "psn--with-feat",
+        "project": "psn",
+        "plan_id": "with-feat",
+        "status": "starting",
+        "feature_slug": "feat-42",
+        "prompt": "prompt with feature"
+      })
+      Plan.append_status("psn--with-feat", "done")
+      payloads = _psn_my_payloads()
+      assert_eq(payloads.length(), 1)
+      assert_eq(payloads[0]["url"], "/projects/psn/features/feat-42")
+    }
+  )
+})

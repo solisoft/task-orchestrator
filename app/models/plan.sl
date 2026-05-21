@@ -7,11 +7,9 @@
 # Plans are created by `spawn_plan_agent` (tasks_controller.sl) when the user
 # clicks "Plan it", and are written to by `bin/plan-run` as the agent runs.
 # The plans_controller reads back the list for thePlans index page.
-
 class Plan < Model
-  validates("project",  { "presence": true })
-  validates("plan_id", { "presence": true })
-
+  validates("project", {"presence": true})
+  validates("plan_id", {"presence": true})
   before_save("touch_timestamps")
 
   static def key_for(project, plan_id)
@@ -23,12 +21,12 @@ class Plan < Model
   end
 
   static def for_project(project)
-    Plan.where({ "project": project }).order("plan_id", "desc").all()
+    Plan.where({"project": project}).order("plan_id", "desc").all()
   end
 
   static def append_log(plan_id, text)
     plan = Plan.find_by_plan_id(plan_id)
-    if plan != nil
+    if plan.present?
       plan.log = (plan.log ?? "") + text
       plan.save()
     end
@@ -36,7 +34,7 @@ class Plan < Model
 
   static def append_status(plan_id, status)
     plan = Plan.find_by_plan_id(plan_id)
-    if plan != nil
+    if plan.present?
       plan.status = status
       plan.updated_at = DateTime.now().to_iso()
       plan.save()
@@ -45,7 +43,7 @@ class Plan < Model
 
   static def update_pending_question(plan_id, pq)
     plan = Plan.find_by_plan_id(plan_id)
-    if plan != nil
+    if plan.present?
       plan.pending_question = pq
       plan.save()
     end
@@ -70,9 +68,9 @@ class Plan < Model
   # the settings checkbox panel and the plan-model `<select>`.
   static def claude_model_labels()
     {
-      "claude-opus-4-7":            "Opus 4.7",
-      "claude-sonnet-4-6":          "Sonnet 4.6",
-      "claude-haiku-4-5-20251001":  "Haiku 4.5"
+      "claude-opus-4-7": "Opus 4.7",
+      "claude-sonnet-4-6": "Sonnet 4.6",
+      "claude-haiku-4-5-20251001": "Haiku 4.5"
     }
   end
 
@@ -81,9 +79,7 @@ class Plan < Model
   # Persisted under the `allowed_models` Setting key by the settings page.
   static def allowed_model_ids()
     raw = Setting.get_or("allowed_models", [])
-    if raw == nil
-      return []
-    end
+    return [] if raw.nil?
     raw
   end
 
@@ -94,24 +90,16 @@ class Plan < Model
   # remains visible in the dropdown.
   static def filter_allowed(ids, current)
     allow = Plan.allowed_model_ids()
-    if allow.length() == 0
-      return ids
-    end
+    return ids if allow.length() == 0
     cur = (current ?? "").trim()
     out = []
     for id in ids
       keep = false
       for a in allow
-        if a == id
-          keep = true
-        end
+        keep = true if a == id
       end
-      if not keep and id == cur and cur != ""
-        keep = true
-      end
-      if keep
-        out.push(id)
-      end
+      keep = true if !keep && id == cur && cur != ""
+      out.push(id) if keep
     end
     out
   end
@@ -122,13 +110,9 @@ class Plan < Model
   # configured allowlist.
   static def is_allowed_model(id)
     allow = Plan.allowed_model_ids()
-    if allow.length() == 0
-      return true
-    end
+    return true if allow.length() == 0
     for a in allow
-      if a == id
-        return true
-      end
+      return true if a == id
     end
     false
   end
@@ -158,16 +142,15 @@ class Plan < Model
     if form_model != ""
       variant = (f["plan_variant"] ?? "").trim()
       is_opencode = form_model.index_of("/") > 0
-      if is_opencode and variant != "" and variant != "default" and Plan._matches_segment(variant, "variant")
+      if is_opencode && variant != "" && variant != "default" && Plan._matches_segment(variant, "variant")
         return Plan.allow_plan_model(form_model + ":" + variant)
       end
+
       return Plan.allow_plan_model(form_model)
     end
-    if feature != nil
+    if feature.present?
       fm = (feature.plan_model ?? "").trim()
-      if fm != ""
-        return Plan.allow_plan_model(fm)
-      end
+      return Plan.allow_plan_model(fm) if fm != ""
     end
     Plan.default_plan_model()
   end
@@ -181,30 +164,18 @@ class Plan < Model
   static def allow_plan_model(value)
     v = (value ?? "").trim()
     for a in Plan.claude_model_ids()
-      if v == a
-        return v
-      end
+      return v if v == a
     end
-    if Plan._is_codex_model_id(v)
-      return v
-    end
-    if Plan._is_opencode_model_id(v)
-      return v
-    end
+    return v if Plan._is_codex_model_id(v)
+    return v if Plan._is_opencode_model_id(v)
     "claude-sonnet-4-6"
   end
 
   static def _is_codex_model_id(s)
-    if s.length() < 6 or s.length() > 200
-      return false
-    end
-    if not s.starts_with("codex/")
-      return false
-    end
+    return false if s.length() < 6 || s.length() > 200
+    return false if !s.starts_with("codex/")
     model = s.substring(6, s.length)
-    if model.length() == 0
-      return false
-    end
+    return false if model.length() == 0
     Plan._matches_segment(model, "model")
   end
 
@@ -213,49 +184,32 @@ class Plan < Model
   # validator used in tasks_controller; kept here so model-level callers
   # don't need to reach across the controller boundary.
   static def _is_opencode_model_id(s)
-    if s.length() == 0 or s.length() > 200
-      return false
-    end
+    return false if s.length() == 0 || s.length() > 200
     slash = s.index_of("/")
-    if slash <= 0 or slash == s.length() - 1
-      return false
-    end
+    return false if slash <= 0 || slash == s.length() - 1
     provider = s.substring(0, slash)
-    rest     = s.substring(slash + 1, s.length)
-    colon    = rest.index_of(":")
-    model    = rest
-    variant  = ""
+    rest = s.substring(slash + 1, s.length)
+    colon = rest.index_of(":")
+    model = rest
+    variant = ""
     if colon > 0
-      model   = rest.substring(0, colon)
+      model = rest.substring(0, colon)
       variant = rest.substring(colon + 1, rest.length)
     end
-    if not Plan._matches_segment(provider, "provider") or not Plan._matches_segment(model, "model")
-      return false
-    end
-    if variant.length() > 0 and not Plan._matches_segment(variant, "variant")
-      return false
-    end
+    return false if !Plan._matches_segment(provider, "provider") || !Plan._matches_segment(model, "model")
+    return false if variant.length() > 0 && !Plan._matches_segment(variant, "variant")
     return true
   end
 
   static def _matches_segment(s, kind)
-    if s.length() == 0
-      return false
-    end
+    return false if s.length() == 0
     i = 0
     while i < s.length()
       c = s.substring(i, i + 1)
-      ok = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
-              or (c >= "0" and c <= "9") or c == "-" or c == "_"
-      if not ok and kind == "model" and c == "."
-        ok = true
-      end
-      if kind == "variant"
-        ok = c >= "a" and c <= "z"
-      end
-      if not ok
-        return false
-      end
+      ok = (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || (c >= "0" && c <= "9") || c == "-" || c == "_"
+      ok = true if !ok && kind == "model" && c == "."
+      ok = c >= "a" && c <= "z" if kind == "variant"
+      return false if !ok
       i = i + 1
     end
     return true
@@ -263,77 +217,59 @@ class Plan < Model
 
   def touch_timestamps()
     now = DateTime.now().to_iso()
-    if self.created_at == nil
-      self.created_at = now
-    end
-    self.updated_at = now
-    self._notify_if_status_changed()
+    this.created_at = now if this.created_at.nil?
+    this.updated_at = now
+    this._notify_if_status_changed()
   end
 
   def _notify_if_status_changed()
-    if self._key == nil or self._key == ""
-      return nil
-    end
-    new_status = self.status ?? ""
-    if self.last_notified_status == new_status
-      return nil
-    end
-    prev = Plan.find_by("_key", self._key) rescue nil
-    if prev == nil
-      return nil
-    end
+    return nil if this._key.nil? || this._key == ""
+    new_status = this.status ?? ""
+    return nil if this.last_notified_status == new_status
+    prev = Plan.find_by("_key", this._key) rescue nil
+    return nil if prev.nil?
     prev_status = prev.status ?? ""
-    if prev_status == new_status
-      return nil
-    end
-    self.last_notified_status = new_status
-    ts = self.task_slug ?? ""
-    fs = self.feature_slug ?? ""
+    return nil if prev_status == new_status
+    this.last_notified_status = new_status
+    ts = this.task_slug ?? ""
+    fs = this.feature_slug ?? ""
     url = ""
     if ts != ""
-      url = "/projects/" + (self.project ?? "") + "/tasks/" + ts
+      url = "/projects/" + (this.project ?? "") + "/tasks/" + ts
     elsif fs != ""
-      url = "/projects/" + (self.project ?? "") + "/features/" + fs
+      url = "/projects/" + (this.project ?? "") + "/features/" + fs
     else
-      url = "/projects/" + (self.project ?? "")
+      url = "/projects/" + (this.project ?? "")
     end
-    title = self.prompt_preview(80)
-    if title == nil or title == ""
-      title = self.plan_id ?? "Plan"
-    end
+    title = this.prompt_preview(80)
+    title = this.plan_id ?? "Plan" if title.nil? || title == ""
     web_push_send_to_all({
-      "title":  title,
+      "title": title,
       "status": new_status,
-      "url":    url
+      "url": url
     }) rescue null
   end
 
   def prompt_emoji()
-    s = (self.prompt ?? "").strip()
-    if s == ""
-      return ""
-    end
+    s = (this.prompt ?? "").strip()
+    return "" if s == ""
     n = 12
-    if s.length() < n
-      n = s.length()
-    end
+    n = s.length() if s.length() < n
     s.substring(0, n).gsub("\n", " ")
   end
 
   # Single-line teaser for the index summary row. Newlines collapsed to
   # spaces, hard-capped at `max` chars with an ellipsis when longer.
   def prompt_preview(max)
-    s = (self.prompt ?? "").gsub("\n", " ").trim()
-    if s.length() <= max
-      return s
-    end
+    s = (this.prompt ?? "").gsub("\n", " ").trim()
+    return s if s.length() <= max
     s.substring(0, max) + "…"
   end
 
   def write_pending_answer(qid, value)
-    answer = { "id": qid, "value": value }
-    self.pending_question = answer
-    self.save()
+    answer = {"id": qid, "value": value}
+    this.pending_question = answer
+    this.save()
   end
 
   # The Task this plan was turned into, or nil if `task_slug` is unset
@@ -341,34 +277,30 @@ class Plan < Model
   # flows; the plans index page does NOT call this in the view loop —
   # plans_controller#index batches the lookup off the N+1 path.
   def linked_task()
-    slug = (self.task_slug ?? "").trim()
-    if slug == ""
-      return nil
-    end
-    Task.find_by_slug(self.project, slug)
+    slug = (this.task_slug ?? "").trim()
+    return nil if slug == ""
+    Task.find_by_slug(this.project, slug)
   end
 
   # `kill -0 <pid>` is a signal-0 liveness probe — does not kill anything.
   # Mirrors `_run_pid_alive` in run.sl. nil = no pid recorded; true/false
   # = recorded pid is alive / gone.
   static def _pid_alive(pid)
-    if pid == nil
-      return nil
-    end
-    res = System.run_sync(["kill", "-0", str(pid)]) rescue { "exit_code": 1 }
+    return nil if pid.nil?
+    res = System.run_sync([
+      "kill",
+      "-0",
+      str(pid)
+    ]) rescue {"exit_code": 1}
     res["exit_code"] == 0
   end
 
   # Seconds since `updated_at`, or nil if the field is missing/unparseable.
   # Heartbeat fallback for rows written before the pid convention shipped.
   def _stale_seconds()
-    if self.updated_at == nil or self.updated_at == ""
-      return nil
-    end
-    prior = DateTime.parse(self.updated_at).to_unix() rescue nil
-    if prior == nil
-      return nil
-    end
+    return nil if this.updated_at.nil? || this.updated_at == ""
+    prior = DateTime.parse(this.updated_at).to_unix() rescue nil
+    return nil if prior.nil?
     DateTime.now().to_unix() - prior
   end
 
@@ -377,19 +309,13 @@ class Plan < Model
   # button (plan_retry) drives any re-spawn. Terminal statuses
   # (done / failed:*) pass through unchanged.
   def effective_status()
-    s = self.status ?? ""
-    if s == "done" or s.starts_with("failed:")
-      return s
-    end
-    alive = Plan._pid_alive(self.pid)
-    if alive == false
-      return "failed:zombie (no live process)"
-    end
-    if alive == nil
-      age = self._stale_seconds()
-      if age != nil and age > 600
-        return "failed:zombie (no heartbeat for " + str(age / 60) + "m)"
-      end
+    s = this.status ?? ""
+    return s if s == "done" || s.starts_with("failed:")
+    alive = Plan._pid_alive(this.pid)
+    return "failed:zombie (no live process)" if alive == false
+    if alive.nil?
+      age = this._stale_seconds()
+      return "failed:zombie (no heartbeat for " + str(age / 60) + "m)" if age.present? && age > 600
     end
     s
   end
@@ -403,24 +329,27 @@ end
 # exercise the building blocks without going through HTTP.
 fn read_plan_state(plan_id)
   plan = Plan.find_by_plan_id(plan_id)
-  if plan == nil
+  if plan.nil?
     return {
-      "status":           "unknown",
-      "log":              "",
-      "body":             "",
+      "status": "unknown",
+      "log": "",
+      "body": "",
       "pending_question": nil,
-      "model":            "claude-sonnet-4-6",
-      "prompt":           "",
-      "stream_token":     "" }
+      "model": "claude-sonnet-4-6",
+      "prompt": "",
+      "stream_token": ""
+    }
   end
+
   {
-    "status":           plan.effective_status,
-    "log":              plan.log ?? "",
-    "body":             plan.body ?? "",
+    "status": plan.effective_status,
+    "log": plan.log ?? "",
+    "body": plan.body ?? "",
     "pending_question": plan.pending_question,
-    "model":            (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
-    "prompt":           plan.prompt ?? "",
-    "stream_token":     plan.stream_token ?? "" }
+    "model": (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
+    "prompt": plan.prompt ?? "",
+    "stream_token": plan.stream_token ?? ""
+  }
 end
 
 # Plain-data payload for the WS plan/feature-generate stream handlers.
@@ -436,33 +365,32 @@ end
 fn plan_stream_payload(plan_id, event_type, offset)
   state = read_plan_state(plan_id)
   if state["status"] == "unknown"
-    return { "event": "error", "terminal": true, "message": "unknown plan" }
+    return {
+      "event": "error",
+      "terminal": true,
+      "message": "unknown plan"
+    }
   end
+
   cursor = offset
-  if cursor == nil or cursor < 0
-    cursor = 0
-  end
+  cursor = 0 if cursor.nil? || cursor < 0
   log = state["log"] ?? ""
   size = log.length
   # Cursor past end (truncate / restart) wraps back to 0 — we'd rather
   # double-paint a few bytes than skip them.
-  if cursor > size
-    cursor = 0
-  end
+  cursor = 0 if cursor > size
   chunk = ""
-  if cursor < size
-    chunk = log.substring(cursor, size)
-  end
+  chunk = log.substring(cursor, size) if cursor < size
   status_token = state["status"]
   done = status_token == "done"
   failed = status_token.starts_with("failed:")
   {
-    "event":            event_type == "connect" ? "snapshot" : "delta",
-    "log_chunk":        chunk,
-    "log_offset":       size,
-    "status":           status_token,
+    "event": event_type == "connect" ? "snapshot" : "delta",
+    "log_chunk": chunk,
+    "log_offset": size,
+    "status": status_token,
     "pending_question": state["pending_question"],
-    "terminal":         done or failed,
-    "reload":           done
+    "terminal": done || failed,
+    "reload": done
   }
 end

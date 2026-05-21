@@ -7,32 +7,31 @@
 # Use the static helpers (`AgentConfig.get`, `AgentConfig.set`,
 # `AgentConfig.get_or`, `AgentConfig.enabled_agents`) rather than
 # touching the inherited Model API directly.
-
 class AgentConfig < Model
-  validates("_key", { "presence": true })
+  validates("_key", {"presence": true})
 
   static def get(key)
     c = AgentConfig.find_by("_key", key)
-    if c == nil
-      return nil
-    end
+    return nil if c.nil?
     return c.value
   end
 
   static def get_or(key, default_value)
     v = AgentConfig.get(key)
-    if v == nil
-      return default_value
-    end
+    return default_value if v.nil?
     return v
   end
 
   static def set(key, value)
     existing = AgentConfig.find_by("_key", key)
-    if existing == nil
-      return AgentConfig.create({ "_key": key, "value": value })
+    if existing.nil?
+      return AgentConfig.create({
+        "_key": key,
+        "value": value
+      })
     end
-    AgentConfig.update(key, { "value": value })
+
+    AgentConfig.update(key, {"value": value})
     return AgentConfig.find_by("_key", key)
   end
 
@@ -56,9 +55,7 @@ class AgentConfig < Model
       v = configs[a]
       # Unset (`nil`) means enabled by default — the row only exists
       # once the user has explicitly flipped the agent off (or on).
-      if v == nil or v != false
-        enabled.push(a)
-      end
+      enabled.push(a) if v.nil? || v != false
     end
     enabled
   end

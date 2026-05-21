@@ -9,17 +9,12 @@
 #   pushing branch | opening PR | done:<pr_url> | failed:<reason>
 #
 # This model exposes read-only views of those files for the UI.
-
 class Run
   static def run_state_root()
     let custom = getenv("TASK_ORCH_STATE")
-    if custom != nil and custom != ""
-      return custom
-    end
+    return custom if custom.present? && custom != ""
     let home = getenv("HOME")
-    if home == nil or home == ""
-      return "/home/olivier.bonnaure@delupay.com/.local/state/task-orchestrator"
-    end
+    return "/home/olivier.bonnaure@delupay.com/.local/state/task-orchestrator" if home.nil? || home == ""
     return home + "/.local/state/task-orchestrator"
   end
 
@@ -46,7 +41,7 @@ class Run
   static def run_worktree_path(repo, slug)
     let custom = getenv("TASK_ORCH_WORKTREES")
     let root = ""
-    if custom != nil and custom != ""
+    if custom.present? && custom != ""
       root = custom
     else
       let home = getenv("HOME") ?? ""
@@ -65,14 +60,14 @@ class Run
   #        before it could write `failed:` to the status journal.
   static def _run_pid_alive(repo, slug)
     let path = Run.run_pid_path(repo, slug)
-    if not Trusted.exists(path)
-      return nil
-    end
+    return nil if !Trusted.exists(path)
     let pid = (Trusted.read(path) rescue "").trim()
-    if pid == ""
-      return nil
-    end
-    let res = System.run_sync(["kill", "-0", pid]) rescue { "exit_code": 1 }
+    return nil if pid == ""
+    let res = System.run_sync([
+      "kill",
+      "-0",
+      pid
+    ]) rescue {"exit_code": 1}
     res["exit_code"] == 0
   end
 
@@ -81,22 +76,21 @@ class Run
   # convention shipped (no .pid on disk to probe).
   static def _run_log_age_seconds(repo, slug)
     let path = Run.run_log_path(repo, slug)
-    if not Trusted.exists(path)
-      return nil
-    end
-    let res = System.run_sync(["stat", "-c", "%Y", path])
-    if res["exit_code"] != 0
-      return nil
-    end
+    return nil if !Trusted.exists(path)
+    let res = System.run_sync([
+      "stat",
+      "-c",
+      "%Y",
+      path
+    ])
+    return nil if res["exit_code"] != 0
     let mtime = (res["stdout"] ?? "").trim().to_int() rescue nil
-    if mtime == nil
-      return nil
-    end
+    return nil if mtime.nil?
     DateTime.now().to_unix() - mtime
   end
 
   static def _is_terminal_status(token)
-    token.starts_with("done:") or token.starts_with("failed:")
+    token.starts_with("done:") || token.starts_with("failed:")
   end
 
   # Persisted status of the DB row backing this run, or nil if the row
@@ -105,33 +99,23 @@ class Run
   # must not be repainted by a stale journal or a zombie pidfile.
   static def _task_row_status(repo, slug)
     let task = Task.find_by("_key", Task.key_for(repo, slug)) rescue nil
-    if task == nil
-      return nil
-    end
+    return nil if task.nil?
     task.status
   end
 
   # Most recent status line, or nil if no run has happened.
   static def run_current_status(repo, slug)
     let path = Run.run_status_path(repo, slug)
-    if not Trusted.exists(path)
-      return nil
-    end
+    return nil if !Trusted.exists(path)
     let body = Trusted.read(path)
     let lines = body.split("\n")
     let last = ""
     for line in lines
-      if line != ""
-        last = line
-      end
+      last = line if line != ""
     end
-    if last == ""
-      return nil
-    end
+    return nil if last == ""
     let parts = last.split("\t")
-    if parts.length < 2
-      return nil
-    end
+    return nil if parts.length < 2
     let at = parts[0]
     let token = parts[1]
 
@@ -144,37 +128,38 @@ class Run
     # the agent reached a terminal success state and the wrapper just
     # exited before the journal got a terminal write. Skip synthesis so
     # the kanban doesn't paint a `done` row red.
-    if not Run._is_terminal_status(token)
+    if !Run._is_terminal_status(token)
       if Run._task_row_status(repo, slug) == "done"
-        return { "at": at, "status": token }
+        return {"at": at, "status": token}
       end
+
       let alive = Run._run_pid_alive(repo, slug)
       if alive == false
-        return { "at": at, "status": "failed:agent died (no live process)" }
+        return {"at": at, "status": "failed:agent died (no live process)"}
       end
-      if alive == nil
+
+      if alive.nil?
         let age = Run._run_log_age_seconds(repo, slug)
-        if age != nil and age > 600
-          return { "at": at,
-                  "status": "failed:agent died (no heartbeat for " + str(age / 60) + "m)" }
+        if age.present? && age > 600
+          return {
+            "at": at,
+            "status": "failed:agent died (no heartbeat for " + str(age / 60) + "m)"
+          }
         end
+
       end
     end
 
-    { "at": at, "status": token }
+    {"at": at, "status": token}
   end
 
   # Tail the last N bytes of the log. Returns "" if the log doesn't exist
   # (e.g. task hasn't been queued yet).
   static def run_log_tail(repo, slug, max_bytes)
     let path = Run.run_log_path(repo, slug)
-    if not Trusted.exists(path)
-      return ""
-    end
+    return "" if !Trusted.exists(path)
     let body = Trusted.read(path)
-    if body.length <= max_bytes
-      return body
-    end
+    return body if body.length <= max_bytes
     body.substring(body.length - max_bytes, body.length)
   end
 
@@ -183,9 +168,7 @@ class Run
   # client knows where to ask for deltas from.
   static def run_log_size(repo, slug)
     let path = Run.run_log_path(repo, slug)
-    if not Trusted.exists(path)
-      return 0
-    end
+    return 0 if !Trusted.exists(path)
     let body = Trusted.read(path) rescue ""
     body.length
   end
@@ -197,22 +180,20 @@ class Run
   # delta and advance its cursor in one call.
   static def run_log_delta(repo, slug, offset)
     let path = Run.run_log_path(repo, slug)
-    if not Trusted.exists(path)
-      return { "chunk": "", "offset": 0 }
+    if !Trusted.exists(path)
+      return {"chunk": "", "offset": 0}
     end
+
     let body = Trusted.read(path) rescue ""
     let size = body.length
     let start = offset
-    if start == nil or start < 0
-      start = 0
-    end
-    if start > size
-      start = 0
-    end
+    start = 0 if start.nil? || start < 0
+    start = 0 if start > size
     if start == size
-      return { "chunk": "", "offset": size }
+      return {"chunk": "", "offset": size}
     end
-    { "chunk": body.substring(start, size), "offset": size }
+
+    {"chunk": body.substring(start, size), "offset": size}
   end
 
   # Plain-data payload for the WS run-stream handler. Returns:
@@ -233,23 +214,21 @@ class Run
   # WS client or loading controllers into the spec harness.
   static def run_stream_payload(repo, slug, event_type, offset, prefix_end)
     let cursor = offset
-    if cursor == nil or cursor < 0
-      cursor = 0
-    end
+    cursor = 0 if cursor.nil? || cursor < 0
     let status = Run.run_current_status(repo, slug)
-    let token = status == nil ? nil : status["status"]
-    let terminal = token != nil and (token.starts_with("done:") or token.starts_with("failed:"))
+    let token = status.nil? ? nil : status["status"]
+    let terminal = token.present? && (token.starts_with("done:") || token.starts_with("failed:"))
     let delta = Run.run_log_delta(repo, slug, cursor)
     let frame = {
-      "event":      event_type == "connect" ? "snapshot" : "delta",
-      "log_chunk":  delta["chunk"],
+      "event": event_type == "connect" ? "snapshot" : "delta",
+      "log_chunk": delta["chunk"],
       "log_offset": delta["offset"],
-      "status":     status,
-      "pr_url":     Run.run_pr_url(repo, slug),
-      "todos":      Run.run_latest_todos(repo, slug),
-      "terminal":   terminal
+      "status": status,
+      "pr_url": Run.run_pr_url(repo, slug),
+      "todos": Run.run_latest_todos(repo, slug),
+      "terminal": terminal
     }
-    if event_type == "connect" and prefix_end != nil and prefix_end > 0
+    if event_type == "connect" && prefix_end.present? && prefix_end > 0
       frame["prefix_chunk"] = Run.run_log_prefix(repo, slug, prefix_end)
     end
     frame
@@ -260,17 +239,11 @@ class Run
   # log is missing or `end_offset <= 0`. Used by `run_stream_payload` to
   # backfill the prefix the SSR `run_log_tail` cap left out.
   static def run_log_prefix(repo, slug, end_offset)
-    if end_offset == nil or end_offset <= 0
-      return ""
-    end
+    return "" if end_offset.nil? || end_offset <= 0
     let path = Run.run_log_path(repo, slug)
-    if not Trusted.exists(path)
-      return ""
-    end
+    return "" if !Trusted.exists(path)
     let body = Trusted.read(path) rescue ""
-    if end_offset >= body.length
-      return body
-    end
+    return body if end_offset >= body.length
     body.substring(0, end_offset)
   end
 
@@ -292,27 +265,21 @@ class Run
   # shows the agent's *current* plan, not a history.
   static def run_latest_todos(repo, slug)
     let path = Run.run_log_jsonl_path(repo, slug)
-    if not Trusted.exists(path)
-      return []
-    end
+    return [] if !Trusted.exists(path)
     let body = Trusted.read(path) rescue ""
-    if body == ""
-      return []
-    end
+    return [] if body == ""
     let max_bytes = 1048576
-    if body.length > max_bytes
-      body = body.substring(body.length - max_bytes, body.length)
-    end
+    body = body.substring(body.length - max_bytes, body.length) if body.length > max_bytes
     let lines = body.split("\n")
     let latest = []
     let i = lines.length - 1
     while i >= 0
       let line = lines[i]
-      if line != "" and line.contains("\"todo")
+      if line != "" && line.contains("\"todo")
         let obj = JSON.parse(line) rescue nil
-        if obj != nil
+        if obj.present?
           let todos = Run._extract_todos_from_event(obj)
-          if todos != nil
+          if todos.present?
             latest = todos
             i = -1
           end
@@ -320,9 +287,7 @@ class Run
       end
       i = i - 1
     end
-    if latest.length == 0
-      return Run._synthesize_todos_from_spec(repo, slug)
-    end
+    return Run._synthesize_todos_from_spec(repo, slug) if latest.length == 0
     latest
   end
 
@@ -335,13 +300,9 @@ class Run
   # section is missing.
   static def _synthesize_todos_from_spec(repo, slug)
     let spec_path = Run.run_worktree_path(repo, slug) + "/tasks/todo/" + slug + ".md"
-    if not Trusted.exists(spec_path)
-      return []
-    end
+    return [] if !Trusted.exists(spec_path)
     let body = Trusted.read(spec_path) rescue ""
-    if body == ""
-      return []
-    end
+    return [] if body == ""
     Run._parse_acceptance_criteria(body)
   end
 
@@ -357,10 +318,14 @@ class Run
       let trimmed = lines[i].trim()
       if trimmed.starts_with("##")
         inside = trimmed.downcase().contains("acceptance criteria")
-      elsif inside and (trimmed.starts_with("- ") or trimmed.starts_with("* "))
+      elsif inside && (trimmed.starts_with("- ") || trimmed.starts_with("* "))
         let content = trimmed.substring(2, trimmed.length).trim()
         if content != ""
-          items.push({ "content": content, "status": "pending", "source": "spec" })
+          items.push({
+            "content": content,
+            "status": "pending",
+            "source": "spec"
+          })
         end
       end
       i = i + 1
@@ -392,7 +357,7 @@ class Run
         let c = content[i]
         let c_type = c["type"] ?? ""
         let c_name = c["name"] ?? ""
-        if c_type == "tool_use" and c_name == "TodoWrite"
+        if c_type == "tool_use" && c_name == "TodoWrite"
           let input = c["input"] ?? {}
           return input["todos"]
         end
@@ -406,9 +371,7 @@ class Run
   # PR URL if `task-run` opened one, else nil.
   static def run_pr_url(repo, slug)
     let path = Run.run_pr_path(repo, slug)
-    if not Trusted.exists(path)
-      return nil
-    end
+    return nil if !Trusted.exists(path)
     Trusted.read(path).strip()
   end
 
@@ -421,20 +384,19 @@ class Run
   # found, network flake) so the caller can decide how to handle it.
   static def pr_merged(pr_url)
     let mock = Setting.get("_pr_merged_mock") rescue nil
-    if mock == true
-      return true
-    end
-    if mock == false
-      return false
-    end
+    return true if mock == true
+    return false if mock == false
     let res = System.run_sync([
-      "gh", "pr", "view", pr_url,
-      "--json", "state",
-      "-q", ".state"
+      "gh",
+      "pr",
+      "view",
+      pr_url,
+      "--json",
+      "state",
+      "-q",
+      ".state"
     ])
-    if res["exit_code"] != 0
-      return false
-    end
+    return false if res["exit_code"] != 0;
     (res["stdout"] ?? "").trim() == "MERGED"
   end
 
@@ -444,20 +406,12 @@ class Run
   # nothing on disk (stale `failed:` journal line, zombie pidfile) is
   # allowed to flip the indicator back to red.
   static def run_indicator(repo, slug)
-    if Run._task_row_status(repo, slug) == "done"
-      return "done"
-    end
+    return "done" if Run._task_row_status(repo, slug) == "done"
     let s = Run.run_current_status(repo, slug)
-    if s == nil
-      return nil
-    end
+    return nil if s.nil?
     let token = s["status"]
-    if token.starts_with("done:")
-      return "done"
-    end
-    if token.starts_with("failed:")
-      return "failed"
-    end
+    return "done" if token.starts_with("done:")
+    return "failed" if token.starts_with("failed:")
     return "running"
   end
 
@@ -472,19 +426,19 @@ class Run
   # `master`. Mirrors the fallback `bin/task-run` does in local-only
   # mode so the merge UI agrees with what the runner branched off of.
   static def project_main_branch(project_path)
-    if Run._git_branch_exists(project_path, "main")
-      return "main"
-    end
-    if Run._git_branch_exists(project_path, "master")
-      return "master"
-    end
+    return "main" if Run._git_branch_exists(project_path, "main")
+    return "master" if Run._git_branch_exists(project_path, "master")
     return "main"
   end
 
   static def _git_branch_exists(project_path, branch)
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "show-ref", "--verify", "--quiet",
+      "git",
+      "-C",
+      project_path,
+      "show-ref",
+      "--verify",
+      "--quiet",
       "refs/heads/" + branch
     ])
     res["exit_code"] == 0
@@ -501,12 +455,14 @@ class Run
   # in the main project tree.
   static def task_worktree_branch_exists(repo, slug)
     let wt = Run.run_worktree_path(repo, slug)
-    if not Trusted.is_dir(wt)
-      return false
-    end
+    return false if !Trusted.is_dir(wt)
     let res = System.run_sync([
-      "git", "-C", wt,
-      "show-ref", "--verify", "--quiet",
+      "git",
+      "-C",
+      wt,
+      "show-ref",
+      "--verify",
+      "--quiet",
       "refs/heads/" + Run.task_branch_name(slug)
     ])
     res["exit_code"] == 0
@@ -522,52 +478,56 @@ class Run
   # an ancestor of main but never advanced past it — nothing merged).
   static def task_branch_merged(project_path, slug)
     let main = Run.project_main_branch(project_path)
-    if not Run.task_branch_exists(project_path, slug)
-      return false
-    end
+    return false if !Run.task_branch_exists(project_path, slug)
     let branch_sha = Run._git_rev_parse(project_path, Run.task_branch_name(slug))
-    let main_sha   = Run._git_rev_parse(project_path, main)
-    if branch_sha == "" or main_sha == "" or branch_sha == main_sha
-      return false
-    end
+    let main_sha = Run._git_rev_parse(project_path, main)
+    return false if branch_sha == "" || main_sha == "" || branch_sha == main_sha
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "merge-base", "--is-ancestor",
-      Run.task_branch_name(slug), main
-    ])
-    if res["exit_code"] != 0
-      return false
-    end
-    let merge_base_res = System.run_sync([
-      "git", "-C", project_path,
+      "git",
+      "-C",
+      project_path,
       "merge-base",
-      Run.task_branch_name(slug), main
+      "--is-ancestor",
+      Run.task_branch_name(slug),
+      main
     ])
-    if merge_base_res["exit_code"] != 0
-      return false
-    end
+    return false if res["exit_code"] != 0
+    let merge_base_res = System.run_sync([
+      "git",
+      "-C",
+      project_path,
+      "merge-base",
+      Run.task_branch_name(slug),
+      main
+    ])
+    return false if merge_base_res["exit_code"] != 0;
     (merge_base_res["stdout"] ?? "").trim() != branch_sha
   end
 
   static def _git_rev_parse(project_path, ref)
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "rev-parse", "--verify", "--quiet", ref
+      "git",
+      "-C",
+      project_path,
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      ref
     ])
-    if res["exit_code"] != 0
-      return ""
-    end
+    return "" if res["exit_code"] != 0;
     (res["stdout"] ?? "").trim()
   end
 
   static def project_current_branch(project_path)
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "rev-parse", "--abbrev-ref", "HEAD"
+      "git",
+      "-C",
+      project_path,
+      "rev-parse",
+      "--abbrev-ref",
+      "HEAD"
     ])
-    if res["exit_code"] != 0
-      return ""
-    end
+    return "" if res["exit_code"] != 0;
     (res["stdout"] ?? "").trim()
   end
 
@@ -576,12 +536,13 @@ class Run
   # guard refuses to act if it can't prove the tree is clean.
   static def project_worktree_dirty(project_path)
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "status", "--porcelain"
+      "git",
+      "-C",
+      project_path,
+      "status",
+      "--porcelain"
     ])
-    if res["exit_code"] != 0
-      return true
-    end
+    return true if res["exit_code"] != 0;
     (res["stdout"] ?? "").trim() != ""
   end
 
@@ -595,27 +556,38 @@ class Run
     let branch = Run.task_branch_name(slug)
     let current = Run.project_current_branch(project_path)
     if current != main
-      return { "ok": false,
-              "error": "current branch is '" + current + "', not '" + main +
-                        "'. Checkout " + main + " first." }
+      return {
+        "ok": false,
+        "error": "current branch is '" + current + "', not '" + main + "'. Checkout " + main + " first."
+      }
     end
+
     if Run.project_worktree_dirty(project_path)
-      return { "ok": false,
-              "error": "working tree has uncommitted changes — commit or stash first." }
+      return {"ok": false, "error": "working tree has uncommitted changes — commit or stash first."}
     end
+
     let res = System.run_sync([
-      "git", "-C", project_path,
-      "merge", "--no-ff", "--no-edit", branch
+      "git",
+      "-C",
+      project_path,
+      "merge",
+      "--no-ff",
+      "--no-edit",
+      branch
     ])
     if res["exit_code"] != 0
-      System.run_sync(["git", "-C", project_path, "merge", "--abort"]) rescue null
+      System.run_sync([
+        "git",
+        "-C",
+        project_path,
+        "merge",
+        "--abort"
+      ]) rescue null
       let err = ((res["stderr"] ?? "") + (res["stdout"] ?? "")).trim()
-      if err == ""
-        err = "git merge exited " + str(res["exit_code"])
-      end
-      return { "ok": false, "error": err }
+      err = "git merge exited " + str(res["exit_code"]) if err == ""
+      return {"ok": false, "error": err}
     end
-    return { "ok": true }
+    return {"ok": true}
   end
 
   # Stage all changes, commit, and push the per-task branch to origin.
@@ -625,37 +597,58 @@ class Run
     let branch = Run.task_branch_name(slug)
     let current = Run.project_current_branch(worktree_path)
     if current != branch
-      return { "ok": false,
-              "error": "current branch is '" + current + "', not '" + branch +
-                        "'. Checkout " + branch + " first." }
+      return {
+        "ok": false,
+        "error": "current branch is '" + current + "', not '" + branch + "'. Checkout " + branch + " first."
+      }
     end
-    if not Run.project_worktree_dirty(worktree_path)
-      return { "ok": false,
-              "error": "working tree has no uncommitted changes — nothing to commit." }
+
+    if !Run.project_worktree_dirty(worktree_path)
+      return {"ok": false, "error": "working tree has no uncommitted changes — nothing to commit."}
     end
-    let add = System.run_sync(["git", "-C", worktree_path, "add", "-A"])
+
+    let add = System.run_sync([
+      "git",
+      "-C",
+      worktree_path,
+      "add",
+      "-A"
+    ])
     if add["exit_code"] != 0
-      return { "ok": false,
-              "error": "git add failed: " + (add["stderr"] ?? "unknown error") }
+      return {
+        "ok": false,
+        "error": "git add failed: " + (add["stderr"] ?? "unknown error")
+      }
     end
+
     let msg = "fix(review): address PR feedback for " + branch
-    let commit = System.run_sync(["git", "-C", worktree_path, "commit", "-m", msg])
+    let commit = System.run_sync([
+      "git",
+      "-C",
+      worktree_path,
+      "commit",
+      "-m",
+      msg
+    ])
     if commit["exit_code"] != 0
       let err = ((commit["stderr"] ?? "") + (commit["stdout"] ?? "")).trim()
-      if err == ""
-        err = "git commit exited " + str(commit["exit_code"])
-      end
-      return { "ok": false, "error": err }
+      err = "git commit exited " + str(commit["exit_code"]) if err == ""
+      return {"ok": false, "error": err}
     end
-    let push = System.run_sync(["git", "-C", worktree_path, "push", "origin", branch])
+    let push = System.run_sync([
+      "git",
+      "-C",
+      worktree_path,
+      "push",
+      "origin",
+      branch
+    ])
     if push["exit_code"] != 0
       let err = ((push["stderr"] ?? "") + (push["stdout"] ?? "")).trim()
-      if err == ""
-        err = "git push exited " + str(push["exit_code"])
-      end
-      return { "ok": false, "error": err }
+      err = "git push exited " + str(push["exit_code"]) if err == ""
+      return {"ok": false, "error": err}
     end
-    { "ok": true }
+    {"ok": true}
   end
 
   # Wipe every on-disk artefact from a previous run for this task —
@@ -671,7 +664,11 @@ class Run
       Run.run_pid_path(repo, slug)
     ]
       if Trusted.exists(path)
-        Trusted.delete(path) rescue System.run_sync(["rm", "-f", path])
+        Trusted.delete(path) rescue System.run_sync([
+          "rm",
+          "-f",
+          path
+        ])
       end
     end
   end

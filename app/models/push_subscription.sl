@@ -10,12 +10,10 @@
 #   auth       — the user-agent's auth secret (base64url)
 #   user_agent — UA string at subscribe time, kept for debugging
 #   created_at — ISO timestamp set on first save
-
 class PushSubscription < Model
-  validates("endpoint", { "presence": true })
-  validates("p256dh",   { "presence": true })
-  validates("auth",     { "presence": true })
-
+  validates("endpoint", {"presence": true})
+  validates("p256dh", {"presence": true})
+  validates("auth", {"presence": true})
   before_save("touch_timestamps")
 
   static def find_by_endpoint(endpoint)
@@ -28,11 +26,9 @@ class PushSubscription < Model
   static def upsert(attrs)
     endpoint = attrs["endpoint"]
     existing = PushSubscription.find_by_endpoint(endpoint)
-    if existing == nil
-      return PushSubscription.create(attrs)
-    end
-    existing.p256dh     = attrs["p256dh"]     ?? existing.p256dh
-    existing.auth       = attrs["auth"]       ?? existing.auth
+    return PushSubscription.create(attrs) if existing.nil?
+    existing.p256dh = attrs["p256dh"] ?? existing.p256dh
+    existing.auth = attrs["auth"] ?? existing.auth
     existing.user_agent = attrs["user_agent"] ?? existing.user_agent
     existing.save()
     return existing
@@ -44,16 +40,12 @@ class PushSubscription < Model
   # endpoint — don't keep retrying).
   static def remove_by_endpoint(endpoint)
     existing = PushSubscription.find_by_endpoint(endpoint)
-    if existing == nil
-      return false
-    end
+    return false if existing.nil?
     existing.delete()
     return true
   end
 
   def touch_timestamps()
-    if self.created_at == nil
-      self.created_at = DateTime.now().to_iso()
-    end
+    this.created_at = DateTime.now().to_iso() if this.created_at.nil?
   end
 end

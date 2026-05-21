@@ -2,13 +2,13 @@
 #
 # Identity: `_key` = `<project>--<slug>` (unique index on (project, slug)).
 # One feature can have many Tasks and many Comments linked to it.
-
 class Feature < Model
-  validates("project",  { "presence": true })
-  validates("title",    { "presence": true })
-  validates("status",   { "presence": true,
-                          "format": "^(draft|ready|in-progress|done)$" })
-
+  validates("project", {"presence": true})
+  validates("title", {"presence": true})
+  validates(
+    "status",
+    {"presence": true, "format": "^(draft|ready|in-progress|done)$"}
+  )
   before_save("touch_timestamps")
 
   static def statuses()
@@ -24,14 +24,12 @@ class Feature < Model
   end
 
   static def for_project(project)
-    Feature.where({ "project": project }).order("updated_at", "desc").all()
+    Feature.where({"project": project}).order("updated_at", "desc").all()
   end
 
   static def for_version(version_id)
-    if version_id == nil or version_id == ""
-      return []
-    end
-    Feature.where({ "version_id": version_id }).order("updated_at", "desc").all()
+    return [] if version_id.nil? || version_id == ""
+    Feature.where({"version_id": version_id}).order("updated_at", "desc").all()
   end
 
   # Search features by title/description, scoped to a project.
@@ -44,31 +42,27 @@ class Feature < Model
     p = (project ?? "").trim()
     off = offset ?? 0
     lim = limit ?? 10
-    if off < 0 then off = 0 end
-    if lim < 1 then lim = 10 end
+    off = 0 if off < 0
+    lim = 10 if lim < 1
 
-    all_raw = p == ""
-      ? Feature.all()
-      : Feature.where({ "project": p }).all()
-    all = all_raw.sort_by(fn(f) f.updated_at ?? "").reverse()
+    all_raw = p == "" ? Feature.all() : Feature.where({"project": p}).all()
+    all = all_raw.sort_by(fn(f) { f.updated_at ?? "" }).reverse()
 
-    filtered = q == ""
-      ? all
-      : all.filter(fn(f)
-          title = f.title ?? ""
-          desc  = f.description ?? ""
-          title.index_of(q) != -1 or desc.index_of(q) != -1
-        end)
+    filtered = q == "" ? all : all.filter(fn(f) {
+      title = f.title ?? ""
+      desc = f.description ?? ""
+      title.index_of(q) != -1 || desc.index_of(q) != -1
+    })
 
     total = filtered.length()
     end_at = off + lim
     results = []
     i = off
-    while i < total and i < end_at
+    while i < total && i < end_at
       results.push(filtered[i])
       i = i + 1
     end
-    { "results": results, "total": total }
+    {"results": results, "total": total}
   end
 
   # Look up the Feature pointed to by `task.feature_slug` and recompute
@@ -77,28 +71,20 @@ class Feature < Model
   # find so callers don't have to nil-guard before calling
   # `recompute_status!()`.
   static def refresh_for_task(task)
-    if task == nil
-      return nil
-    end
+    return nil if task.nil?
     fslug = task.feature_slug ?? ""
-    if fslug == ""
-      return nil
-    end
+    return nil if fslug == ""
     feature = Feature.find_by("_key", fslug)
-    if feature == nil
-      return nil
-    end
+    return nil if feature.nil?
     feature.recompute_status!()
     feature
   end
 
   def touch_timestamps()
     now = DateTime.now().to_iso()
-    if self.created_at == nil
-      self.created_at = now
-    end
-    self.updated_at = now
-    self._log_if_status_changed()
+    this.created_at = now if this.created_at.nil?
+    this.updated_at = now
+    this._log_if_status_changed()
   end
 
   # Diff `self.status` against the persisted row and, on a change,
@@ -114,34 +100,20 @@ class Feature < Model
   # calls in the chain skip — yielding exactly one ActivityLog row per
   # real status flip.
   def _log_if_status_changed()
-    if self._key == nil or self._key == ""
-      return nil
-    end
-    new_status = self.status ?? ""
-    if self.last_logged_status == new_status
-      return nil
-    end
-    prev = Feature.find_by("_key", self._key) rescue nil
-    if prev == nil
-      return nil
-    end
+    return nil if this._key.nil? || this._key == ""
+    new_status = this.status ?? ""
+    return nil if this.last_logged_status == new_status
+    prev = Feature.find_by("_key", this._key) rescue nil
+    return nil if prev.nil?
     prev_status = prev.status ?? ""
-    if prev_status == new_status
-      return nil
-    end
-    self.last_logged_status = new_status
-    ActivityLog.log_status_change(
-      nil,
-      self._key,
-      prev_status,
-      new_status,
-      self.change_author
-    ) rescue null
+    return nil if prev_status == new_status
+    this.last_logged_status = new_status
+    ActivityLog.log_status_change(nil, this._key, prev_status, new_status, this.change_author) rescue null
   end
 
   # Tasks linked to this feature via their `feature_slug` field.
   def tasks()
-    Task.where({ "feature_slug": self._key }).order("created_at", "asc").all()
+    Task.where({"feature_slug": this._key}).order("created_at", "asc").all()
   end
 
   # Pipeline stage for the Shape Up project hub:
@@ -156,25 +128,15 @@ class Feature < Model
   # hub view; callers can pass `{ "review": N, "done": N, ... }`. Falls
   # back to a single `self.tasks()` scan when not provided.
   def stage(status_counts = nil)
-    fs = self.status ?? "draft"
-    if fs == "done"
-      return "ship"
-    end
-    counts = status_counts ?? Feature._stage_count_tasks(self._key)
+    fs = this.status ?? "draft"
+    return "ship" if fs == "done"
+    counts = status_counts ?? Feature._stage_count_tasks(this._key)
     in_review = (counts["review"] ?? 0) + (counts["done"] ?? 0)
-    if in_review > 0
-      return "ship"
-    end
-    building = (counts["todo"] ?? 0) +
-      (counts["queued"] ?? 0) +
-      (counts["inprogress"] ?? 0) +
-      (counts["failed"] ?? 0)
-    if fs == "in-progress" or building > 0
-      return "build"
-    end
-    if fs == "ready"
-      return "bet"
-    end
+    return "ship" if in_review > 0
+    building = (counts["todo"] ?? 0) + (counts["queued"] ?? 0) + (counts["inprogress"] ?? 0)
+    + (counts["failed"] ?? 0)
+    return "build" if fs == "in-progress" || building > 0
+    return "bet" if fs == "ready"
     "shape"
   end
 
@@ -182,7 +144,7 @@ class Feature < Model
   # when the caller doesn't already have the data in hand.
   static def _stage_count_tasks(feature_key)
     h = {}
-    rows = Task.where({ "feature_slug": feature_key }).all() rescue []
+    rows = Task.where({"feature_slug": feature_key}).all() rescue []
     for t in rows
       s = t.status ?? ""
       h[s] = (h[s] ?? 0) + 1
@@ -192,7 +154,7 @@ class Feature < Model
 
   # Comments associated with this feature.
   def comments()
-    Comment.where({ "feature_slug": self._key }).order("created_at", "asc").all()
+    Comment.where({"feature_slug": this._key}).order("created_at", "asc").all()
   end
 
   # Auto-flip the feature to `done` once every linked task is finished.
@@ -204,29 +166,21 @@ class Feature < Model
   # Idempotent: returns false without touching the row when already
   # `done` or when the linked tasks don't justify the flip.
   def recompute_status!()
-    if self.status == "done"
-      return false
-    end
+    return false if this.status == "done"
     any_done = false
-    for t in self.tasks()
+    for t in this.tasks()
       s = t.status ?? ""
-      if s == "archived"
-        next
-      end
+      next if s == "archived"
       if s == "done"
         any_done = true
       else
         return false
       end
     end
-    if not any_done
-      return false
-    end
-    self.status = "done"
-    self.save()
-    if self._errors
-      return false
-    end
+    return false if !any_done
+    this.status = "done"
+    this.save()
+    return false if this._errors
     return true
   end
 end

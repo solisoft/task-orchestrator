@@ -1,7 +1,6 @@
 # Routes
 
 # ── Authentication (unscoped) ────────
-
 get("/login", "auth#login_form")
 post("/login", "auth#login")
 get("/logout", "auth#logout")
@@ -83,16 +82,15 @@ get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
 
 # ── Auth-gated routes ─────────────────
 
-middleware("authenticate", -> {
+middleware("authenticate", fn() {
 
   # ── Versions (nested under projects) ─
-
-  get("/projects/:name/versions",          "versions#index")
-  get("/projects/:name/versions/new",      "versions#new")
-  post("/projects/:name/versions",         "versions#create")
-  get("/projects/:name/versions/:id",      "versions#show")
+  get("/projects/:name/versions", "versions#index")
+  get("/projects/:name/versions/new", "versions#new")
+  post("/projects/:name/versions", "versions#create")
+  get("/projects/:name/versions/:id", "versions#show")
   get("/projects/:name/versions/:id/edit", "versions#edit")
-  post("/projects/:name/versions/:id/update",  "versions#update")
+  post("/projects/:name/versions/:id/update", "versions#update")
   post("/projects/:name/versions/:id/destroy", "versions#destroy")
 
   # ── Settings ─────────────────────────
@@ -112,9 +110,9 @@ middleware("authenticate", -> {
   # Browsers only emit GET/POST, and Soli's router doesn't honor a
   # `?_method=put|delete` override, so we map the destructive verbs to
   # POST aliases below.
-  get("/features/new",      "features#new")
-  post("/features",         "features#create")
-  get("/features/:id",      "features#show")
+  get("/features/new", "features#new")
+  post("/features", "features#create")
+  get("/features/:id", "features#show")
   get("/features/:id/edit", "features#edit")
   post("/features/:id/update", "features#update")
   post("/features/:id/destroy", "features#destroy")
@@ -138,5 +136,4 @@ middleware("authenticate", -> {
   #   POST   /comments/:id/attachment           → attachments#create  (unused — we attach inside comments#create)
   #   DELETE /comments/:id/attachment/:blob_id  → attachments#destroy
   uploads("comments", "attachment")
-
 })

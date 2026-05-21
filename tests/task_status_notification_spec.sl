@@ -16,130 +16,119 @@
 # Counts are filtered by project name (`tsn`) since other specs run
 # concurrently against the same log file and would otherwise add
 # spurious entries.
+const _tsn_log = "/tmp/_task_orch_web_push.log"
+const _tsn_sentinel = "/tmp/_task_orch_web_push.active"
 
-const _tsn_log       = "/tmp/_task_orch_web_push.log"
-const _tsn_sentinel  = "/tmp/_task_orch_web_push.active"
-
-def _tsn_count_my_lines()
-  if not Trusted.exists(_tsn_log)
-    return 0
-  end
+fn _tsn_count_my_lines
+  return 0 if !Trusted.exists(_tsn_log)
   body = (Trusted.read(_tsn_log) rescue "").trim()
-  if body == ""
-    return 0
-  end
+  return 0 if body == ""
   n = 0
   for line in body.split("\n")
-    if line == ""
-      next
-    end
+    next if line == ""
     entry = JSON.parse(line) rescue nil
-    if entry == nil
-      next
-    end
+    next if entry.nil?
     payload = entry["payload"] ?? {}
     url = (payload["url"] ?? "")
-    if url.starts_with("/projects/tsn/")
-      n = n + 1
-    end
+    n = n + 1 if url.starts_with("/projects/tsn/")
   end
   return n
 end
 
-def _tsn_my_payloads()
+fn _tsn_my_payloads
   out = []
-  if not Trusted.exists(_tsn_log)
-    return out
-  end
+  return out if !Trusted.exists(_tsn_log)
   body = (Trusted.read(_tsn_log) rescue "").trim()
-  if body == ""
-    return out
-  end
+  return out if body == ""
   for line in body.split("\n")
-    if line == ""
-      next
-    end
+    next if line == ""
     entry = JSON.parse(line) rescue nil
-    if entry == nil
-      next
-    end
+    next if entry.nil?
     payload = entry["payload"] ?? {}
     url = (payload["url"] ?? "")
-    if url.starts_with("/projects/tsn/")
-      out.push(payload)
-    end
+    out.push(payload) if url.starts_with("/projects/tsn/")
   end
   return out
 end
 
-def _tsn_seed_task(slug, status)
+fn _tsn_seed_task(slug, status)
   Task.create({
-    "_key":    "tsn--" + slug,
+    "_key": "tsn--" + slug,
     "project": "tsn",
-    "slug":    slug,
-    "title":   "title for " + slug,
-    "status":  status
+    "slug": slug,
+    "title": "title for " + slug,
+    "status": status
   })
 end
 
-def _tsn_reset()
+fn _tsn_reset
+
   # Wipe only the `tsn` project's tasks so we don't disturb tasks that
   # other specs are mid-flight on (Task.delete_all() would).
-  for t in Task.where({ "project": "tsn" }).all()
+  for t in Task.where({"project": "tsn"}).all()
     Task.delete(t._key) rescue null
   end
   Trusted.delete(_tsn_log) rescue null
   Trusted.write(_tsn_sentinel, "1")
 end
 
-describe("Task status-change notification", fn()
-  before_each(fn()
+describe("Task status-change notification", fn() {
+  before_each(fn() {
     assert_test_db()
     _tsn_reset()
-  end)
+  })
 
-  test("does NOT notify on brand-new task creation", fn()
+  test("does NOT notify on brand-new task creation", fn() {
     _tsn_seed_task("first", "todo")
     assert_eq(_tsn_count_my_lines(), 0)
-  end)
+  })
 
-  test("notifies exactly once on a status transition", fn()
+  test("notifies exactly once on a status transition", fn() {
     _tsn_seed_task("flip", "todo")
     t = Task.find_by_slug("tsn", "flip")
     t.status = "queued"
     t.save()
     assert_eq(_tsn_count_my_lines(), 1)
-  end)
+  })
 
-  test("does NOT notify when save() does not change status", fn()
-    _tsn_seed_task("notitle", "todo")
-    t = Task.find_by_slug("tsn", "notitle")
-    t.title = "new title — same status"
-    t.save()
-    assert_eq(_tsn_count_my_lines(), 0)
-  end)
+  test(
+    "does NOT notify when save() does not change status",
+    fn() {
+      _tsn_seed_task("notitle", "todo")
+      t = Task.find_by_slug("tsn", "notitle")
+      t.title = "new title — same status"
+      t.save()
+      assert_eq(_tsn_count_my_lines(), 0)
+    }
+  )
 
-  test("dispatched payload carries title, new status, and click-through URL", fn()
-    _tsn_seed_task("payload", "todo")
-    t = Task.find_by_slug("tsn", "payload")
-    t.status = "review"
-    t.save()
-    payloads = _tsn_my_payloads()
-    assert_eq(payloads.length(), 1)
-    payload = payloads[0]
-    assert_eq(payload["status"], "review")
-    assert_eq(payload["url"], "/projects/tsn/tasks/payload")
-    assert_eq(payload["title"], "title for payload")
-  end)
+  test(
+    "dispatched payload carries title, new status, and click-through URL",
+    fn() {
+      _tsn_seed_task("payload", "todo")
+      t = Task.find_by_slug("tsn", "payload")
+      t.status = "review"
+      t.save()
+      payloads = _tsn_my_payloads()
+      assert_eq(payloads.length(), 1)
+      payload = payloads[0]
+      assert_eq(payload["status"], "review")
+      assert_eq(payload["url"], "/projects/tsn/tasks/payload")
+      assert_eq(payload["title"], "title for payload")
+    }
+  )
 
-  test("notifies on every distinct transition (todo → queued → inprogress)", fn()
-    _tsn_seed_task("multi", "todo")
-    t = Task.find_by_slug("tsn", "multi")
-    t.status = "queued"
-    t.save()
-    t2 = Task.find_by_slug("tsn", "multi")
-    t2.status = "inprogress"
-    t2.save()
-    assert_eq(_tsn_count_my_lines(), 2)
-  end)
-end)
+  test(
+    "notifies on every distinct transition (todo → queued → inprogress)",
+    fn() {
+      _tsn_seed_task("multi", "todo")
+      t = Task.find_by_slug("tsn", "multi")
+      t.status = "queued"
+      t.save()
+      t2 = Task.find_by_slug("tsn", "multi")
+      t2.status = "inprogress"
+      t2.save()
+      assert_eq(_tsn_count_my_lines(), 2)
+    }
+  )
+})

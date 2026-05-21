@@ -3,22 +3,24 @@
 # Identity: `_key` = `<project>--<slug>` (the unique index on (project, slug)
 # is what enforces uniqueness; the composite key just lets us look up by
 # a stable URL piece without a `where` round-trip).
-
 class Task < Model
-  validates("project",    { "presence": true })
-  validates("slug",       { "presence": true,
-                            "format": "^[A-Za-z0-9][A-Za-z0-9._-]*$" })
-  validates("status",     { "presence": true,
-                            "format": "^(proposed|todo|queued|inprogress|review|done|failed|archived)$" })
-  validates("title",      { "presence": true })
+  validates("project", {"presence": true})
+  validates(
+    "slug",
+    {"presence": true, "format": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
+  )
+  validates(
+    "status",
+    {"presence": true, "format": "^(proposed|todo|queued|inprogress|review|done|failed|archived)$"}
+  )
+  validates("title", {"presence": true})
   # `agent_type` is optional — when unset the dashboard falls back to
   # `Setting.get("agent_type")`. The format check only fires when the
   # field is a string, so null rows still validate.
-  validates("agent_type", { "format": "^(claude|opencode|opencode-sdk|codex)$" })
+  validates("agent_type", {"format": "^(claude|opencode|opencode-sdk|codex)$"})
   # tags is an optional string array; when present every element must be a
   # known tag (see `known_tags`). Solidb is schemaless so the field itself
   # requires no migration — validation and the sparse index are enough.
-
   before_save("touch_timestamps")
 
   static def statuses()
@@ -58,23 +60,23 @@ class Task < Model
   end
 
   static def find_by_slug(project, slug)
+
     # Use find_by so a miss returns nil rather than the 404-mapping
     # raise that `Task.find` performs. `unique_slug_for` and the show
     # action both want a soft "is this taken?" check, not an exception.
     by_key = Task.find_by("_key", Task.key_for(project, slug))
-    if by_key != nil
-      return by_key
-    end
+    return by_key if by_key.present?
+
     # Defensive fallback: rows whose `_key` drifted off the
     # `<project>--<slug>` convention (legacy ingest, manual inserts)
     # still need to resolve from a slug-based URL. The (project, slug)
     # pair is unique, so .all()[0] is deterministic.
-    rows = Task.where({ "project": project, "slug": slug }).all() rescue []
+    rows = Task.where({"project": project, "slug": slug}).all() rescue []
     rows.length() > 0 ? rows[0] : nil
   end
 
   static def for_project(project)
-    Task.where({ "project": project }).order("slug", "asc").all()
+    Task.where({"project": project}).order("slug", "asc").all()
   end
 
   # { status -> [Task, ...] } for the project. Every kanban status is
@@ -86,15 +88,13 @@ class Task < Model
       cols[s] = []
     end
     for t in Task.for_project(project)
-      if cols[t.status] != nil
-        cols[t.status].push(t)
-      end
+      cols[t.status].push(t) if cols[t.status] != nil
     end
     cols
   end
 
   static def archived_for(project)
-    Task.where({ "project": project, "status": "archived" }).order("slug", "asc").all()
+    Task.where({"project": project, "status": "archived"}).order("slug", "asc").all()
   end
 
   static def counts_by_status(project)
@@ -102,7 +102,7 @@ class Task < Model
     for s in Task.statuses()
       h[s] = 0
     end
-    for t in Task.where({ "project": project }).all()
+    for t in Task.where({"project": project}).all()
       h[t.status] = (h[t.status] ?? 0) + 1
     end
     h
@@ -118,13 +118,9 @@ class Task < Model
     result = {}
     for t in Task.all()
       project = t.project
-      if result[project] == nil
-        result[project] = Task.empty_status_counts()
-      end
+      result[project] = Task.empty_status_counts() if result[project].nil?
       status = t.status
-      if result[project][status] != nil
-        result[project][status] = result[project][status] + 1
-      end
+      result[project][status] = result[project][status] + 1 if result[project][status].present?
     end
     result
   end
@@ -167,27 +163,21 @@ class Task < Model
     default_agent = Task.default_agent()
     for t in Task.all()
       project = t.project
-      if counts_by_project[project] == nil
-        counts_by_project[project] = Task.empty_status_counts()
-      end
+      counts_by_project[project] = Task.empty_status_counts() if counts_by_project[project].nil?
       status = t.status
-      if counts_by_project[project][status] != nil
+      if counts_by_project[project][status].present?
         counts_by_project[project][status] = counts_by_project[project][status] + 1
       end
       unix = Task._started_at_unix(t)
-      if unix != nil
+      if unix.present?
         agent = Task._effective_agent_with_default(t, default_agent)
-        if agent == nil or agent == ""
-          agent = default_agent
-        end
+        agent = default_agent if agent.nil? || agent == ""
         for w in windows
-          if unix >= cutoffs[w] and usage[w][agent] != nil
-            usage[w][agent] = usage[w][agent] + 1
-          end
+          usage[w][agent] = usage[w][agent] + 1 if unix >= cutoffs[w] && usage[w][agent].present?
         end
       end
     end
-    { "counts_by_project": counts_by_project, "usage": usage }
+    {"counts_by_project": counts_by_project, "usage": usage}
   end
 
   # Default agent for tasks that have no per-task `agent_type` set yet.
@@ -195,11 +185,9 @@ class Task < Model
   # the first enabled agent so the dashboard never NPEs on a clean DB.
   static def default_agent()
     cfg = Setting.get("agent_type") rescue nil
-    if cfg == nil or cfg == ""
+    if cfg.nil? || cfg == ""
       enabled = Task.enabled_agents()
-      if enabled.length() > 0
-        return enabled[0]
-      end
+      return enabled[0] if enabled.length() > 0
       return Task.known_agents()[0]
     end
     return cfg
@@ -213,18 +201,12 @@ class Task < Model
   # Used by the queue limit check, the dashboard usage tiles, and the
   # board badge.
   static def effective_agent(t)
-    if t.model != nil and t.model != ""
-      if t.model.starts_with("codex/")
-        return "codex"
-      end
-      if t.model.contains("/")
-        return "opencode"
-      end
+    if t.model.present? && t.model != ""
+      return "codex" if t.model.starts_with("codex/")
+      return "opencode" if t.model.contains("/")
       return "claude"
     end
-    if t.agent_type != nil and t.agent_type != ""
-      return t.agent_type
-    end
+    return t.agent_type if t.agent_type.present? && t.agent_type != ""
     return Task.default_agent()
   end
 
@@ -233,9 +215,7 @@ class Task < Model
   # or "deepseek/deepseek-chat" instead of the coarse "claude" /
   # "opencode" bucket.
   static def display_model(t)
-    if t.model != nil and t.model != ""
-      return t.model
-    end
+    return t.model if t.model.present? && t.model != ""
     return Task.effective_agent(t)
   end
 
@@ -275,6 +255,7 @@ class Task < Model
       result[w] = buckets
       cutoffs[w] = Task._window_cutoff_unix(w)
     end
+
     # Resolve the global default agent ONCE outside the loop. Inside
     # the per-task scan we then bucket via
     # `_effective_agent_with_default`, which never re-reads
@@ -283,15 +264,11 @@ class Task < Model
     default_agent = Task.default_agent()
     for t in Task.all()
       unix = Task._started_at_unix(t)
-      next if unix == nil
+      next if unix.nil?
       agent = Task._effective_agent_with_default(t, default_agent)
-      if agent == nil or agent == ""
-        agent = default_agent
-      end
+      agent = default_agent if agent.nil? || agent == ""
       for w in windows
-        if unix >= cutoffs[w] and result[w][agent] != nil
-          result[w][agent] = result[w][agent] + 1
-        end
+        result[w][agent] = result[w][agent] + 1 if unix >= cutoffs[w] && result[w][agent].present?
       end
     end
     result
@@ -303,18 +280,12 @@ class Task < Model
   # Pulled out so bulk scans like `usage_by_agent_for_windows` can
   # resolve the default once and read it back N times.
   static def _effective_agent_with_default(t, default_agent)
-    if t.model != nil and t.model != ""
-      if t.model.starts_with("codex/")
-        return "codex"
-      end
-      if t.model.contains("/")
-        return "opencode"
-      end
+    if t.model.present? && t.model != ""
+      return "codex" if t.model.starts_with("codex/")
+      return "opencode" if t.model.contains("/")
       return "claude"
     end
-    if t.agent_type != nil and t.agent_type != ""
-      return t.agent_type
-    end
+    return t.agent_type if t.agent_type.present? && t.agent_type != ""
     return default_agent
   end
 
@@ -323,13 +294,9 @@ class Task < Model
   # so the loop body stays a single conditional (no early `continue`,
   # which Soli's lint pass mis-flags as an undefined local read).
   static def _started_at_unix(t)
-    if t.started_at == nil or t.started_at == ""
-      return nil
-    end
+    return nil if t.started_at.nil? || t.started_at == ""
     dt = DateTime.parse(t.started_at) rescue nil
-    if dt == nil
-      return nil
-    end
+    return nil if dt.nil?
     return dt.to_unix()
   end
 
@@ -339,9 +306,7 @@ class Task < Model
   # than an unbounded scan.
   static def _window_cutoff_unix(window)
     now = DateTime.now().to_unix()
-    if window == "week"
-      return now - 86400 * 7
-    end
+    return now - 86400 * 7 if window == "week"
     return now - 86400
   end
 
@@ -357,40 +322,34 @@ class Task < Model
 
   static def totals_for_task(project_name, slug)
     jsonl_path = Run.run_state_root() + "/" + project_name + "/" + slug + ".log.jsonl"
-    if not Trusted.exists(jsonl_path)
-      return { "duration_ms": 0, "total_cost_usd": 0.0 }
+    if !Trusted.exists(jsonl_path)
+      return {"duration_ms": 0, "total_cost_usd": 0.0}
     end
+
     body = Trusted.read(jsonl_path) rescue ""
     if body == ""
-      return { "duration_ms": 0, "total_cost_usd": 0.0 }
+      return {"duration_ms": 0, "total_cost_usd": 0.0}
     end
+
     total_ms = 0
     total_cost = 0.0
     for line in body.split("\n")
       next if line == ""
       obj = JSON.parse(line) rescue nil
-      next if obj == nil
+      next if obj.nil?
       if obj["type"] == "result"
         ms = obj["duration_ms"] ?? 0
-        if ms > 0
-          total_ms = total_ms + ms
-        end
+        total_ms = total_ms + ms if ms > 0
         cost = obj["total_cost_usd"] ?? 0.0
-        if cost > 0.0
-          total_cost = total_cost + cost
-        end
-      elsif obj["type"] == "step_finish" and obj["part"] != nil and obj["part"]["cost"] != nil
+        total_cost = total_cost + cost if cost > 0.0
+      elsif obj["type"] == "step_finish" && obj["part"].present? && obj["part"]["cost"].present?
         ms = obj["part"]["duration_ms"] ?? 0
-        if ms > 0
-          total_ms = total_ms + ms
-        end
+        total_ms = total_ms + ms if ms > 0
         cost = obj["part"]["cost"] ?? 0.0
-        if cost > 0.0
-          total_cost = total_cost + cost
-        end
+        total_cost = total_cost + cost if cost > 0.0
       end
     end
-    { "duration_ms": total_ms, "total_cost_usd": total_cost }
+    {"duration_ms": total_ms, "total_cost_usd": total_cost}
   end
 
   # Distinct project names that have at least one task ingested.
@@ -407,9 +366,9 @@ class Task < Model
   end
 
   def queue!()
-    self.status = "queued"
-    self.queued_at = DateTime.now().to_iso()
-    self.save()
+    this.status = "queued"
+    this.queued_at = DateTime.now().to_iso()
+    this.save()
   end
 
   # Re-arm a failed (or zombie) row for another agent pass. Counterpart
@@ -417,24 +376,24 @@ class Task < Model
   # clear the failure note so the run viewer's polling resumes, but the
   # worktree (and any uncommitted edits in it) is left intact.
   def resume!()
-    self.status         = "inprogress"
-    self.failure_reason = null
-    self.finished_at    = null
-    self.save()
+    this.status = "inprogress"
+    this.failure_reason = null
+    this.finished_at = null
+    this.save()
   end
 
   # Reset every transient run field — DB-side counterpart to
   # `clear_run_state` in run.sl, which wipes the on-disk log artefacts.
   # Called on cancel/unqueue so re-queuing starts from a clean slate.
   def unqueue!()
-    self.status         = "todo"
-    self.queued_at      = null
-    self.started_at     = null
-    self.finished_at    = null
-    self.pr_url         = null
-    self.outcome        = null
-    self.failure_reason = null
-    self.save()
+    this.status = "todo"
+    this.queued_at = null
+    this.started_at = null
+    this.finished_at = null
+    this.pr_url = null
+    this.outcome = null
+    this.failure_reason = null
+    this.save()
   end
 
   # Single before_save: stamp timestamps + dispatch a Web Push when
@@ -446,15 +405,11 @@ class Task < Model
   # regardless of reload count.
   def touch_timestamps()
     now = DateTime.now().to_iso()
-    if self.created_at == null
-      self.created_at = now
-    end
-    self.updated_at = now
-    if self.status == null
-      self.status = "todo"
-    end
-    self._validate_tags()
-    self._notify_if_status_changed()
+    this.created_at = now if this.created_at.nil?
+    this.updated_at = now
+    this.status = "todo" if this.status.nil?
+    this._validate_tags()
+    this._notify_if_status_changed()
   end
 
   # Diff `self.status` against the persisted row of the same `_key`
@@ -472,35 +427,21 @@ class Task < Model
   # so the second-and-onward calls in the chain see "already sent"
   # and skip — yielding exactly one Web Push per real status flip.
   def _notify_if_status_changed()
-    if self._key == nil or self._key == ""
-      return nil
-    end
-    new_status  = self.status ?? ""
-    if self.last_notified_status == new_status
-      return nil
-    end
-    prev = Task.find_by("_key", self._key) rescue nil
-    if prev == nil
-      return nil
-    end
+    return nil if this._key.nil? || this._key == ""
+    new_status = this.status ?? ""
+    return nil if this.last_notified_status == new_status
+    prev = Task.find_by("_key", this._key) rescue nil
+    return nil if prev.nil?
     prev_status = prev.status ?? ""
-    if prev_status == new_status
-      return nil
-    end
-    self.last_notified_status = new_status
-    ActivityLog.log_status_change(
-      self._key,
-      self.feature_slug,
-      prev_status,
-      new_status,
-      self.change_author
-    ) rescue null
-    url = "/projects/" + (self.project ?? "") +
-              "/tasks/" + (self.slug ?? "")
+    return nil if prev_status == new_status
+    this.last_notified_status = new_status
+    ActivityLog.log_status_change(this._key, this.feature_slug, prev_status, new_status, this.change_author)
+      rescue null
+    url = "/projects/" + (this.project ?? "") + "/tasks/" + (this.slug ?? "")
     web_push_send_to_all({
-      "title":  self.title ?? self.slug ?? "Task",
+      "title": this.title ?? this.slug ?? "Task",
       "status": new_status,
-      "url":    url
+      "url": url
     }) rescue null
   end
 
@@ -509,7 +450,7 @@ class Task < Model
   static def follow_up_counts()
     h = {}
     for t in Task.all()
-      next if t.tags == nil
+      next if t.tags.nil?
       for tag in t.tags
         next if tag != "follow_up"
         p = t.project ?? ""
@@ -524,15 +465,13 @@ class Task < Model
   # Runs inside touch_timestamps (the sole before_save) so spec reloads
   # don't multiply fire.
   def _validate_tags()
-    if self.tags != nil
-      for tag in self.tags
+    if this.tags.present?
+      for tag in this.tags
         ok = false
         for known in Task.known_tags()
-          if tag == known
-            ok = true
-          end
+          ok = true if tag == known
         end
-        if not ok
+        if !ok
           this._errors = this._errors ?? {}
           this._errors["tags"] = true
         end
@@ -546,10 +485,10 @@ end
 # back to `.env` and the test suite truncates the live `tasks` collection.
 # Call this from every before_each that wipes data; it raises before any
 # damage if SOLIDB_DATABASE doesn't end with `_test`.
-fn assert_test_db()
+fn assert_test_db
   db = getenv("SOLIDB_DATABASE") ?? ""
-  if not db.ends_with("_test")
-    throw("Refusing to wipe data: SOLIDB_DATABASE='" + db +
-          "' is not a *_test database. Check .env.test.")
+  if !db.ends_with("_test")
+    throw ("Refusing to wipe data: SOLIDB_DATABASE='" + db + "' is not a *_test database. Check .env.test.")
   end
+
 end

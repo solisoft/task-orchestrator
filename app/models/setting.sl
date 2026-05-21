@@ -7,9 +7,8 @@
 # missing row consistently looks like `nil` (`get`) or a default
 # (`get_or`), and writes always go through the upsert path so the same
 # code can both create and overwrite a setting.
-
 class Setting < Model
-  validates("_key", { "presence": true })
+  validates("_key", {"presence": true})
 
   # SoliKV cache TTL for memoized Setting.get reads (seconds). Settings
   # change rarely — theme, plan_model, agent caps — so a 5-minute TTL
@@ -47,15 +46,13 @@ class Setting < Model
   # until the TTL expires — that's the documented contract.
   static def get(key)
     cached = Cache.get(Setting._cache_key(key)) rescue nil
-    if cached != nil
-      if cached == Setting._cache_miss_sentinel()
-        return nil
-      end
+    if cached.present?
+      return nil if cached == Setting._cache_miss_sentinel()
       return cached
     end
     s = Setting.find_by("_key", key)
-    value = (s == nil) ? nil : s.value
-    stash = (value == nil) ? Setting._cache_miss_sentinel() : value
+    value = (s.nil?) ? nil : s.value
+    stash = (value.nil?) ? Setting._cache_miss_sentinel() : value
     Cache.set(Setting._cache_key(key), stash, Setting._cache_ttl_seconds()) rescue null
     return value
   end
@@ -65,9 +62,7 @@ class Setting < Model
   # encoding the dashboard expects.
   static def get_or(key, default_value)
     v = Setting.get(key)
-    if v == nil
-      return default_value
-    end
+    return default_value if v.nil?
     return v
   end
 
@@ -100,9 +95,7 @@ class Setting < Model
   # and threads the hash through `render()` as `theme_css_vars`.
   static def current_theme_css_vars()
     preset = ThemePreset.find_by_key(Setting.current_theme())
-    if preset == nil
-      return {}
-    end
+    return {} if preset.nil?
     return preset["css_vars"]
   end
 
@@ -112,13 +105,9 @@ class Setting < Model
   # "Dracula" or "GitHub Light" is selected.
   static def current_theme_class()
     preset = ThemePreset.find_by_key(Setting.current_theme())
-    if preset == nil
-      return "dark"
-    end
+    return "dark" if preset.nil?
     base = preset["base"] ?? "dark"
-    if base == "light"
-      return "light"
-    end
+    return "light" if base == "light"
     return "dark"
   end
 
@@ -130,16 +119,14 @@ class Setting < Model
   # Persist a new preset or overwrite an existing one by name.
   static def set_theme_preset(name, css_vars)
     presets = Setting.theme_presets()
-    presets[name] = { "css_vars": css_vars }
+    presets[name] = {"css_vars": css_vars}
     Setting.set("theme_presets", presets)
   end
 
   # Remove a preset by name. Returns true if it existed.
   static def remove_theme_preset(name)
     presets = Setting.theme_presets()
-    if presets[name] == nil
-      return false
-    end
+    return false if presets[name].nil?
     presets.delete(name)
     Setting.set("theme_presets", presets)
     return true
@@ -156,18 +143,22 @@ class Setting < Model
   # the version of the framework this app targets — the static path
   # serialises the hash and round-trips the change correctly.
   static def set(key, value)
+
     # Punch the cache key BEFORE the write so a concurrent reader can't
     # repopulate the cache from the stale row in the gap between the
     # write completing and the cache invalidation. Worst-case repopulate
     # races read the new value off disk — never the old one off cache.
     Cache.delete(Setting._cache_key(key)) rescue null
     existing = Setting.find_by("_key", key)
-    if existing == nil
-      created = Setting.create({ "_key": key, "value": value })
+    if existing.nil?
+      created = Setting.create({
+        "_key": key,
+        "value": value
+      })
       Cache.delete(Setting._cache_key(key)) rescue null
       return created
     end
-    Setting.update(key, { "value": value })
+    Setting.update(key, {"value": value})
     Cache.delete(Setting._cache_key(key)) rescue null
     return Setting.find_by("_key", key)
   end
@@ -176,9 +167,7 @@ class Setting < Model
   static def unset(key)
     Cache.delete(Setting._cache_key(key)) rescue null
     existing = Setting.find_by("_key", key)
-    if existing == nil
-      return false
-    end
+    return false if existing.nil?
     existing.delete()
     Cache.delete(Setting._cache_key(key)) rescue null
     return true
