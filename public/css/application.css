@@ -669,6 +669,10 @@ img, video {
   position: relative;
 }
 
+.sticky {
+  position: sticky;
+}
+
 .-inset-px {
   inset: -1px;
 }

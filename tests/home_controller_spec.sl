@@ -1,5 +1,5 @@
 # HomeController — post-redesign:
-#   GET /  → marketing landing (guest), Workspace inbox (auth'd)
+#   GET /  → Workspace inbox (auth required; anonymous → 302 /login)
 # Workspace sections: Awaiting review, Recently failed, Long-running,
 # Recently shipped — all driven by Task rows. One Task.all() scan.
 fn _home_reset_state
@@ -13,21 +13,18 @@ fn _home_iso_seconds_ago(seconds_ago)
 end
 
 describe("HomeController", fn() {
-  describe("GET / (anonymous landing)", fn() {
+  describe("GET / (anonymous)", fn() {
     before_each(fn() {
       assert_test_db()
       _home_reset_state()
+      User.delete_all()
       as_guest()
     })
 
-    test("returns 200", fn() {
+    test("redirects to /login when no session is set", fn() {
       response = get("/")
-      assert_eq(res_status(response), 200)
-    })
-
-    test("renders the landing page title", fn() {
-      response = get("/")
-      assert_contains(res_body(response), "Task Orchestrator")
+      assert_eq(res_status(response), 302)
+      assert_contains(res_header(response, "Location") ?? "", "/login")
     })
   })
 

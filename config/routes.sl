@@ -5,84 +5,72 @@ get("/login", "auth#login_form")
 post("/login", "auth#login")
 get("/logout", "auth#logout")
 
-# ── Root & Utility ──────────────────
-
-get("/", "home#landing")
+# ── Ops (unscoped) ───────────────────
+# Health probe stays open for monitoring (k8s liveness, uptime checks).
 get("/health", "home#health")
-get("/debug", "debug#show")
-get("/debug/features", "debug#features_probe")
-get("/debug/demote", "debug#demote_feature_todos")
-get("/debug/stamp", "debug#stamp_imported")
-get("/debug/unstamp", "debug#unstamp_imported")
-get("/debug/try-import", "debug#try_import")
-get("/debug/comments", "debug#comments_probe")
-get("/docs", "docs#index")
 
-# ── Projects ─────────────────────────
-
-get("/projects", "projects#index")
-get("/projects/:name", "projects#show")
-
-# ── Tasks ────────────────────────────
-
-get("/projects/:name/tasks/new", "tasks#new")
-# create must precede the static-segment plan route (Soli pruning)
-post("/projects/:name/tasks", "tasks#create")
-get("/projects/:name/tasks/:slug/sidebar", "tasks#sidebar")
-# Static-segment GETs (sidebar, code-review) must precede the bare
-# `:slug` show route — Soli's router would otherwise capture
-# `expose-params/code-review` as the slug.
-get("/projects/:name/tasks/:slug/code-review", "tasks#code_review_panel")
-get("/projects/:name/tasks/:slug", "tasks#show")
-post("/projects/:name/tasks/:slug/save", "tasks#save")
-post("/projects/:name/tasks/:slug/queue", "tasks#queue")
-post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
-post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
-post("/projects/:name/tasks/:slug/checkout", "tasks#checkout_branch")
-post("/projects/:name/tasks/:slug/mark-done", "tasks#mark_done")
-post("/projects/:name/tasks/:slug/commit-push", "tasks#commit_push")
-post("/projects/:name/tasks/:slug/react", "tasks#react")
-post("/projects/:name/tasks/:slug/code-review", "tasks#code_review")
-post("/projects/:name/tasks/:slug/archive", "tasks#archive")
-post("/projects/:name/tasks/:slug/unarchive", "tasks#unarchive")
-
-# ── Streams ──────────────────────────
-# Phase 5 retired the standalone task planner (/projects/:name/tasks/plan*
-# + /ws/plan-stream). Feature briefs are the only planning surface now —
-# their plan-runs stream over /ws/feature-generate-stream below.
-
+# ── Streams (WebSocket — unscoped) ───
+# Soli's WS dispatcher doesn't run HTTP middleware on these routes, so
+# they each authenticate themselves via per-stream tokens echoed by the
+# client. Moving them inside `middleware("authenticate", …)` would be a
+# no-op at best and broken at worst.
 router_websocket("/ws/code-review-stream", "tasks#code_review_stream")
-# Sits outside the `authenticate` block: the WS handler is event-driven, so
-# cookie-based session lookup isn't reliably available here. The plan_id
-# (a server-generated nonce) is what gates access, mirroring how
-# `runs#stream` treats its slug.
 router_websocket("/ws/feature-generate-stream", "features#generate_stream")
-# Access is gated by a per-plan `stream_token` nonce rendered into the
-# auth-gated show page and echoed back on every WS tick. Anonymous callers
-# cannot guess the token, so the stream is effectively auth-gated even
-# though the WS route itself is not wrapped in `middleware("authenticate")`.
-
-# ── Runs ─────────────────────────────
-
-get("/projects/:name/tasks/:slug/run", "runs#show")
-get("/projects/:name/tasks/:slug/run/log", "runs#log")
-post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
-# Live WebSocket streams — the views drive these instead of 2s polling.
-# Soli 1.0.3's `router_websocket` does not extract `:name`-style path
-# params for WS routes, so all three streams ride a single static
-# endpoint each; the client identifies the resource by echoing `project`
-# / `slug` / `plan_id` / `feature_id` on every tick.
 router_websocket("/ws/run-stream", "runs#stream")
 
-# ── Push notifications ───────────────
-
-post("/push_subscriptions", "push_subscriptions#create")
-post("/push_subscriptions/delete", "push_subscriptions#destroy")
-get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
-
 # ── Auth-gated routes ─────────────────
+# Every HTML page and JSON action a signed-in user can reach lives here.
+# Unscoped exceptions above are the gate itself (/login, /logout) and the
+# ops endpoint (/health). Anonymous callers get a 302 to /login.
 
 middleware("authenticate", fn() {
+
+  # ── Root & Utility ──────────────────
+  get("/", "home#landing")
+  get("/debug", "debug#show")
+  get("/debug/features", "debug#features_probe")
+  get("/debug/demote", "debug#demote_feature_todos")
+  get("/debug/stamp", "debug#stamp_imported")
+  get("/debug/unstamp", "debug#unstamp_imported")
+  get("/debug/try-import", "debug#try_import")
+  get("/debug/comments", "debug#comments_probe")
+  get("/docs", "docs#index")
+
+  # ── Projects ─────────────────────────
+  get("/projects", "projects#index")
+  get("/projects/:name", "projects#show")
+
+  # ── Tasks ────────────────────────────
+  get("/projects/:name/tasks/new", "tasks#new")
+  # create must precede the static-segment plan route (Soli pruning)
+  post("/projects/:name/tasks", "tasks#create")
+  get("/projects/:name/tasks/:slug/sidebar", "tasks#sidebar")
+  # Static-segment GETs (sidebar, code-review) must precede the bare
+  # `:slug` show route — Soli's router would otherwise capture
+  # `expose-params/code-review` as the slug.
+  get("/projects/:name/tasks/:slug/code-review", "tasks#code_review_panel")
+  get("/projects/:name/tasks/:slug", "tasks#show")
+  post("/projects/:name/tasks/:slug/save", "tasks#save")
+  post("/projects/:name/tasks/:slug/queue", "tasks#queue")
+  post("/projects/:name/tasks/:slug/unqueue", "tasks#unqueue")
+  post("/projects/:name/tasks/:slug/merge", "tasks#merge_branch")
+  post("/projects/:name/tasks/:slug/checkout", "tasks#checkout_branch")
+  post("/projects/:name/tasks/:slug/mark-done", "tasks#mark_done")
+  post("/projects/:name/tasks/:slug/commit-push", "tasks#commit_push")
+  post("/projects/:name/tasks/:slug/react", "tasks#react")
+  post("/projects/:name/tasks/:slug/code-review", "tasks#code_review")
+  post("/projects/:name/tasks/:slug/archive", "tasks#archive")
+  post("/projects/:name/tasks/:slug/unarchive", "tasks#unarchive")
+
+  # ── Runs ─────────────────────────────
+  get("/projects/:name/tasks/:slug/run", "runs#show")
+  get("/projects/:name/tasks/:slug/run/log", "runs#log")
+  post("/projects/:name/tasks/:slug/run/resume", "runs#resume")
+
+  # ── Push notifications ───────────────
+  post("/push_subscriptions", "push_subscriptions#create")
+  post("/push_subscriptions/delete", "push_subscriptions#destroy")
+  get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
 
   # ── Versions (nested under projects) ─
   get("/projects/:name/versions", "versions#index")
@@ -94,7 +82,6 @@ middleware("authenticate", fn() {
   post("/projects/:name/versions/:id/destroy", "versions#destroy")
 
   # ── Settings ─────────────────────────
-
   get("/settings", "settings#show")
   post("/settings", "settings#update")
   # Lightweight theme-only endpoint — used by the header toggle to flip
@@ -128,7 +115,6 @@ middleware("authenticate", fn() {
   post("/features/:id/promote", "features#promote")
 
   # ── Comments (nested under features) ─
-
   post("/features/:id/comments", "comments#create")
   post("/comments/:key/delete", "comments#destroy")
   # Auto-mounts:

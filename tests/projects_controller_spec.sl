@@ -1,13 +1,25 @@
-describe("ProjectsController", fn() {
-  before_each(fn() {
-    assert_test_db()
-    Task.delete_all()
-    Setting.delete_all()
-    Version.delete_all()
-    as_guest()
-  })
+# Projects routes (`/projects`, `/projects/:name`) live behind the
+# authenticate middleware. Each nested describe must re-establish the
+# session in its own before_each — Soli's before_each does not cascade
+# into nested describes.
+fn _proj_login_test_user
+  User.delete_all()
+  User.register("proj@test.com", "password", "Proj Tester")
+  login("proj@test.com", "password")
+end
 
+fn _proj_reset_state
+  assert_test_db()
+  Task.delete_all()
+  Setting.delete_all()
+  Version.delete_all()
+  _proj_login_test_user()
+end
+
+describe("ProjectsController", fn() {
   describe("GET /projects", fn() {
+    before_each(fn() { _proj_reset_state() })
+
     test("returns 200 and renders heading", fn() {
       response = get("/projects")
       assert_eq(res_status(response), 200)
@@ -41,9 +53,18 @@ describe("ProjectsController", fn() {
       response = get("/projects")
       assert_contains(res_body(response), "/projects/proj_cycles?tab=cycles")
     })
+
+    test("redirects to /login when no session is set", fn() {
+      as_guest()
+      response = get("/projects")
+      assert_eq(res_status(response), 302)
+      assert_contains(res_header(response, "Location") ?? "", "/login")
+    })
   })
 
   describe("GET /projects/:name", fn() {
+    before_each(fn() { _proj_reset_state() })
+
     test("returns 404 for unknown project", fn() {
       response = get("/projects/nonexistent_project_xyz")
       assert_eq(res_status(response), 404)
@@ -93,9 +114,18 @@ describe("ProjectsController", fn() {
       response = get("/projects/proj_kanban2?tab=build&view=flat")
       assert_contains(res_body(response), "todo")
     })
+
+    test("redirects to /login when no session is set", fn() {
+      as_guest()
+      response = get("/projects/whatever")
+      assert_eq(res_status(response), 302)
+      assert_contains(res_header(response, "Location") ?? "", "/login")
+    })
   })
 
   describe("tab parameter", fn() {
+    before_each(fn() { _proj_reset_state() })
+
     test("renders with archived tab when ?tab=archived", fn() {
       root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync([

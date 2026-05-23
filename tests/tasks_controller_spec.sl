@@ -40,6 +40,43 @@ fn _tq_seed_todo
   return "ready"
 end
 
+# All task routes now live inside the authenticate middleware scope, so
+# specs must establish a session before driving them. Centralised here
+# so the per-describe `before_each` blocks can call one fn instead of
+# repeating the User.register + login boilerplate.
+fn _tq_login_test_user
+  User.delete_all()
+  User.register("tq@test.com", "password", "Task Tester")
+  login("tq@test.com", "password")
+end
+
+# Soli's CSRF guard rejects cookie-bearing POSTs that don't carry an
+# Origin or Referer header. The test client doesn't set Origin by
+# default, so we probe /login (a GET) to discover the dynamic test-
+# server host, then thread it through `_tq_post(...)` on every POST.
+fn _tq_origin
+  probe = get("/login")
+  url = probe["url"] ?? ""
+  prefix = "http://"
+  return url if !url.starts_with(prefix)
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
+  return prefix + rest.substring(0, slash) if slash > 0
+  url
+end
+
+fn _tq_post(path, body)
+  # Call the test-client `post` builtin (lookup via the global env so
+  # the symbol isn't captured by the wrapper's own name).
+  pst = post
+  return pst(path, body, {"headers": {"Origin": _tq_origin()}})
+end
+
+fn _tq_post_hx(path, body)
+  pst = post
+  return pst(path, body, {"headers": {"Origin": _tq_origin(), "hx-request": "true"}})
+end
+
 # Seed a "consumed" inprogress task at `started_at` so it counts
 # against the daily/weekly limit window. Used to push the budget up
 # to (or past) the cap before queuing the test subject.
@@ -61,12 +98,12 @@ describe("TasksController#queue", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test("queues a task when no limits are set", fn() {
     slug = _tq_seed_todo()
-    response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "queued")
@@ -77,7 +114,7 @@ describe("TasksController#queue", fn() {
     Setting.set("limit_daily_claude", 5)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
     slug = _tq_seed_todo()
-    response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "queued")
@@ -88,7 +125,7 @@ describe("TasksController#queue", fn() {
     Setting.set("limit_daily_claude", 1)
     _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
     slug = _tq_seed_todo()
-    response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 422)
     t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "todo")
@@ -102,7 +139,7 @@ describe("TasksController#queue", fn() {
     _tq_seed_consumed("w1", _tq_iso_seconds_ago(86400 * 2), "claude")
     _tq_seed_consumed("w2", _tq_iso_seconds_ago(86400 * 3), "claude")
     slug = _tq_seed_todo()
-    response = post("/projects/proj/tasks/" + slug + "/queue", {})
+    response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
     assert_eq(res_status(response), 422)
     t = Task.find_by_slug("proj", slug)
     assert_eq(t.status, "todo")
@@ -115,7 +152,7 @@ describe("TasksController#queue", fn() {
       Setting.set("limit_daily_claude", 1)
       _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
       slug = _tq_seed_todo()
-      post("/projects/proj/tasks/" + slug + "/queue", {})
+      _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
       t = Task.find_by_slug("proj", slug)
       assert_eq(t.status, "todo")
       assert_null(t.queued_at)
@@ -130,7 +167,7 @@ describe("TasksController#queue", fn() {
       _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
       _tq_seed_consumed("c2", _tq_iso_seconds_ago(120), "claude")
       slug = _tq_seed_todo()
-      response = post("/projects/proj/tasks/" + slug + "/queue", {})
+      response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
       assert_eq(res_status(response), 302)
     }
   )
@@ -147,7 +184,7 @@ describe("TasksController#queue", fn() {
       _tq_seed_consumed("o2", _tq_iso_seconds_ago(120), "opencode")
       _tq_seed_consumed("s1", _tq_iso_seconds_ago(180), "opencode-sdk")
       slug = _tq_seed_todo()
-      response = post("/projects/proj/tasks/" + slug + "/queue", {})
+      response = _tq_post("/projects/proj/tasks/" + slug + "/queue", {})
       assert_eq(res_status(response), 302)
     }
   )
@@ -159,7 +196,7 @@ describe("TasksController#queue", fn() {
       Setting.set("limit_daily_claude", 1)
       _tq_seed_consumed("c1", _tq_iso_seconds_ago(60), "claude")
       slug = _tq_seed_todo()
-      response = post("/projects/proj/tasks/" + slug + "/queue", {}, {"headers": {"hx-request": "true"}})
+      response = _tq_post_hx("/projects/proj/tasks/" + slug + "/queue", {})
       assert_eq(res_status(response), 422)
       body = res_body(response)
       # The error fragment renders the board partial with the limit_error
@@ -197,7 +234,7 @@ describe(
       assert_test_db()
       Task.delete_all()
       Setting.delete_all()
-      as_guest()
+      _tq_login_test_user()
     })
 
     test(
@@ -323,7 +360,7 @@ describe("TasksController#merge_branch", fn() {
     assert_test_db()
     Task.delete_all()
     Setting.delete_all()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -338,7 +375,7 @@ describe("TasksController#merge_branch", fn() {
         "status": "done",
         "outcome": "local-branch"
       })
-      response = post("/projects/proj/tasks/merge-me/merge", {})
+      response = _tq_post("/projects/proj/tasks/merge-me/merge", {})
       assert_eq(res_status(response), 302)
       check = System.run_sync([
         "git",
@@ -365,7 +402,7 @@ describe("TasksController#merge_branch", fn() {
         "status": "done",
         "outcome": "no-commit"
       })
-      response = post("/projects/proj/tasks/not-eligible/merge", {})
+      response = _tq_post("/projects/proj/tasks/not-eligible/merge", {})
       assert_eq(res_status(response), 422)
     }
   )
@@ -390,7 +427,7 @@ describe("TasksController#merge_branch", fn() {
         "status": "done",
         "outcome": "local-branch"
       })
-      response = post("/projects/proj/tasks/ghost/merge", {})
+      response = _tq_post("/projects/proj/tasks/ghost/merge", {})
       assert_eq(res_status(response), 422)
       assert_contains(res_body(response), "not found")
     }
@@ -407,7 +444,7 @@ describe("TasksController#merge_branch", fn() {
       "status": "done",
       "outcome": "local-branch"
     })
-    response = post("/projects/proj/tasks/dirty-tree/merge", {})
+    response = _tq_post("/projects/proj/tasks/dirty-tree/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "uncommitted changes")
     # Cleanup so a re-run starts clean.
@@ -425,7 +462,7 @@ describe("TasksController#merge_branch", fn() {
       "status": "done",
       "outcome": "local-branch"
     })
-    response = post("/projects/proj/tasks/wrong-branch/merge", {})
+    response = _tq_post("/projects/proj/tasks/wrong-branch/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "Checkout main first")
   })
@@ -437,7 +474,7 @@ describe("TasksController#mark_done", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -450,7 +487,7 @@ describe("TasksController#mark_done", fn() {
         "title": "No PR review task",
         "status": "review"
       })
-      response = post("/projects/proj/tasks/no-pr-review/mark-done", {})
+      response = _tq_post("/projects/proj/tasks/no-pr-review/mark-done", {})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "no-pr-review")
       assert_eq(t.status, "done")
@@ -469,7 +506,7 @@ describe("TasksController#mark_done", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post("/projects/proj/tasks/merged-pr/mark-done", {})
+      response = _tq_post("/projects/proj/tasks/merged-pr/mark-done", {})
       Run.set_pr_merged_mock(nil)
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "merged-pr")
@@ -487,7 +524,7 @@ describe("TasksController#mark_done", fn() {
       "status": "review",
       "pr_url": "https://github.com/owner/repo/pull/2"
     })
-    response = post("/projects/proj/tasks/open-pr/mark-done", {})
+    response = _tq_post("/projects/proj/tasks/open-pr/mark-done", {})
     Run.set_pr_merged_mock(nil)
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "PR not merged")
@@ -507,7 +544,7 @@ describe("TasksController#mark_done", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/3"
       })
-      response = post("/projects/proj/tasks/force-pr/mark-done", {"force": "true"})
+      response = _tq_post("/projects/proj/tasks/force-pr/mark-done", {"force": "true"})
       Run.set_pr_merged_mock(nil)
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "force-pr")
@@ -523,7 +560,7 @@ describe("TasksController#mark_done", fn() {
       "title": "Todo task",
       "status": "todo"
     })
-    response = post("/projects/proj/tasks/todo-task/mark-done", {})
+    response = _tq_post("/projects/proj/tasks/todo-task/mark-done", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for review tasks")
     t = Task.find_by_slug("proj", "todo-task")
@@ -549,7 +586,7 @@ describe("TasksController#mark_done", fn() {
         "status": "review",
         "feature_slug": "proj--brief"
       })
-      response = post("/projects/proj/tasks/linked/mark-done", {})
+      response = _tq_post("/projects/proj/tasks/linked/mark-done", {})
       assert_eq(res_status(response), 302)
       f = Feature.find_by_slug("proj", "brief")
       assert_eq(f.status, "done")
@@ -563,7 +600,7 @@ describe("TasksController#archive", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test("archives a done task", fn() {
@@ -574,7 +611,7 @@ describe("TasksController#archive", fn() {
       "title": "Archive done",
       "status": "done"
     })
-    response = post("/projects/proj/tasks/archive-done/archive", {})
+    response = _tq_post("/projects/proj/tasks/archive-done/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-done")
     assert_eq(t.status, "archived")
@@ -588,7 +625,7 @@ describe("TasksController#archive", fn() {
       "title": "Archive failed",
       "status": "failed"
     })
-    response = post("/projects/proj/tasks/archive-failed/archive", {})
+    response = _tq_post("/projects/proj/tasks/archive-failed/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-failed")
     assert_eq(t.status, "archived")
@@ -602,7 +639,7 @@ describe("TasksController#archive", fn() {
       "title": "Archive todo",
       "status": "todo"
     })
-    response = post("/projects/proj/tasks/archive-todo/archive", {})
+    response = _tq_post("/projects/proj/tasks/archive-todo/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-todo")
     assert_eq(t.status, "archived")
@@ -615,7 +652,7 @@ describe("TasksController#unarchive", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test("unarchives a task back to todo", fn() {
@@ -626,7 +663,7 @@ describe("TasksController#unarchive", fn() {
       "title": "Unarchive me",
       "status": "archived"
     })
-    response = post("/projects/proj/tasks/unarchive-me/unarchive", {})
+    response = _tq_post("/projects/proj/tasks/unarchive-me/unarchive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "unarchive-me")
     assert_eq(t.status, "todo")
@@ -640,7 +677,7 @@ describe("TasksController#unarchive", fn() {
       "title": "Unarchive queued",
       "status": "queued"
     })
-    response = post("/projects/proj/tasks/unarchive-queued/unarchive", {})
+    response = _tq_post("/projects/proj/tasks/unarchive-queued/unarchive", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for archived")
     t = Task.find_by_slug("proj", "unarchive-queued")
@@ -684,25 +721,32 @@ describe("TasksController#create author stamping", fn() {
     ActivityLog.delete_all()
     User.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
-  # The controller reads `session_get("user_email")` directly because
-  # task routes run outside the auth-middleware scope. Driving the
-  # signed-in flow through the test client would force us to satisfy
-  # Soli's CSRF guard (Origin/Referer must match the dynamic test-
-  # server port). The `change_author` propagation onto the action
-  # endpoints (queue / mark-done / archive) is covered at the model
-  # layer in `activity_log_spec.sl` — same code path, zero CSRF
-  # surface. Here we just check the unauthenticated branch.
-  test("leaves author empty when no session is set", fn() {
-    response = post(
+  # Task routes are now behind the authenticate middleware — anonymous
+  # POSTs get bounced to /login and the controller never runs. The
+  # signed-in flow stamps the session user's email onto `task.author`.
+  test("redirects anonymous POSTs to /login and creates no task", fn() {
+    as_guest()
+    response = _tq_post(
       "/projects/proj/tasks",
       {"title": "Anon task", "body_md": "# Anon task\n\nbody"}
     )
     assert_eq(res_status(response), 302)
-    task = Task.find_by_slug("proj", "anon-task")
-    assert_eq(task.author ?? "", "")
+    assert_contains(res_header(response, "Location") ?? "", "/login")
+    assert_null(Task.find_by_slug("proj", "anon-task"))
+  })
+
+  test("stamps the signed-in user's email as author", fn() {
+    response = _tq_post(
+      "/projects/proj/tasks",
+      {"title": "By signed in", "body_md": "# By signed in\n\nbody"}
+    )
+    assert_eq(res_status(response), 302)
+    task = Task.find_by_slug("proj", "by-signed-in")
+    assert_not_null(task)
+    assert_eq(task.author ?? "", "tq@test.com")
   })
 
   test("persists Task.author when create receives one", fn() {
@@ -904,7 +948,7 @@ describe("TasksController#save model persistence", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -918,7 +962,7 @@ describe("TasksController#save model persistence", fn() {
         "body_md": "# original",
         "status": "todo"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/save-model/save",
         {
           "title": "Save model",
@@ -945,7 +989,7 @@ describe("TasksController#save model persistence", fn() {
         "body_md": "# x",
         "status": "todo"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/save-stitched/save",
         {
           "body_md": "# x",
@@ -971,7 +1015,7 @@ describe("TasksController#save model persistence", fn() {
         "model": "claude-opus-4-7",
         "status": "todo"
       })
-      response = post("/projects/proj/tasks/save-keep/save", {"body_md": "# updated"})
+      response = _tq_post("/projects/proj/tasks/save-keep/save", {"body_md": "# updated"})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "save-keep")
       assert_eq(t.model, "claude-opus-4-7")
@@ -986,7 +1030,7 @@ describe("TasksController#queue model override", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -999,7 +1043,7 @@ describe("TasksController#queue model override", fn() {
         "title": "Queue with model",
         "status": "todo"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/queue-with-model/queue",
         {"plan_model": "claude-opus-4-7", "plan_variant": "default"}
       )
@@ -1021,7 +1065,7 @@ describe("TasksController#queue model override", fn() {
         "model": "claude-haiku-4-5-20251001",
         "status": "todo"
       })
-      response = post("/projects/proj/tasks/queue-no-model/queue", {})
+      response = _tq_post("/projects/proj/tasks/queue-no-model/queue", {})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "queue-no-model")
       assert_eq(t.status, "queued")
@@ -1036,7 +1080,7 @@ describe("TasksController#show model picker", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1061,13 +1105,68 @@ describe("TasksController#show model picker", fn() {
   )
 })
 
+describe("TasksController#show run-state locals", fn() {
+  before_each(fn() {
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    _tq_login_test_user()
+  })
+
+  test("todo task renders the single-column brief, no run panel", fn() {
+    Task.create({
+      "_key": "proj--no-run",
+      "project": "proj",
+      "slug": "no-run",
+      "title": "No run yet",
+      "status": "todo"
+    })
+    response = get("/projects/proj/tasks/no-run")
+    assert_eq(res_status(response), 200)
+    body = res_body(response)
+    # The "View run log" anchor that used to point at the standalone run
+    # page is gone — the run renders inline only when one exists.
+    assert_not(body.contains(">View run log<"))
+    # No run panel for todo tasks (no log file exists yet).
+    assert_not(body.contains("id=\"run-log\""))
+    assert_not(body.contains("data-stream-url=\"/ws/run-stream\""))
+    # The todo path still shows the queue + archive affordances.
+    assert_contains(body, "Queue &rarr; agent")
+    assert_contains(body, "data-confirm=\"Archive this todo task?\"")
+  })
+
+  test("inprogress task renders the inline run panel beside the brief", fn() {
+    Task.create({
+      "_key": "proj--with-run",
+      "project": "proj",
+      "slug": "with-run",
+      "title": "With run",
+      "status": "inprogress"
+    })
+    response = get("/projects/proj/tasks/with-run")
+    assert_eq(res_status(response), 200)
+    body = res_body(response)
+    # The run panel's structural ids prove the `runs/log` partial was
+    # rendered inline on the task page. (The WS `data-stream-url` is
+    # only emitted when a live status file exists on disk; controller
+    # spec fixtures don't write one, so we assert on the unconditional
+    # markup instead.)
+    assert_contains(body, "id=\"run-panel\"")
+    assert_contains(body, "id=\"run-log\"")
+    assert_contains(body, "id=\"run-plan-body\"")
+    # The brief still renders alongside, inside the right-side aside.
+    assert_contains(body, "Task brief")
+  })
+})
+
 describe("TasksController#sidebar", fn() {
   before_each(fn() {
     assert_test_db()
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1112,7 +1211,7 @@ describe("TasksController#commit_push", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1134,7 +1233,7 @@ describe("TasksController#commit_push", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+      response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 302)
       log = System.run_sync([
         "git",
@@ -1161,7 +1260,7 @@ describe("TasksController#commit_push", fn() {
       "title": "No PR",
       "status": "review"
     })
-    response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+    response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for tasks with an open PR")
   })
@@ -1179,7 +1278,7 @@ describe("TasksController#commit_push", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+      response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "working tree has no uncommitted changes")
     }
@@ -1204,7 +1303,7 @@ describe("TasksController#commit_push", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post("/projects/proj/tasks/" + slug + "/commit-push", {})
+      response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), slug)
     }
@@ -1217,7 +1316,7 @@ describe("TasksController#show tags badge", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1298,7 +1397,7 @@ describe("TasksController#code_review", fn() {
     CodeReview.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1314,7 +1413,7 @@ describe("TasksController#code_review", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/" + slug + "/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
       )
@@ -1346,7 +1445,7 @@ describe("TasksController#code_review", fn() {
         "title": "Not in review",
         "status": "todo"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/cr-not-review/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
       )
@@ -1371,7 +1470,7 @@ describe("TasksController#code_review", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/cr-no-tree/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
       )
@@ -1390,7 +1489,7 @@ describe("TasksController#code_review", fn() {
         "title": "No worktree, no PR",
         "status": "review"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/cr-no-tree-no-pr/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
       )
@@ -1406,7 +1505,7 @@ describe("TasksController#show code-review panel", fn() {
     Task.delete_all()
     Setting.delete_all()
     _tq_setup_workspace()
-    as_guest()
+    _tq_login_test_user()
   })
 
   test(
@@ -1479,7 +1578,7 @@ describe("TasksController#show code-review panel", fn() {
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
       })
-      response = post(
+      response = _tq_post(
         "/projects/proj/tasks/" + slug + "/code-review",
         {"plan_model": "claude-opus-4-7", "plan_variant": "default"}
       )

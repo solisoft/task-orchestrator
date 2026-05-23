@@ -1,14 +1,22 @@
 # Docs controller — covers the in-app Getting Started page reachable
-# from the home header (`📖 Docs` link).
+# from the header (`📖 Docs` link). /docs is auth-gated; anonymous
+# callers get a 302 to /login.
 describe("DocsController", fn() {
-  before_each(fn() { as_guest() })
+  before_each(fn() {
+    User.delete_all()
+    User.register("docs@test.com", "password", "Docs User")
+    login("docs@test.com", "password")
+  })
 
   describe("GET /docs", fn() {
 
-    # Soli's before_each doesn't cascade into nested describes — re-assert
-    # guest so the test above this block can't leak its login into the
-    # next "header shows Sign in" assertion.
-    before_each(fn() { as_guest() })
+    # Soli's before_each doesn't cascade into nested describes — re-run
+    # the login so any guest-leaning test above can't reset our session.
+    before_each(fn() {
+      User.delete_all()
+      User.register("docs@test.com", "password", "Docs User")
+      login("docs@test.com", "password")
+    })
 
     test("returns 200", fn() {
       response = get("/docs")
@@ -43,23 +51,13 @@ describe("DocsController", fn() {
       assert(body.contains("TASK_ORCH_WORKTREES"))
     })
 
-    test("links back to the project kanban", fn() {
+    test("links back to the workspace", fn() {
       response = get("/docs")
       body = res_body(response)
       assert(body.contains("href=\"/\""))
     })
 
-    test("header shows Sign in for guests", fn() {
-      response = get("/docs")
-      body = res_body(response)
-      assert_eq(res_status(response), 200)
-      assert(body.contains(">Sign in<"))
-    })
-
-    test("header shows user avatar when logged in", fn() {
-      User.delete_all()
-      User.register("docs@test.com", "password", "Docs User")
-      login("docs@test.com", "password")
+    test("header shows the user avatar / logout for the signed-in user", fn() {
       response = get("/docs")
       body = res_body(response)
       assert_eq(res_status(response), 200)
@@ -68,18 +66,16 @@ describe("DocsController", fn() {
     })
   })
 
-  describe("GET / (anonymous landing)", fn() {
+  describe("anonymous access", fn() {
 
-    # Outer before_each does not cascade into nested describes in Soli —
-    # re-assert guest so a logged-in test above doesn't leak its session
-    # into this one (would route us to the Workspace inbox instead).
+    # Outer before_each logs us in; this nested block runs after that, so
+    # we must reset to a guest session before the redirect assertion.
     before_each(fn() { as_guest() })
 
-    test("links to the docs page", fn() {
-      response = get("/")
-      body = res_body(response)
-      assert(body.contains("href=\"/docs\""))
-      assert(body.contains("Docs"))
+    test("redirects /docs to /login for anonymous callers", fn() {
+      response = get("/docs")
+      assert_eq(res_status(response), 302)
+      assert_contains(res_header(response, "Location") ?? "", "/login")
     })
   })
 })

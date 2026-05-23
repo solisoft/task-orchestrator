@@ -2,17 +2,10 @@
 # `/log` endpoint (GET, HTMX-target) returns just the tail fragment so
 # polling is cheap and the surrounding page doesn't redraw.
 class RunsController < ApplicationController
-  title: Any
-  project: Any
-  task: Any
-  slug: Any
-  status: Any
-  pr_url: Any
-  tail: Any
-  log_size: Any
-  todos: Any
-  branch_info: Any
-
+  # The standalone run page was folded into tasks#show — the run log,
+  # plan/todos and status row now render inline beside the task brief.
+  # This action stays alive as a 302 so existing bookmarks and the
+  # post-react redirect (tasks_controller.sl:react) continue to resolve.
   def show(req)
     project = Project.find_project(req["params"]["name"])
     if project.nil?
@@ -25,17 +18,7 @@ class RunsController < ApplicationController
       return {"status": 404, "body": "Task not found"}
     end
 
-    @title = "Run · " + slug
-    @project = project
-    @task = task
-    @slug = slug
-    @status = Run.run_current_status(project["name"], slug)
-    @pr_url = Run.run_pr_url(project["name"], slug)
-    @tail = Run.run_log_tail(project["name"], slug, 16384)
-    @log_size = Run.run_log_size(project["name"], slug)
-    @todos = Run.run_latest_todos(project["name"], slug)
-    @branch_info = _branch_info_for(task, project)
-    render("runs/show")
+    redirect("/projects/" + project["name"] + "/tasks/" + slug)
   end
 
   # POST /projects/:name/tasks/:slug/run/resume — re-launch a dead run

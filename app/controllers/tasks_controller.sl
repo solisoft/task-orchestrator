@@ -14,6 +14,13 @@ class TasksController < ApplicationController
   can_commit_push: Any
   code_reviews: Any
   flash_error: Any
+  has_run: Any
+  slug: Any
+  status: Any
+  pr_url: Any
+  tail: Any
+  log_size: Any
+  todos: Any
 
   def new(req)
     project = Project.find_project(req["params"]["name"])
@@ -141,6 +148,12 @@ class TasksController < ApplicationController
     # array when the task hasn't been reviewed yet.
     code_reviews = []
     code_reviews = CodeReview.for_task(project["name"], task.slug) if task.status == "review"
+    # Pre-load the live run state when the task has been queued (or is past
+    # it) so the run-log panel can render inline on the task page. View
+    # scope can't resolve `Run.X`, so the lookups happen here. Skipped for
+    # `todo` / `proposed` / `archived` — those tasks have no run yet and
+    # the view collapses to a single-column brief.
+    run_locals = this._run_locals_for(task, project)
     @title = task.slug
     @project = project
     @task = task
@@ -153,7 +166,42 @@ class TasksController < ApplicationController
     @opencode_options = picker["opencode_options"]
     @code_reviews = code_reviews
     @flash_error = nil
+    @has_run = run_locals["has_run"]
+    @slug = task.slug
+    @status = run_locals["status"]
+    @pr_url = run_locals["pr_url"]
+    @tail = run_locals["tail"]
+    @log_size = run_locals["log_size"]
+    @todos = run_locals["todos"]
     render("tasks/show")
+  end
+
+  # Returns the run-state locals the inlined `runs/log` partial needs, or
+  # a hash with `has_run: false` and nils when the task hasn't been queued
+  # yet. Centralised so commit_push (which re-renders show) and show share
+  # the same shape.
+  def _run_locals_for(task, project)
+    statuses_with_run = ["queued", "inprogress", "review", "done", "failed"]
+    has_run = false
+    for s in statuses_with_run
+      has_run = true if task.status == s
+    end
+    return {
+      "has_run": false,
+      "status": nil,
+      "pr_url": nil,
+      "tail": nil,
+      "log_size": nil,
+      "todos": nil
+    } if !has_run
+    {
+      "has_run": true,
+      "status": Run.run_current_status(project["name"], task.slug),
+      "pr_url": Run.run_pr_url(project["name"], task.slug),
+      "tail": Run.run_log_tail(project["name"], task.slug, 16384),
+      "log_size": Run.run_log_size(project["name"], task.slug),
+      "todos": Run.run_latest_todos(project["name"], task.slug)
+    }
   end
 
   # GET /projects/:name/tasks/:slug/code-review — htmx fetch that returns
@@ -394,6 +442,7 @@ class TasksController < ApplicationController
     result = Run.commit_and_push(worktree_path, task.slug)
     if !result["ok"]
       picker = plan_model_picker_data(Setting.get_or("plan_model", "claude-sonnet-4-6"))
+      run_locals = this._run_locals_for(task, project)
       @title = task.slug
       @project = project
       @task = task
@@ -406,6 +455,13 @@ class TasksController < ApplicationController
       @opencode_options = picker["opencode_options"]
       @code_reviews = CodeReview.for_task(project["name"], task.slug)
       @flash_error = result["error"]
+      @has_run = run_locals["has_run"]
+      @slug = task.slug
+      @status = run_locals["status"]
+      @pr_url = run_locals["pr_url"]
+      @tail = run_locals["tail"]
+      @log_size = run_locals["log_size"]
+      @todos = run_locals["todos"]
       return render("tasks/show")
     end
     redirect("/projects/" + project["name"] + "/tasks/" + task.slug)

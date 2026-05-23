@@ -1,11 +1,41 @@
-describe("RunsController", fn() {
-  before_each(fn() {
-    assert_test_db()
-    Task.delete_all()
-    as_guest()
-  })
+# Run routes live behind the authenticate middleware. Each nested
+# describe needs its own before_each since Soli's before_each does not
+# cascade into nested describes.
+fn _runs_login_test_user
+  User.delete_all()
+  User.register("runs@test.com", "password", "Runs Tester")
+  login("runs@test.com", "password")
+end
 
+fn _runs_reset_state
+  assert_test_db()
+  Task.delete_all()
+  _runs_login_test_user()
+end
+
+# Soli's CSRF guard rejects cookie-bearing POSTs without an Origin /
+# Referer header. Probe /login to discover the dynamic test-server host
+# so we can attach an Origin to each authenticated POST.
+fn _runs_origin
+  probe = get("/login")
+  url = probe["url"] ?? ""
+  prefix = "http://"
+  return url if !url.starts_with(prefix)
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
+  return prefix + rest.substring(0, slash) if slash > 0
+  url
+end
+
+fn _runs_post(path, body)
+  pst = post
+  return pst(path, body, {"headers": {"Origin": _runs_origin()}})
+end
+
+describe("RunsController", fn() {
   describe("GET /projects/:name/tasks/:slug/run", fn() {
+    before_each(fn() { _runs_reset_state() })
+
     test("returns 404 for unknown project", fn() {
       response = get("/projects/nonexistent/tasks/some-task/run")
       assert_eq(res_status(response), 404)
@@ -22,7 +52,7 @@ describe("RunsController", fn() {
       assert_eq(res_status(response), 404)
     })
 
-    test("returns 200 for valid project and task", fn() {
+    test("redirects to the task page (run now renders inline)", fn() {
       root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
       System.run_sync([
         "mkdir",
@@ -37,11 +67,21 @@ describe("RunsController", fn() {
         "status": "todo"
       })
       response = get("/projects/proj_run_ok/tasks/task-run/run")
-      assert_eq(res_status(response), 200)
+      assert_eq(res_status(response), 302)
+      assert_eq(res_header(response, "Location"), "/projects/proj_run_ok/tasks/task-run")
+    })
+
+    test("redirects to /login when no session is set", fn() {
+      as_guest()
+      response = get("/projects/anything/tasks/whatever/run")
+      assert_eq(res_status(response), 302)
+      assert_contains(res_header(response, "Location") ?? "", "/login")
     })
   })
 
   describe("GET /projects/:name/tasks/:slug/run/log", fn() {
+    before_each(fn() { _runs_reset_state() })
+
     test("returns 404 for unknown project", fn() {
       response = get("/projects/nonexistent/tasks/some-task/run/log")
       assert_eq(res_status(response), 404)
@@ -78,14 +118,7 @@ describe("RunsController", fn() {
   })
 
   describe("POST /projects/:name/tasks/:slug/run/resume", fn() {
-
-    # Soli's before_each does not cascade into nested describes — re-run
-    # the cleanup here so prior tests can't leak a resumable-status row.
-    before_each(fn() {
-      assert_test_db()
-      Task.delete_all()
-      as_guest()
-    })
+    before_each(fn() { _runs_reset_state() })
 
     test("returns 422 for non-resumable task", fn() {
       root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
@@ -101,7 +134,7 @@ describe("RunsController", fn() {
         "title": "Resume me",
         "status": "done"
       })
-      response = post("/projects/proj_resume/tasks/resume-me/run/resume", {})
+      response = _runs_post("/projects/proj_resume/tasks/resume-me/run/resume", {})
       assert_eq(res_status(response), 422)
       assert_contains(res_body(response), "not in a resumable state")
     })

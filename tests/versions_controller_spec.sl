@@ -447,7 +447,9 @@ describe("ProjectsController hub tabs with versions", fn() {
     Feature.delete_all()
     Setting.delete_all()
     _ensure_project("hub-tab-proj")
-    as_guest()
+    User.delete_all()
+    User.register("hub-v@test.com", "password", "Hub")
+    login("hub-v@test.com", "password")
   })
 
   test(

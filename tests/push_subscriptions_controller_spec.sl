@@ -33,11 +33,36 @@ fn _psc_reset_state
   # to the in-process test HTTP server.
   Setting.set("vapid_test_public", _psc_test_pub)
   Setting.set("vapid_test_private", _psc_test_priv)
-  as_guest()
+  # Push subscription endpoints live behind the authenticate middleware
+  # (the browser only calls them after the user is signed in). Establish
+  # a session so the spec drives the actual handler, not the /login
+  # redirect.
+  User.delete_all()
+  User.register("push@test.com", "password", "Push Tester")
+  login("push@test.com", "password")
 end
 
 fn _psc_count
   return PushSubscription.all().length()
+end
+
+# Soli's CSRF guard rejects cookie-bearing POSTs without an Origin or
+# Referer header. Probe /login to find the dynamic test-server host and
+# wrap _psc_post() so authenticated POSTs carry the right Origin.
+fn _psc_origin
+  probe = get("/login")
+  url = probe["url"] ?? ""
+  prefix = "http://"
+  return url if !url.starts_with(prefix)
+  rest = url.substring(prefix.length(), url.length())
+  slash = rest.index_of("/")
+  return prefix + rest.substring(0, slash) if slash > 0
+  url
+end
+
+fn _psc_post(path, body)
+  pst = post
+  return pst(path, body, {"headers": {"Origin": _psc_origin()}})
 end
 
 describe("PushSubscriptionsController", fn() {
@@ -48,7 +73,7 @@ describe("PushSubscriptionsController", fn() {
     })
 
     test("creates a subscription via the flat shape", fn() {
-      response = post("/push_subscriptions", _psc_subscription_payload("https://push/1"))
+      response = _psc_post("/push_subscriptions", _psc_subscription_payload("https://push/1"))
       assert_eq(res_status(response), 201)
       assert_eq(_psc_count(), 1)
       row = PushSubscription.find_by_endpoint("https://push/1")
@@ -57,7 +82,7 @@ describe("PushSubscriptionsController", fn() {
     })
 
     test("returns 422 when endpoint is missing", fn() {
-      response = post(
+      response = _psc_post(
         "/push_subscriptions",
         {"p256dh": "k", "auth": "a"}
       )
@@ -66,7 +91,7 @@ describe("PushSubscriptionsController", fn() {
     })
 
     test("returns 422 when keys are missing", fn() {
-      response = post("/push_subscriptions", {"endpoint": "https://push/x"})
+      response = _psc_post("/push_subscriptions", {"endpoint": "https://push/x"})
       assert_eq(res_status(response), 422)
       assert_eq(_psc_count(), 0)
     })
@@ -74,8 +99,8 @@ describe("PushSubscriptionsController", fn() {
     test(
       "is idempotent on a repeat subscribe (no duplicate row)",
       fn() {
-        post("/push_subscriptions", _psc_subscription_payload("https://push/dup"))
-        response = post("/push_subscriptions", _psc_subscription_payload("https://push/dup"))
+        _psc_post("/push_subscriptions", _psc_subscription_payload("https://push/dup"))
+        response = _psc_post("/push_subscriptions", _psc_subscription_payload("https://push/dup"))
         assert_eq(res_status(response), 201)
         assert_eq(_psc_count(), 1)
       }
@@ -84,7 +109,7 @@ describe("PushSubscriptionsController", fn() {
     test(
       "accepts the nested PushSubscription.toJSON shape (keys.p256dh / keys.auth)",
       fn() {
-        response = post(
+        response = _psc_post(
           "/push_subscriptions",
           {"endpoint": "https://push/nested", "keys": {
             "p256dh": "nested-p256",
@@ -107,8 +132,8 @@ describe("PushSubscriptionsController", fn() {
       })
 
       test("removes a row when the endpoint matches", fn() {
-        post("/push_subscriptions", _psc_subscription_payload("https://push/bye"))
-        response = post("/push_subscriptions/delete", {"endpoint": "https://push/bye"})
+        _psc_post("/push_subscriptions", _psc_subscription_payload("https://push/bye"))
+        response = _psc_post("/push_subscriptions/delete", {"endpoint": "https://push/bye"})
         assert_eq(res_status(response), 200)
         assert_null(PushSubscription.find_by_endpoint("https://push/bye"))
       })
@@ -116,13 +141,13 @@ describe("PushSubscriptionsController", fn() {
       test(
         "returns 404 when no row matches the endpoint",
         fn() {
-          response = post("/push_subscriptions/delete", {"endpoint": "https://push/ghost"})
+          response = _psc_post("/push_subscriptions/delete", {"endpoint": "https://push/ghost"})
           assert_eq(res_status(response), 404)
         }
       )
 
       test("returns 422 when no endpoint is supplied", fn() {
-        response = post("/push_subscriptions/delete", {})
+        response = _psc_post("/push_subscriptions/delete", {})
         assert_eq(res_status(response), 422)
       })
     }
