@@ -349,6 +349,25 @@ describe("run.sl utility functions", fn()
     let result = pr_merged("https://github.com/owner/repo/pull/999999")
     assert_eq(result, false)
   end)
+
+  test("project_has_remote returns false when the repo has no origin", fn()
+    let dir = "/tmp/_rs_proj_no_remote"
+    System.run_sync(["rm", "-rf", dir])
+    System.run_sync(["git", "init", "-q", "-b", "main", dir])
+    assert_eq(project_has_remote(dir), false)
+    System.run_sync(["rm", "-rf", dir])
+  end)
+
+  test("project_has_remote returns true when the repo has an origin", fn()
+    let dir = "/tmp/_rs_proj_remote"
+    let origin_dir = "/tmp/_rs_proj_remote_origin.git"
+    System.run_sync(["rm", "-rf", dir, origin_dir])
+    System.run_sync(["git", "init", "-q", "-b", "main", dir])
+    System.run_sync(["git", "init", "-q", "--bare", origin_dir])
+    System.run_sync(["git", "-C", dir, "remote", "add", "origin", origin_dir])
+    assert_eq(project_has_remote(dir), true)
+    System.run_sync(["rm", "-rf", dir, origin_dir])
+  end)
 end)
 
 # `run_latest_todos` returns the agent's latest TodoWrite payload when
