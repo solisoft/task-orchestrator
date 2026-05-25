@@ -179,6 +179,18 @@ def _tq_setup_git_proj(slug)
   return proj
 end
 
+# Like _tq_setup_git_proj but also adds an origin remote (bare repo)
+# so project_has_remote returns true. Used by tests that need to
+# distinguish the remote-present vs no-remote code paths.
+def _tq_setup_git_proj_with_remote(slug)
+  let proj = _tq_setup_git_proj(slug)
+  let origin = "/tmp/merge-origin-" + slug + ".git"
+  System.run_sync(["rm", "-rf", origin])
+  System.run_sync(["git", "init", "-q", "--bare", origin])
+  System.run_sync(["git", "-C", proj, "remote", "add", "origin", origin])
+  return proj
+end
+
 describe("TasksController#show with local-branch outcome", fn()
   before_each(fn()
     assert_test_db()
@@ -242,6 +254,42 @@ describe("TasksController#show with local-branch outcome", fn()
     let body = res_body(response)
     assert_not(body.contains("Merge into main"))
   end)
+
+  test("shows merge button for non-local-branch task when project has no remote", fn()
+    _tq_setup_git_proj("offline-show")
+    Task.create({
+      "_key":    "proj--offline-show",
+      "project": "proj",
+      "slug":    "offline-show",
+      "title":   "Offline show",
+      "status":  "review",
+      "outcome": "no-commit"
+    })
+    let response = get("/projects/proj/tasks/offline-show")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    assert_contains(body, "Merge into main")
+    assert_contains(body, "not merged into main")
+  end)
+
+  test("hides commit-push button when project has no remote", fn()
+    _tq_setup_git_proj("no-remote-push")
+    Task.create({
+      "_key":    "proj--no-remote-push",
+      "project": "proj",
+      "slug":    "no-remote-push",
+      "title":   "No remote push",
+      "status":  "review",
+      "outcome": "local-branch",
+      "pr_url":  "https://github.com/owner/repo/pull/1"
+    })
+    let response = get("/projects/proj/tasks/no-remote-push")
+    assert_eq(res_status(response), 200)
+    let body = res_body(response)
+    # The commit-push form should not be rendered when the project has
+    # no git remote — even though the task is in review with a PR URL.
+    assert_not(body.contains("action=\"/projects/proj/tasks/no-remote-push/commit-push\""))
+  end)
 end)
 
 describe("TasksController#merge_branch", fn()
@@ -270,7 +318,7 @@ describe("TasksController#merge_branch", fn()
   end)
 
   test("rejects with 422 when the task is not done+local-branch", fn()
-    _tq_setup_git_proj("not-eligible")
+    _tq_setup_git_proj_with_remote("not-eligible")
     Task.create({
       "_key":    "proj--not-eligible",
       "project": "proj",
@@ -332,6 +380,39 @@ describe("TasksController#merge_branch", fn()
     let response = post("/projects/proj/tasks/wrong-branch/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "Checkout main first")
+  end)
+
+  test("merges non-local-branch when project has no remote (offline mode)", fn()
+    let proj = _tq_setup_git_proj("offline-merge")
+    # outcome = "no-commit" deliberately NOT "local-branch"
+    Task.create({
+      "_key":    "proj--offline-merge",
+      "project": "proj",
+      "slug":    "offline-merge",
+      "title":   "Offline merge",
+      "status":  "done",
+      "outcome": "no-commit"
+    })
+    let response = post("/projects/proj/tasks/offline-merge/merge", {})
+    assert_eq(res_status(response), 302)
+    let check = System.run_sync(["git", "-C", proj,
+      "merge-base", "--is-ancestor", "task/offline-merge", "main"])
+    assert_eq(check["exit_code"], 0)
+  end)
+
+  test("rejects non-local-branch merge when project has a remote", fn()
+    let proj = _tq_setup_git_proj_with_remote("remote-reject")
+    Task.create({
+      "_key":    "proj--remote-reject",
+      "project": "proj",
+      "slug":    "remote-reject",
+      "title":   "Remote reject",
+      "status":  "done",
+      "outcome": "no-commit"
+    })
+    let response = post("/projects/proj/tasks/remote-reject/merge", {})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "only available")
   end)
 end)
 

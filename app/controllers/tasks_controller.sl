@@ -444,7 +444,8 @@ fn _branch_info_for(task, project)
     "exists": exists,
     "merged": task_branch_merged(project_path, task.slug),
     "worktree_path": exists_in_worktree ? wt_path : nil,
-    "is_local_branch": task.outcome == "local-branch"
+    "is_local_branch": task.outcome == "local-branch",
+    "has_github_remote": project_has_remote(project_path)
   }
 end
 
@@ -453,6 +454,9 @@ fn _can_commit_push(task, project)
     return false
   end
   if task.pr_url == nil or task.pr_url == ""
+    return false
+  end
+  if not project_has_remote(project["path"])
     return false
   end
   if not run_worktree_exists(project["name"], task.slug)
@@ -476,7 +480,8 @@ fn merge_branch(req)
   if task == nil
     return {"status": 404, "body": "Task not found"}
   end
-  if task.status != "inprogress" and task.status != "review" and task.status != "done" or task.outcome != "local-branch"
+  let not_eligible_status = task.status != "inprogress" and task.status != "review" and task.status != "done"
+  if not_eligible_status or (task.outcome != "local-branch" and project_has_remote(project["path"]))
     return {"status": 422,
             "body": "merge is only available for inprogress/review/done tasks with a local branch"}
   end

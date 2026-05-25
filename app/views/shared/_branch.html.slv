@@ -19,7 +19,7 @@
         <% end %>
       </div>
       <% if branch_info["exists"] and not branch_info["merged"] %>
-        <% if branch_info["is_local_branch"] and task.status == "review" %>
+        <% if (branch_info["is_local_branch"] or not branch_info["has_github_remote"]) and task.status == "review" %>
           <form method="post"
                 action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/merge"
                 data-confirm="Merge '<%= branch_info["name"] %>' into <%= branch_info["main"] %>? Runs git merge --no-ff in <%= project["path"] %>.">
@@ -48,7 +48,7 @@
         </button>
       </div>
       <p class="text-xs text-slate-500 mt-2">
-        Branch is checked out in this worktree — <code class="font-mono">cd</code> in to inspect; can't be checked out in <code class="font-mono"><%= project["path"] %></code> while the worktree is active.
+        Branch is checked out in this worktree - <code class="font-mono">cd</code> in to inspect; cannot be checked out in <code class="font-mono"><%= project["path"] %></code> while the worktree is active.
       </p>
     <% elsif branch_info["exists"] and not branch_info["merged"] %>
       <p class="text-xs text-slate-500 mt-2">
