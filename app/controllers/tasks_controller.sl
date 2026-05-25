@@ -300,6 +300,61 @@ fn create(req)
   redirect("/projects/" + project["name"] + "/tasks/" + task.slug)
 end
 
+# POST /api/projects/:name/tasks — JSON-in / JSON-out endpoint for
+# agent-driven task creation. Sits behind `middleware("api_key", ...)`
+# so it can be hit without a session cookie. The body shape is:
+#   { "title": "...", "body_md": "...", "model": "..."(optional),
+#     "author": "..."(optional) }
+# Either `title` or a leading `# heading` line in `body_md` is required;
+# `_allow_plan_model` validates `model` so anything outside the
+# allowlist falls back to the canonical default.
+fn api_create(req)
+  let project = find_project(req["params"]["name"])
+  if project == nil
+    return _api_tasks_json(404, { "error": "Unknown project: " + (req["params"]["name"] ?? "") })
+  end
+  let body = req["json"] ?? req["all"] ?? {}
+  let body_md = body["body_md"] ?? ""
+  let title = (body["title"] ?? "").trim()
+  if title == ""
+    title = parse_title_from_body(body_md)
+  end
+  if title == ""
+    return _api_tasks_json(422, {
+      "error": "title is required (provide `title` or a `# heading` line in `body_md`)"
+    })
+  end
+  let slug = unique_slug_for(project["name"], title.slugify())
+  let model = _allow_plan_model((body["model"] ?? "").trim())
+  let author = (body["author"] ?? "agent").trim()
+  let task = Task.create({
+    "_key":    Task.key_for(project["name"], slug),
+    "project": project["name"],
+    "slug":    slug,
+    "title":   title,
+    "body_md": body_md,
+    "model":   model,
+    "author":  author,
+    "status":  "todo"
+  })
+  if task._errors
+    return _api_tasks_json(422, { "error": "validation failed", "details": task._errors })
+  end
+  let url = "/projects/" + project["name"] + "/tasks/" + task.slug
+  return _api_tasks_json(201, { "slug": task.slug, "url": url })
+end
+
+# Build a JSON response with the conventional Content-Type. Kept local
+# to this controller so the action's failure modes stay consistent
+# (every branch returns the same shape).
+fn _api_tasks_json(status, payload)
+  return {
+    "status":  status,
+    "headers": { "Content-Type": "application/json; charset=utf-8" },
+    "body":    JSON.stringify(payload)
+  }
+end
+
 # Pull the first `# ...` heading line out of a markdown body, with the
 # leading hashes/whitespace stripped. Returns "" if the body has none.
 fn parse_title_from_body(body)

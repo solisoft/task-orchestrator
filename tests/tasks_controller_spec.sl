@@ -1540,3 +1540,145 @@ describe("TasksController#show code-review panel", fn()
     end
   end)
 end)
+
+# --- agent-facing JSON API -------------------------------------------
+#
+# `POST /api/projects/:name/tasks` is gated by the `api_key` scoped
+# middleware (X-Api-Key header → `Setting("api_key")`). The endpoint is
+# entirely separate from the cookie-auth `create` flow — agents
+# (opencode / claude) hit it without a session.
+
+describe("TasksController#api_create", fn()
+  before_each(fn()
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+    Setting.set("api_key", "secret-key-123")
+  end)
+
+  test("creates a task and returns 201 JSON when the API key is valid", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "From agent", "body_md": "spec body" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let body = res_body(response)
+    assert_contains(body, "\"slug\":\"from-agent\"")
+    assert_contains(body, "/projects/proj/tasks/from-agent")
+    let t = Task.find_by_slug("proj", "from-agent")
+    assert_not_null(t)
+    assert_eq(t.title, "From agent")
+    assert_eq(t.body_md, "spec body")
+    assert_eq(t.status, "todo")
+  end)
+
+  test("falls back to the first `# heading` line when title is omitted", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "body_md": "# Heading-derived title\n\nbody here" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let t = Task.find_by_slug("proj", "heading-derived-title")
+    assert_not_null(t)
+    assert_eq(t.title, "Heading-derived title")
+  end)
+
+  test("returns 401 JSON when the X-Api-Key header is missing", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Anon attempt", "body_md": "x" }, {})
+    assert_eq(res_status(response), 401)
+    let body = res_body(response)
+    assert_contains(body, "Invalid or missing X-Api-Key")
+    # No row was inserted on the auth failure.
+    assert_null(Task.find_by_slug("proj", "anon-attempt"))
+  end)
+
+  test("returns 401 JSON when the X-Api-Key header is wrong", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Wrong key", "body_md": "x" },
+      { "headers": { "x-api-key": "nope" } })
+    assert_eq(res_status(response), 401)
+    let body = res_body(response)
+    assert_contains(body, "Invalid or missing X-Api-Key")
+    assert_null(Task.find_by_slug("proj", "wrong-key"))
+  end)
+
+  test("returns 401 JSON when the server has no api_key configured", fn()
+    Setting.delete_all()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Server unset", "body_md": "x" },
+      { "headers": { "x-api-key": "anything" } })
+    assert_eq(res_status(response), 401)
+    let body = res_body(response)
+    assert_contains(body, "not configured")
+  end)
+
+  test("returns 422 JSON when title is empty AND no `# heading` is in body_md", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "", "body_md": "no heading here, just text" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 422)
+    let body = res_body(response)
+    assert_contains(body, "title is required")
+  end)
+
+  test("returns 404 JSON when the project does not exist", fn()
+    let response = post("/api/projects/no-such-proj/tasks",
+      { "title": "Ghost project", "body_md": "x" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 404)
+    let body = res_body(response)
+    assert_contains(body, "Unknown project")
+  end)
+
+  test("appends -2 / -3 / … on slug collisions across repeated submissions", fn()
+    let r1 = post("/api/projects/proj/tasks",
+      { "title": "Dup task", "body_md": "first" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(r1), 201)
+    let r2 = post("/api/projects/proj/tasks",
+      { "title": "Dup task", "body_md": "second" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(r2), 201)
+    assert_not_null(Task.find_by_slug("proj", "dup-task"))
+    assert_not_null(Task.find_by_slug("proj", "dup-task-2"))
+  end)
+
+  test("validates the optional `model` field against the allowlist", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Picked model", "body_md": "x", "model": "claude-opus-4-7" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let t = Task.find_by_slug("proj", "picked-model")
+    assert_eq(t.model, "claude-opus-4-7")
+  end)
+
+  test("rejects an unknown model by falling back to the canonical default", fn()
+    # No slash → not an opencode shape; not in the Claude SDK allowlist
+    # either, so `_allow_plan_model` rewrites it to the default.
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Bogus model", "body_md": "x", "model": "not-a-real-model" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let t = Task.find_by_slug("proj", "bogus-model")
+    assert_eq(t.model, "claude-sonnet-4-6")
+  end)
+
+  test("stamps the optional `author` field on the created task", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "Author stamp", "body_md": "x", "author": "opencode@bot" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let t = Task.find_by_slug("proj", "author-stamp")
+    assert_eq(t.author, "opencode@bot")
+  end)
+
+  test("defaults author to `agent` when the field is omitted", fn()
+    let response = post("/api/projects/proj/tasks",
+      { "title": "No author", "body_md": "x" },
+      { "headers": { "x-api-key": "secret-key-123" } })
+    assert_eq(res_status(response), 201)
+    let t = Task.find_by_slug("proj", "no-author")
+    assert_eq(t.author, "agent")
+  end)
+end)

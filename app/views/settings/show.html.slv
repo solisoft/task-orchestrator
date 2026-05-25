@@ -284,6 +284,24 @@
         <% end %>
       </fieldset>
 
+      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent API</legend>
+        <p class="mt-2 text-sm text-slate-400">
+          Shared secret for the agent-facing JSON API
+          (<code>POST /api/projects/:name/tasks</code>). Agents must send it
+          as the <code>X-Api-Key</code> header. Leave blank to disable the
+          endpoint entirely.
+        </p>
+        <div class="mt-4">
+          <label for="api_key" class="block text-xs font-medium text-slate-300 mb-1">API key</label>
+          <input type="text" id="api_key" name="api_key"
+                 value="<%= api_key %>"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="paste or generate a long random string"
+                 class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+        </div>
+      </fieldset>
+
       <div class="flex items-center justify-end gap-3">
         <a href="/" class="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">Cancel</a>
         <button type="submit"

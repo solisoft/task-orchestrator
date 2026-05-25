@@ -18,6 +18,7 @@ fn show(req)
   render("settings/show", {
     "current_user": _user,
     "title": "Settings",
+    "api_key": Setting.get_or("api_key", ""),
     "agent_type": Setting.get_or("agent_type", Task.known_agents()[0]),
     "agents": Task.known_agents(),
     "agents_config": _settings_load_agents_config(),
@@ -105,6 +106,13 @@ fn update(req)
   for a in Task.known_agents()
     Setting.set("limit_daily_"  + a, _settings_parse_limit(form["limit_daily_"  + a]))
     Setting.set("limit_weekly_" + a, _settings_parse_limit(form["limit_weekly_" + a]))
+  end
+  # `api_key` rides the same form. Persist only when the field is
+  # actually present so callers that POST a partial form (theme-only,
+  # presets) don't blank an existing key.
+  let raw_api_key = form["api_key"]
+  if raw_api_key != nil
+    Setting.set("api_key", str(raw_api_key).trim())
   end
   redirect("/settings")
 end

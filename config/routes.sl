@@ -83,6 +83,12 @@ post("/push_subscriptions", "push_subscriptions#create")
 post("/push_subscriptions/delete", "push_subscriptions#destroy")
 get("/push/vapid-public-key", "push_subscriptions#vapid_public_key")
 
+# ── Agent-facing JSON API (X-Api-Key gated) ─
+
+middleware("api_key", -> {
+  post("/api/projects/:name/tasks", "tasks#api_create")
+})
+
 # ── Auth-gated routes ─────────────────
 
 middleware("authenticate", -> {
