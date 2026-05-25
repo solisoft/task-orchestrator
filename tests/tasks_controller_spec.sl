@@ -1158,6 +1158,48 @@ describe("TasksController#show run-state locals", fn() {
     # The brief still renders alongside, inside the right-side aside.
     assert_contains(body, "Task brief")
   })
+
+  test("tail ending mid-line marks the final span as data-partial", fn() {
+    Task.create({
+      "_key": "proj--mid-line",
+      "project": "proj",
+      "slug": "mid-line",
+      "title": "Mid-line tail",
+      "status": "inprogress"
+    })
+    # Write a log whose tail ends WITHOUT a trailing newline — the partial
+    # last line is the one the agent is still writing.
+    state_root = Run.run_state_root() + "/proj"
+    System.run_sync(["mkdir", "-p", state_root])
+    Trusted.write(state_root + "/mid-line.log", "first line\nsecond line still bei")
+    response = get("/projects/proj/tasks/mid-line")
+    assert_eq(res_status(response), 200)
+    body = res_body(response)
+    # The final partial span must carry data-partial="1" so the JS
+    # adopts it as `pre._partialSpan` on connect and the first WS delta
+    # extends the line in place instead of starting a new visual row.
+    assert_contains(body, "data-partial=\"1\"")
+    assert_contains(body, "second line still bei")
+    Trusted.delete(state_root + "/mid-line.log")
+  })
+
+  test("tail ending in newline emits no data-partial marker", fn() {
+    Task.create({
+      "_key": "proj--clean-line",
+      "project": "proj",
+      "slug": "clean-line",
+      "title": "Clean tail",
+      "status": "inprogress"
+    })
+    state_root = Run.run_state_root() + "/proj"
+    System.run_sync(["mkdir", "-p", state_root])
+    Trusted.write(state_root + "/clean-line.log", "first line\nsecond line\n")
+    response = get("/projects/proj/tasks/clean-line")
+    assert_eq(res_status(response), 200)
+    body = res_body(response)
+    assert_not(body.contains("data-partial=\"1\""))
+    Trusted.delete(state_root + "/clean-line.log")
+  })
 })
 
 describe("TasksController#sidebar", fn() {

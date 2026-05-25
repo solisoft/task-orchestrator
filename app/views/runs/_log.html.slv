@@ -9,6 +9,22 @@
   # `prefix_chunk` in the snapshot, which the client prepends above SSR.
   prefix_end = log_size - tail.length
 %>
+<%
+  # If the tail ends mid-line (no trailing \n), the last <span> is a
+  # partial line that the agent will extend. Marking it with
+  # data-partial="1" lets run-stream.js adopt it as `pre._partialSpan`
+  # on connect, so the first WS delta extends it in place instead of
+  # starting a new visual line.
+  #
+  # NOTE: `and` in template scope doesn't reliably short-circuit, so
+  # we compute the "last byte" lookup only when tail is non-empty.
+  tail_lines = tail.split("\n")
+  tail_last_idx = tail_lines.length - 1
+  tail_has_trailing_nl = false
+  if tail != ""
+    tail_has_trailing_nl = tail.substring(tail.length - 1, tail.length) == "\n"
+  end
+%>
 
 <div id="run-panel"
   <% if polling %>
@@ -45,7 +61,8 @@
       <% if tail == "" %>
         <p class="font-mono text-xs text-slate-600 p-6 text-center italic">no log yet — task hasn't been queued</p>
       <% else %>
-        <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in tail.split("\n") %><span class="block <%= task_log_line_class(line) %>"><%= line %></span><% end %></pre>
+        <% tail_i = 0 %>
+        <pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"><% for line in tail_lines %><span class="block <%= task_log_line_class(line) %>"<% if tail_i == tail_last_idx and not tail_has_trailing_nl and line != "" %> data-partial="1"<% end %>><%= line %></span><% tail_i = tail_i + 1 %><% end %></pre>
       <% end %>
     </div>
 

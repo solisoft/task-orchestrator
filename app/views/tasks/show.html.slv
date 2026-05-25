@@ -118,62 +118,57 @@
     <%- partial("shared/branch", { "branch_info": branch_info, "task": task, "project": project }) %>
 
     <% if _has_run %>
-      <!-- 2-col layout: live run on the main column, brief (and review
-           affordances) in a sticky right sidebar. Mirrors the proportions
-           of the old standalone /run page so the agent log stays the
-           primary signal while the brief remains glanceable. -->
-      <div class="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-6 items-start animate-fade-in animate-fade-in-2">
-        <div class="min-w-0">
-          <%- partial("runs/log", {
-            "project":  project,
-            "task":     task,
-            "slug":     slug,
-            "status":   status,
-            "pr_url":   pr_url,
-            "tail":     tail,
-            "log_size": log_size,
-            "todos":    todos
-          }) %>
-        </div>
+      <!-- Stacked: live run panel on top (status row, log, plan/todos),
+           then any review-only affordances (React to PR, code-review
+           history), then the task brief at the bottom for reference. -->
+      <div class="space-y-6 animate-fade-in animate-fade-in-2">
+        <%- partial("runs/log", {
+          "project":  project,
+          "task":     task,
+          "slug":     slug,
+          "status":   status,
+          "pr_url":   pr_url,
+          "tail":     tail,
+          "log_size": log_size,
+          "todos":    todos
+        }) %>
 
-        <aside class="xl:sticky xl:top-6 space-y-4">
-          <% if task.status == "review" and task.pr_url != nil and task.pr_url != "" %>
-            <div class="rounded-xl glass-card p-4">
-              <details open>
-                <summary class="text-sm font-semibold text-indigo-300 cursor-pointer select-none">React to PR — send feedback to agent</summary>
-                <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/react" class="mt-3">
-                  <textarea name="prompt" rows="4" placeholder="e.g. fix the null check in handle_response, add unit test for edge case, update the docs…" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-sm text-slate-100 resize-y" required></textarea>
-                  <div class="mt-2 flex items-center justify-between text-xs text-slate-500 gap-2">
-                    <span class="leading-snug">The agent will implement changes in the worktree (no commit). Use &ldquo;Commit &amp; push fixes&rdquo; after review.</span>
-                    <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-3 py-1.5 transition-colors shrink-0">React</button>
-                  </div>
-                </form>
-              </details>
-            </div>
-          <% end %>
-
-          <% if task.status == "review" %>
-            <%- partial("tasks/code_review", {
-              "project":              project,
-              "task":                 task,
-              "default_plan_model":   default_plan_model,
-              "default_review_model": default_review_model,
-              "claude_options":       claude_options,
-              "opencode_options":     opencode_options,
-              "codex_options":        codex_options,
-              "reviews":              code_reviews
-            }) %>
-          <% end %>
-
-          <div class="rounded-xl glass-card border border-white/5 p-5">
-            <header class="flex items-center justify-between mb-3">
-              <h2 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Task brief</h2>
-            </header>
-            <article class="task-md text-sm">
-              <%- Markdown.to_safe_html(body_for_render) %>
-            </article>
+        <% if task.status == "review" and task.pr_url != nil and task.pr_url != "" %>
+          <div class="rounded-xl glass-card p-4">
+            <details open>
+              <summary class="text-sm font-semibold text-indigo-300 cursor-pointer select-none">React to PR — send feedback to agent</summary>
+              <form method="post" action="/projects/<%= project["name"] %>/tasks/<%= task.slug %>/react" class="mt-3">
+                <textarea name="prompt" rows="4" placeholder="e.g. fix the null check in handle_response, add unit test for edge case, update the docs…" class="w-full rounded-lg bg-slate-900/80 border border-white/10 focus:border-indigo-400/60 outline-none p-3 font-mono text-sm text-slate-100 resize-y" required></textarea>
+                <div class="mt-2 flex items-center justify-between text-xs text-slate-500 gap-2">
+                  <span class="leading-snug">The agent will implement changes in the worktree (no commit). Use &ldquo;Commit &amp; push fixes&rdquo; after review.</span>
+                  <button type="submit" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-3 py-1.5 transition-colors shrink-0">React</button>
+                </div>
+              </form>
+            </details>
           </div>
-        </aside>
+        <% end %>
+
+        <% if task.status == "review" %>
+          <%- partial("tasks/code_review", {
+            "project":              project,
+            "task":                 task,
+            "default_plan_model":   default_plan_model,
+            "default_review_model": default_review_model,
+            "claude_options":       claude_options,
+            "opencode_options":     opencode_options,
+            "codex_options":        codex_options,
+            "reviews":              code_reviews
+          }) %>
+        <% end %>
+
+        <div class="rounded-xl glass-card border border-white/5 p-6">
+          <header class="flex items-center justify-between mb-3">
+            <h2 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Task brief</h2>
+          </header>
+          <article class="task-md text-sm">
+            <%- Markdown.to_safe_html(body_for_render) %>
+          </article>
+        </div>
       </div>
     <% else %>
       <!-- Single-column brief: task hasn't been queued (todo / proposed)

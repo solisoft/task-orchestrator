@@ -356,7 +356,7 @@ run_agent() {
         "${codex_cmd[@]}" < /dev/null "$prompt"
       ) 2>> "$log_file.stderr" \
         | tee -a "$log_file.jsonl" \
-        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' | stdbuf -oL sed -u 's/\x1b\[[?;0-9]*[a-zA-Z]//g' >> "$log_file"
       ;;
     opencode)
       local opencode_cmd=(opencode run --format json --dangerously-skip-permissions -m "$task_model")
@@ -368,7 +368,7 @@ run_agent() {
         "${opencode_cmd[@]}" < /dev/null "$prompt"
       ) 2>> "$log_file.stderr" \
         | tee -a "$log_file.jsonl" \
-        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' | stdbuf -oL sed -u 's/\x1b\[[?;0-9]*[a-zA-Z]//g' >> "$log_file"
       ;;
     *)
       local claude_args=(--dangerously-skip-permissions -p --output-format stream-json --verbose)
@@ -380,7 +380,7 @@ run_agent() {
         claude "${claude_args[@]}" < /dev/null "$prompt"
       ) 2>> "$log_file.stderr" \
         | tee -a "$log_file.jsonl" \
-        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' >> "$log_file"
+        | jq -r --unbuffered -f "$claude_jq" | stdbuf -oL tr -d '\r' | stdbuf -oL sed -u 's/\x1b\[[?;0-9]*[a-zA-Z]//g' >> "$log_file"
       ;;
   esac
   local rc=${PIPESTATUS[0]}

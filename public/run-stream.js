@@ -34,6 +34,23 @@
       .replace(/'/g, "&#39;");
   }
 
+  // Strip ANSI/VT control sequences so progress bars, colour codes and
+  // cursor moves emitted by tools like `cargo`, `soli test`, `npm` don't
+  // render as literal `[32m[1m[...]` garbage in the log view.
+  //
+  // Covers:
+  //   CSI:  ESC [ <params> <final>          — colours, cursor, erase
+  //   OSC:  ESC ] ... (BEL | ESC \)         — window titles, hyperlinks
+  //   2-byte ESC sequences (charset selects, RIS, etc.)
+  //   bare BEL / lone ESC
+  // The byte cursor in the WS protocol is the *server's* file offset, so
+  // stripping here is safe — it doesn't shift any state the client tracks.
+  var ANSI_RE = /\x1b\[[?;0-9]*[ -\/]*[@-~]|\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b[@-_]|\x07/g;
+  function stripAnsi(s) {
+    if (!s) return s;
+    return s.replace(ANSI_RE, "");
+  }
+
   // Classify a log line for terminal-colour styling. Mirrors
   // task_log_line_class from app/helpers/run_helper.sl so the live
   // stream matches what the initial SSR snapshot rendered.
@@ -57,6 +74,8 @@
   // scroll away when the backfill arrives.
   function prependLogChunk(logEl, chunk) {
     if (!logEl || !chunk) return;
+    chunk = stripAnsi(chunk);
+    if (!chunk) return;
     var pre = logEl.querySelector("pre");
     if (!pre) {
       logEl.innerHTML =
@@ -64,10 +83,25 @@
       pre = logEl.querySelector("pre");
     }
     var distFromBottom = logEl.scrollHeight - logEl.scrollTop;
-    var frag = document.createDocumentFragment();
     var lines = chunk.split("\n");
     var trailingNewline = chunk.charCodeAt(chunk.length - 1) === 10;
     var last = trailingNewline ? lines.length - 1 : lines.length;
+
+    // If the prefix ends mid-line, its last entry is the start of the
+    // line whose tail SSR painted as its first <span>. Splice it onto
+    // that span so the line renders as one, instead of breaking visually
+    // at the prefix/SSR seam.
+    if (!trailingNewline && last > 0) {
+      var firstSpan = pre.querySelector("span");
+      if (firstSpan) {
+        var merged = lines[last - 1] + firstSpan.textContent;
+        firstSpan.textContent = merged;
+        firstSpan.className = "block " + lineClass(merged);
+        last = last - 1;
+      }
+    }
+
+    var frag = document.createDocumentFragment();
     for (var i = 0; i < last; i++) {
       var span = document.createElement("span");
       span.className = "block " + lineClass(lines[i]);
@@ -80,13 +114,18 @@
 
   function appendLogChunk(logEl, chunk, isSnapshot) {
     if (!logEl || !chunk) return;
+    chunk = stripAnsi(chunk);
+    if (!chunk) return;
     var pre = logEl.querySelector("pre");
     if (!pre) {
       logEl.innerHTML =
         '<pre class="font-mono text-xs leading-relaxed p-4 whitespace-pre-wrap m-0"></pre>';
       pre = logEl.querySelector("pre");
     }
-    if (isSnapshot) pre._partialSpan = null;
+    // Note: do not reset `_partialSpan` on snapshot. The snapshot's bytes
+    // are contiguous with the SSR paint (they start at the offset the
+    // client sent, which equals SSR's log_size), so any SSR-marked
+    // partial span is exactly what the snapshot needs to extend.
 
     var frag = document.createDocumentFragment();
     var start = 0;
@@ -189,6 +228,18 @@
   Controller.prototype.connect = function () {
     if (this.closed || this.terminal) return;
     var c = this;
+    // On the very first connect, adopt any SSR-marked partial span as
+    // `pre._partialSpan` so the first delta extends it in place rather
+    // than starting a new visual line. Without this, lines the agent
+    // was mid-writing at SSR time look "cut" until the user reloads.
+    if (!c.firstMessageSent && c.logSel) {
+      var logEl = c.find(c.logSel);
+      var pre = logEl ? logEl.querySelector("pre") : null;
+      if (pre && !pre._partialSpan) {
+        var marked = pre.querySelector('span[data-partial="1"]');
+        if (marked) pre._partialSpan = marked;
+      }
+    }
     try {
       c.ws = new WebSocket(buildUrl(c.url));
     } catch (err) {
