@@ -277,6 +277,7 @@ class TasksController < ApplicationController
   def _can_commit_push(task, project)
     return false if task.status != "review"
     return false if task.pr_url.nil? || task.pr_url == ""
+    return false if !Run.project_has_remote(project["path"])
     return false if !Run.run_worktree_exists(project["name"], task.slug)
     worktree_path = Run.run_worktree_path(project["name"], task.slug)
     Run.project_worktree_dirty(worktree_path)
@@ -298,8 +299,9 @@ class TasksController < ApplicationController
       return {"status": 404, "body": "Task not found"}
     end
 
-    if task.status != "inprogress" && task.status != "review" && task.status != "done"
-    || task.outcome != "local-branch"
+    eligible_status = task.status == "inprogress" || task.status == "review" || task.status == "done"
+    needs_local_branch = task.outcome != "local-branch" && Run.project_has_remote(project["path"])
+    if !eligible_status || needs_local_branch
       return {"status": 422, "body": "merge is only available for inprogress/review/done tasks with a local branch"}
     end
 
@@ -1102,7 +1104,8 @@ fn _branch_info_for(task, project)
     "exists": exists,
     "merged": Run.task_branch_merged(project_path, task.slug),
     "worktree_path": exists_in_worktree ? wt_path : nil,
-    "is_local_branch": task.outcome == "local-branch"
+    "is_local_branch": task.outcome == "local-branch",
+    "has_github_remote": Run.project_has_remote(project_path)
   }
 end
 

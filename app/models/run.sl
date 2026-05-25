@@ -546,6 +546,21 @@ class Run
     (res["stdout"] ?? "").trim() != ""
   end
 
+  # Does the project's git repo have an `origin` remote? Returns true
+  # when `git remote get-url origin` succeeds, false otherwise (including
+  # when the path is not a git repo).
+  static def project_has_remote(project_path)
+    let res = System.run_sync([
+      "git",
+      "-C",
+      project_path,
+      "remote",
+      "get-url",
+      "origin"
+    ])
+    res["exit_code"] == 0
+  end
+
   # Merge `task/<slug>` into the project's main branch with `--no-ff`
   # so the per-task branch stays visible in `git log --graph`. Refuses
   # to act unless main is currently checked out AND the working tree
