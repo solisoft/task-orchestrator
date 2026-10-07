@@ -20,14 +20,13 @@ end
 # independent so the spec can stack many fixtures.
 fn _seed_task(suffix, started_at_iso, agent_type)
   return Task.create({
-    "_key": "usagespec--" + suffix,
     "project": "usagespec",
     "slug": suffix,
     "title": "fixture " + suffix,
     "status": "inprogress",
     "started_at": started_at_iso,
     "agent_type": agent_type
-  })
+  }, {"key": "usagespec--" + suffix})
 end
 
 describe("Task.usage_by_agent", fn() {
@@ -90,13 +89,12 @@ describe("Task.usage_by_agent", fn() {
 
   test("ignores tasks with no started_at", fn() {
     Task.create({
-      "_key": "usagespec--neverran",
       "project": "usagespec",
       "slug": "neverran",
       "title": "still in todo",
       "status": "todo",
       "agent_type": "claude"
-    })
+    }, {"key": "usagespec--neverran"})
     h = Task.usage_by_agent("day")
     assert_eq(h["claude"], 0)
   })
@@ -153,13 +151,12 @@ describe("Task.effective_agent", fn() {
 
   test("returns the per-task agent_type when set", fn() {
     t = Task.create({
-      "_key": "agspec--withtype",
       "project": "agspec",
       "slug": "withtype",
       "title": "x",
       "status": "todo",
       "agent_type": "opencode-sdk"
-    })
+    }, {"key": "agspec--withtype"})
     assert_eq(Task.effective_agent(t), "opencode-sdk")
   })
 
@@ -168,49 +165,45 @@ describe("Task.effective_agent", fn() {
     fn() {
       Setting.set("agent_type", "opencode")
       t = Task.create({
-        "_key": "agspec--notype",
         "project": "agspec",
         "slug": "notype",
         "title": "x",
         "status": "todo"
-      })
+      }, {"key": "agspec--notype"})
       assert_eq(Task.effective_agent(t), "opencode")
     }
   )
 
   test("routes codex/ model to codex agent", fn() {
     t = Task.create({
-      "_key": "agspec--codex",
       "project": "agspec",
       "slug": "codex",
       "title": "x",
       "status": "todo",
       "model": "codex/gpt-4o"
-    })
+    }, {"key": "agspec--codex"})
     assert_eq(Task.effective_agent(t), "codex")
   })
 
   test("routes provider/model to opencode, not codex", fn() {
     t = Task.create({
-      "_key": "agspec--opencode",
       "project": "agspec",
       "slug": "opencode",
       "title": "x",
       "status": "todo",
       "model": "deepseek/deepseek-chat"
-    })
+    }, {"key": "agspec--opencode"})
     assert_eq(Task.effective_agent(t), "opencode")
   })
 
   test("routes claude-* model to claude", fn() {
     t = Task.create({
-      "_key": "agspec--claude",
       "project": "agspec",
       "slug": "claude",
       "title": "x",
       "status": "todo",
       "model": "claude-opus-4-7"
-    })
+    }, {"key": "agspec--claude"})
     assert_eq(Task.effective_agent(t), "claude")
   })
 
@@ -221,13 +214,12 @@ describe("Task.effective_agent", fn() {
 
   test("display_model returns task.model when set", fn() {
     t = Task.create({
-      "_key": "agspec--display",
       "project": "agspec",
       "slug": "display",
       "title": "x",
       "status": "todo",
       "model": "codex/gpt-4o"
-    })
+    }, {"key": "agspec--display"})
     assert_eq(Task.display_model(t), "codex/gpt-4o")
   })
 
@@ -236,12 +228,11 @@ describe("Task.effective_agent", fn() {
     fn() {
       Setting.set("agent_type", "claude")
       t = Task.create({
-        "_key": "agspec--display-fallback",
         "project": "agspec",
         "slug": "display-fallback",
         "title": "x",
         "status": "todo"
-      })
+      }, {"key": "agspec--display-fallback"})
       assert_eq(Task.display_model(t), "claude")
     }
   )
@@ -311,26 +302,23 @@ describe("Task.counts_by_project", fn() {
     "groups rows by project and zero-fills every status",
     fn() {
       Task.create({
-        "_key": "alpha--a1",
         "project": "alpha",
         "slug": "a1",
         "title": "x",
         "status": "todo"
-      })
+      }, {"key": "alpha--a1"})
       Task.create({
-        "_key": "alpha--a2",
         "project": "alpha",
         "slug": "a2",
         "title": "x",
         "status": "done"
-      })
+      }, {"key": "alpha--a2"})
       Task.create({
-        "_key": "beta--b1",
         "project": "beta",
         "slug": "b1",
         "title": "x",
         "status": "review"
-      })
+      }, {"key": "beta--b1"})
       h = Task.counts_by_project()
       assert_eq(h["alpha"]["todo"], 1)
       assert_eq(h["alpha"]["done"], 1)
@@ -344,12 +332,11 @@ describe("Task.counts_by_project", fn() {
     "omits projects with no tasks (caller handles default)",
     fn() {
       Task.create({
-        "_key": "alpha--a1",
         "project": "alpha",
         "slug": "a1",
         "title": "x",
         "status": "todo"
-      })
+      }, {"key": "alpha--a1"})
       h = Task.counts_by_project()
       # `beta` was never seeded — the hash simply has no key for it.
       assert_null(h["beta"])
@@ -380,12 +367,11 @@ describe("Task.dashboard_scan", fn() {
   test("counts_by_project matches the standalone helper", fn() {
     _seed_task("a1", _iso_seconds_ago(60), "claude")
     Task.create({
-      "_key": "beta--b1",
       "project": "beta",
       "slug": "b1",
       "title": "x",
       "status": "done"
-    })
+    }, {"key": "beta--b1"})
     scan = Task.dashboard_scan(["day", "week"])
     assert_eq(scan["counts_by_project"], Task.counts_by_project())
   })
@@ -418,26 +404,23 @@ describe("Task.for_project", fn() {
 
   test("returns tasks for the given project", fn() {
     Task.create({
-      "_key": "p--a",
       "project": "p",
       "slug": "a",
       "title": "A",
       "status": "todo"
-    })
+    }, {"key": "p--a"})
     Task.create({
-      "_key": "p--b",
       "project": "p",
       "slug": "b",
       "title": "B",
       "status": "done"
-    })
+    }, {"key": "p--b"})
     Task.create({
-      "_key": "q--c",
       "project": "q",
       "slug": "c",
       "title": "C",
       "status": "todo"
-    })
+    }, {"key": "q--c"})
     tasks = Task.for_project("p")
     assert_eq(tasks.length(), 2)
   })
@@ -455,19 +438,17 @@ describe("Task.board_for", fn() {
     "returns every kanban column with tasks under them",
     fn() {
       Task.create({
-        "_key": "p--a",
         "project": "p",
         "slug": "a",
         "title": "A",
         "status": "todo"
-      })
+      }, {"key": "p--a"})
       Task.create({
-        "_key": "p--b",
         "project": "p",
         "slug": "b",
         "title": "B",
         "status": "review"
-      })
+      }, {"key": "p--b"})
       board = Task.board_for("p")
       assert_hash_has_key(board, "todo")
       assert_hash_has_key(board, "review")
@@ -503,26 +484,23 @@ describe("Task.known_projects", fn() {
 
   test("returns sorted project names that have tasks", fn() {
     Task.create({
-      "_key": "b--t1",
       "project": "b",
       "slug": "t1",
       "title": "T1",
       "status": "todo"
-    })
+    }, {"key": "b--t1"})
     Task.create({
-      "_key": "a--t1",
       "project": "a",
       "slug": "t1",
       "title": "T2",
       "status": "todo"
-    })
+    }, {"key": "a--t1"})
     Task.create({
-      "_key": "c--t1",
       "project": "c",
       "slug": "t1",
       "title": "T3",
       "status": "todo"
-    })
+    }, {"key": "c--t1"})
     projects = Task.known_projects()
     assert_eq(projects, [
       "a",

@@ -1,6 +1,6 @@
 [Unit]
 Description=Task orchestrator dispatcher (global)
-Documentation=file://%h/workspace/soli/task-orchestrator/README.md
+Documentation=file://@ORCHESTRATOR_DIR@/README.md
 # Single global daemon — opens a WebSocket live-query against solidb's
 # `tasks` collection and CAS-claims rows entering `status == queued`.
 # Enable with: ./bin/install-dispatcher
@@ -9,14 +9,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/workspace/soli/task-orchestrator
+WorkingDirectory=@ORCHESTRATOR_DIR@
 # systemd-user services don't load ~/.bashrc, so we have to spell out
 # the PATH the dispatcher and its child task-run need (claude, gh, bun,
 # git, jq, opencode). The mise shims dir resolves bun to whatever
 # version is currently active without pinning a path that rots after
 # upgrades.
 Environment=PATH=%h/.local/bin:%h/.opencode/bin:%h/.local/share/mise/shims:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/env bun %h/workspace/soli/task-orchestrator/bin/task-dispatch
+ExecStart=/usr/bin/env bun @ORCHESTRATOR_DIR@/bin/task-dispatch
 # Always restart — the dispatcher is the bottleneck for the whole queue.
 # A 5s delay matches the WebSocket reconnect cadence inside the script
 # itself, so we don't churn against a flaky solidb / network.

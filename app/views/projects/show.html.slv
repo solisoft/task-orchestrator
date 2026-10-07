@@ -1,5 +1,5 @@
 <div class="min-h-screen text-white">
-  <div class="max-w-5xl mx-auto px-6 py-10">
+  <div class="w-full px-6 lg:px-10 py-10">
 
     <header class="mb-8 flex items-baseline justify-between gap-4 flex-wrap animate-fade-in">
       <div>
@@ -11,10 +11,33 @@
         <p class="text-xs text-slate-500 font-mono mt-1"><%= project["path"] %></p>
       </div>
       <div class="flex items-center gap-2">
+        <% if ticket_source["ready"] %>
+          <form method="post" action="/projects/<%= project["name"] %>/tickets/import" class="inline">
+            <button type="submit" title="Import tickets matching the project's rules from <%= ticket_source["provider"] %>"
+                    class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-3 py-2 transition-colors">⇣ Import tickets</button>
+          </form>
+        <% end %>
+        <button type="button" title="Project settings (tickets, webhooks)"
+                onclick="document.getElementById('project-settings-modal').showModal()"
+                class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-3 py-2 transition-colors">⚙ Settings</button>
         <a href="/projects/<%= project["name"] %>/versions/new" class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">+ New cycle</a>
         <a href="/features/new?project=<%= project["name"] %>" class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">+ New feature</a>
       </div>
     </header>
+
+    <% if ticket_notice %>
+      <div role="status"
+           class="mb-4 rounded-lg border px-4 py-2 text-sm <%= ticket_notice["kind"] == "error" ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200" %>">
+        <%= ticket_notice["text"] %>
+      </div>
+    <% end %>
+
+    <%- partial("projects/settings_modal", {
+        "project":          project,
+        "webhook_settings": webhook_settings,
+        "ticket_config":    ticket_config,
+        "ticket_source":    ticket_source
+    }) %>
 
     <!-- hub tab strip: Shape → Bet → Build → Ship → Cycles -->
     <nav class="flex items-center gap-1 border-b border-white/10 mb-6 animate-fade-in overflow-x-auto">
@@ -63,6 +86,7 @@
           "indicators":  indicators,
           "totals":      totals,
           "agents":      agents,
+          "pr_badges":   pr_badges,
           "statuses":    statuses,
           "active_tab":  active_tab
       }) %>

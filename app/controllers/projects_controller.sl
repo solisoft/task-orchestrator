@@ -10,6 +10,7 @@ class ProjectsController < ApplicationController
   indicators: Any
   totals: Any
   agents: Any
+  pr_badges: Any
   statuses: Any
   active_tab: Any
   hub_tab: Any
@@ -24,6 +25,10 @@ class ProjectsController < ApplicationController
   build_lanes: Any
   build_view: Any
   ship_rows: Any
+  webhook_settings: Any
+  ticket_config: Any
+  ticket_source: Any
+  ticket_notice: Any
 
   def index(req)
     projects = Project.list_projects() rescue []
@@ -96,6 +101,7 @@ class ProjectsController < ApplicationController
     @indicators = indicators_for(name, columns)
     @totals = totals_for(name, columns)
     @agents = agents_for(columns)
+    @pr_badges = pr_badges_for(columns)
     @statuses = Task.kanban_statuses() + ["archived"]
     @active_tab = board_tab
     @hub_tab = hub_tab
@@ -112,7 +118,98 @@ class ProjectsController < ApplicationController
     @build_lanes = build_lanes
     @build_view = build_view
     @ship_rows = ship_rows
+    @webhook_settings = this._webhook_settings(name)
+    # Raw config fills the form (blank = "derive from origin"); the resolved
+    # one shows what an import would actually read. Never hand the Bonfire
+    # token to the view.
+    @ticket_config = TicketSource.config_for(name)
+    @ticket_source = TicketSource.resolve(@ticket_config, Run.project_remote_url(project["path"]))
+    @ticket_source.delete("token")
+    @ticket_notice = this._ticket_notice(req)
     render("projects/show")
+  end
+
+  # Data for the project settings modal: the per-project webhook secrets
+  # (empty string when unset) and whether a global fallback exists, so
+  # the modal can say "using global secret" instead of looking broken.
+  def _webhook_settings(name)
+    github_global = Setting.get("github_webhook_secret") rescue nil
+    gitlab_global = Setting.get("gitlab_webhook_secret") rescue nil
+    {
+      "github_secret": Setting.get("github_webhook_secret:" + name) ?? "",
+      "gitlab_secret": Setting.get("gitlab_webhook_secret:" + name) ?? "",
+      "github_global": github_global.present? && github_global != "",
+      "gitlab_global": gitlab_global.present? && gitlab_global != ""
+    }
+  end
+
+  # POST /projects/:name/settings — persist the settings modal form.
+  # Empty secret fields clear the per-project row (falling back to the
+  # global secret); non-empty values upsert it.
+  def update_settings(req)
+    name = req["params"]["name"]
+    project = Project.find_project(name)
+    if project.nil?
+      return {"status": 404, "body": "Unknown project: " + name}
+    end
+
+    form = req["all"] ?? req["form"] ?? req["json"] ?? {}
+    # Ticket-source fields only arrive from the modal (sentinel field), so a
+    # webhook-only POST can't reset the rules to their defaults.
+    if form["ticket_source_form"] == "1"
+      saved = TicketSource.save_config(name, form)
+      return {"status": 422, "body": saved["error"]} if !saved["ok"]
+    end
+    this._apply_webhook_secret("github", name, form["github_webhook_secret"])
+    this._apply_webhook_secret("gitlab", name, form["gitlab_webhook_secret"])
+    redirect("/projects/" + name)
+  end
+
+  # POST /projects/:name/tickets/import — pull the tickets matching the
+  # project's ticket-source rules into `todo` tasks, then back to the
+  # board with a created/skipped (or error) notice.
+  def import_tickets(req)
+    name = req["params"]["name"]
+    project = Project.find_project(name)
+    if project.nil?
+      return {"status": 404, "body": "Unknown project: " + name}
+    end
+
+    author = session_get("user_email") ?? ""
+    result = TicketSource.import_tickets(name, Run.project_remote_url(project["path"]), author)
+    if !result["ok"]
+      return redirect("/projects/" + name + "?tickets_error=" + url_encode(result["error"] ?? "Import failed"))
+    end
+
+    counts = "tickets_created=" + str(result["created"]) + "&tickets_skipped=" + str(result["skipped"])
+    redirect("/projects/" + name + "?" + counts)
+  end
+
+  # Banner after an import redirect: nil, {"kind": "error", "text"} or
+  # {"kind": "ok", "text"}.
+  def _ticket_notice(req)
+    query = req["query"] ?? {}
+    err = req["params"]["tickets_error"] ?? query["tickets_error"]
+    return {"kind": "error", "text": "Ticket import failed: " + err} if err.present?
+
+    created = req["params"]["tickets_created"] ?? query["tickets_created"]
+    return nil if created.nil?
+
+    skipped = req["params"]["tickets_skipped"] ?? query["tickets_skipped"] ?? "0"
+    {"kind": "ok", "text": "Imported " + str(created) + " ticket(s) — " + str(skipped) + " already on the board."}
+  end
+
+  # Persist or clear one per-project webhook secret. A nil raw value
+  # means the field wasn't submitted — leave the stored row untouched.
+  def _apply_webhook_secret(host, name, raw)
+    return nil if raw.nil?
+    key = host + "_webhook_secret:" + name
+    value = str(raw).trim()
+    if value == ""
+      Setting.unset(key)
+    else
+      Setting.set(key, value)
+    end
   end
 
   # Resolve the hub-level tab. New canonical names: shape | bet | build |
@@ -120,10 +217,12 @@ class ProjectsController < ApplicationController
   # don't 404: board → build, roadmap → cycles, features → build,
   # overview → cycles.
   def _pick_hub_tab(requested)
-    if requested == "shape" || requested == "bet" || requested == "build" || requested == "ship"
-    || requested == "cycles"
-      return requested
-    end
+    # A membership test rather than a five-way `||` chain — which is also how
+    # this file came to be unparseable: the chain was wrapped with the operator
+    # leading the next line, and an expression ends at the newline unless the
+    # line ends with the operator. The parser then read `|| requested ==
+    # "cycles"` as a new statement and ran out of input looking for the `end`.
+    return requested if ["shape", "bet", "build", "ship", "cycles"].includes?(requested)
 
     return "build" if requested == "board" || requested == "features"
     return "cycles" if requested == "roadmap" || requested == "overview"
@@ -338,6 +437,20 @@ fn agents_for(columns)
     if columns[status].present?
       for task in columns[status]
         h[task.slug] = Task.display_model(task)
+      end
+    end
+  end
+  h
+end
+
+# Pre-compute the PR-state badge (open/draft/merged/closed or nil) for
+# every task on the board — views can't call model statics.
+fn pr_badges_for(columns)
+  h = {}
+  for status in (Task.kanban_statuses() + ["archived"])
+    if columns[status].present?
+      for task in columns[status]
+        h[task.slug] = Task.pr_badge(task)
       end
     end
   end

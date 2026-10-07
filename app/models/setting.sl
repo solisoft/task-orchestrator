@@ -8,7 +8,6 @@
 # (`get_or`), and writes always go through the upsert path so the same
 # code can both create and overwrite a setting.
 class Setting < Model
-  validates("_key", {"presence": true})
 
   # SoliKV cache TTL for memoized Setting.get reads (seconds). Settings
   # change rarely — theme, plan_model, agent caps — so a 5-minute TTL
@@ -132,6 +131,33 @@ class Setting < Model
     return true
   end
 
+  # Webhook secret for `host` ("github" | "gitlab"), preferring the
+  # per-project row (`<host>_webhook_secret:<project>`, managed from the
+  # project settings modal) over the global `<host>_webhook_secret`.
+  static def webhook_secret(host, project)
+    scoped = Setting.get(host + "_webhook_secret:" + project) rescue nil
+    return scoped if scoped.present? && scoped != ""
+    Setting.get(host + "_webhook_secret") rescue nil
+  end
+
+  # Every configured webhook secret for `host` — the global key plus all
+  # per-project `<host>_webhook_secret:<project>` rows. Webhook signature
+  # verification runs BEFORE the payload can be trusted (so before the
+  # project is known); the handler accepts a delivery signed with any
+  # configured secret. One Setting.all() scan per delivery — webhooks
+  # are low-traffic, so no cache layer here.
+  static def webhook_secrets(host)
+    prefix = host + "_webhook_secret"
+    out = []
+    for s in Setting.all()
+      key = s._key ?? ""
+      next if key != prefix && !key.starts_with(prefix + ":")
+      v = s.value ?? ""
+      out.push(v) if v != ""
+    end
+    out
+  end
+
   # Upsert: creates the row if missing, otherwise overwrites `value`.
   # Returns the persisted instance (or nil when the underlying update
   # didn't return one — Model.update is a static that returns the raw
@@ -152,9 +178,8 @@ class Setting < Model
     existing = Setting.find_by("_key", key)
     if existing.nil?
       created = Setting.create({
-        "_key": key,
         "value": value
-      })
+      }, {"key": key})
       Cache.delete(Setting._cache_key(key)) rescue null
       return created
     end

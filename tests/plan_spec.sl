@@ -14,23 +14,21 @@ describe("Plan.effective_status", fn() {
 
   test("returns the raw status for terminal: done", fn() {
     plan = Plan.create({
-      "_key": "plan-test-done",
       "project": "x",
       "plan_id": "plan-test-done",
       "status": "done",
       "pid": nil
-    })
+    }, {"key": "plan-test-done"})
     assert_eq(plan.effective_status, "done")
   })
 
   test("returns the raw status for terminal: failed:*", fn() {
     plan = Plan.create({
-      "_key": "plan-test-failed",
       "project": "x",
       "plan_id": "plan-test-failed",
       "status": "failed:rc=1",
       "pid": nil
-    })
+    }, {"key": "plan-test-failed"})
     assert_eq(plan.effective_status, "failed:rc=1")
   })
 
@@ -48,12 +46,11 @@ describe("Plan.effective_status", fn() {
     ])
     live_pid = spawn["stdout"].trim().to_int()
     plan = Plan.create({
-      "_key": "plan-test-alive",
       "project": "x",
       "plan_id": "plan-test-alive",
       "status": "starting",
       "pid": live_pid
-    })
+    }, {"key": "plan-test-alive"})
     assert_eq(plan.effective_status, "starting")
   })
 
@@ -62,12 +59,11 @@ describe("Plan.effective_status", fn() {
     # PID 2^31 - 1 is reserved as "no process" on Linux — kill -0
     # against it always returns ESRCH.
     plan = Plan.create({
-      "_key": "plan-test-zombie",
       "project": "x",
       "plan_id": "plan-test-zombie",
       "status": "starting",
       "pid": 2147483647
-    })
+    }, {"key": "plan-test-zombie"})
     s = plan.effective_status
     assert(s.starts_with("failed:zombie"))
   })
@@ -78,12 +74,11 @@ describe("Plan.effective_status", fn() {
     # by the touch_timestamps callback to now, so override it after
     # creation (save() refreshes it; bypass via direct AQL).
     plan = Plan.create({
-      "_key": "plan-test-heartbeat",
       "project": "x",
       "plan_id": "plan-test-heartbeat",
       "status": "starting",
       "pid": nil
-    })
+    }, {"key": "plan-test-heartbeat"})
     plan.updated_at = "2020-01-01T00:00:00Z"
     # touch_timestamps would overwrite updated_at on save(); test the
     # method in isolation against an in-memory mutation.
@@ -94,12 +89,11 @@ describe("Plan.effective_status", fn() {
     "prompt_preview returns the whole prompt under the cap",
     fn() {
       plan = Plan.create({
-        "_key": "plan-prev-short",
         "project": "x",
         "plan_id": "plan-prev-short",
         "status": "done",
         "prompt": "short prompt"
-      })
+      }, {"key": "plan-prev-short"})
       assert_eq(plan.prompt_preview(100), "short prompt")
     }
   )
@@ -114,12 +108,11 @@ describe("Plan.effective_status", fn() {
         i = i + 1
       end
       plan = Plan.create({
-        "_key": "plan-prev-long",
         "project": "x",
         "plan_id": "plan-prev-long",
         "status": "done",
         "prompt": long
-      })
+      }, {"key": "plan-prev-long"})
       out = plan.prompt_preview(100)
       # The ellipsis is multi-byte under UTF-8 (Soli .length returns
       # bytes), so check the byte count is 100 'a's + 3 for "…".
@@ -132,12 +125,11 @@ describe("Plan.effective_status", fn() {
     "prompt_preview collapses newlines into single line",
     fn() {
       plan = Plan.create({
-        "_key": "plan-prev-nl",
         "project": "x",
         "plan_id": "plan-prev-nl",
         "status": "done",
         "prompt": "line one\nline two\nline three"
-      })
+      }, {"key": "plan-prev-nl"})
       assert_eq(plan.prompt_preview(100).index_of("\n"), -1)
     }
   )
@@ -146,12 +138,11 @@ describe("Plan.effective_status", fn() {
     "keeps starting when no pid and updated_at is recent",
     fn() {
       plan = Plan.create({
-        "_key": "plan-test-recent",
         "project": "x",
         "plan_id": "plan-test-recent",
         "status": "starting",
         "pid": nil
-      })
+      }, {"key": "plan-test-recent"})
 
       # touch_timestamps sets updated_at to now on create, so this is
       # well within the 10-minute window.
@@ -178,13 +169,12 @@ describe(
         ])
         live_pid = spawn["stdout"].trim().to_int()
         Plan.create({
-          "_key": "plan-stream-snap",
           "project": "x",
           "plan_id": "plan-stream-snap",
           "status": "starting",
           "log": "boot...\nready\n",
           "pid": live_pid
-        })
+        }, {"key": "plan-stream-snap"})
         p = plan_stream_payload("plan-stream-snap", "connect", 0)
         assert_eq(p["event"], "snapshot")
         assert_eq(p["log_chunk"], "boot...\nready\n")
@@ -201,13 +191,12 @@ describe(
       ])
       live_pid = spawn["stdout"].trim().to_int()
       Plan.create({
-        "_key": "plan-stream-delta",
         "project": "x",
         "plan_id": "plan-stream-delta",
         "status": "starting",
         "log": "abcdefghij",
         "pid": live_pid
-      })
+      }, {"key": "plan-stream-delta"})
       p = plan_stream_payload("plan-stream-delta", "message", 4)
       assert_eq(p["event"], "delta")
       assert_eq(p["log_chunk"], "efghij")
@@ -216,12 +205,11 @@ describe(
 
     test("flips terminal=true on done", fn() {
       Plan.create({
-        "_key": "plan-stream-done",
         "project": "x",
         "plan_id": "plan-stream-done",
         "status": "done",
         "log": "all green\n"
-      })
+      }, {"key": "plan-stream-done"})
       p = plan_stream_payload("plan-stream-done", "message", 0)
       assert_eq(p["terminal"], true)
     })
@@ -248,12 +236,12 @@ describe("Plan.allow_plan_model / _is_codex_model_id", fn() {
 
   test(
     "allow_plan_model rejects bare model without codex/ prefix",
-    fn() { assert_eq(Plan.allow_plan_model("gpt-4o"), "claude-sonnet-4-6") }
+    fn() { assert_eq(Plan.allow_plan_model("gpt-4o"), Plan.default_claude_model()) }
   )
 
   test(
     "allow_plan_model rejects codex/ with empty model",
-    fn() { assert_eq(Plan.allow_plan_model("codex/"), "claude-sonnet-4-6") }
+    fn() { assert_eq(Plan.allow_plan_model("codex/"), Plan.default_claude_model()) }
   )
 
   test("allow_plan_model still accepts Claude SDK ids", fn() {
@@ -291,8 +279,8 @@ describe("Plan.default_plan_model", fn() {
   })
 
   test(
-    "returns claude-sonnet-4-6 when nothing is persisted",
-    fn() { assert_eq(Plan.default_plan_model(), "claude-sonnet-4-6") }
+    "returns the default Claude model when nothing is persisted",
+    fn() { assert_eq(Plan.default_plan_model(), "claude-sonnet-5-5") }
   )
 
   test("returns the persisted plan_model", fn() {
@@ -363,9 +351,18 @@ describe("Plan.is_allowed_model", fn() {
 describe("Plan.claude_model_ids / claude_model_labels", fn() {
   test("claude_model_ids returns the expected list", fn() {
     ids = Plan.claude_model_ids()
-    assert(ids.contains("claude-opus-4-7"))
-    assert(ids.contains("claude-sonnet-4-6"))
-    assert_eq(ids.length(), 3)
+    assert(ids.contains("claude-fable-5-1"))
+    assert(ids.contains("claude-opus-5-5"))
+    assert(ids.contains("claude-sonnet-5-5"))
+    assert(ids.contains("claude-haiku-4-5-20251001"))
+    assert_eq(ids.length(), 4)
+  })
+
+  test("legacy ids are no longer offered but still accepted", fn() {
+    assert_not(Plan.claude_model_ids().contains("claude-opus-4-7"))
+    assert_eq(Plan.allow_plan_model("claude-opus-4-7"), "claude-opus-4-7")
+    assert_eq(Plan.allow_plan_model("claude-sonnet-4-6"), "claude-sonnet-4-6")
+    assert_eq(Plan.claude_model_labels()["claude-opus-4-7"], "Opus 4.7 (legacy)")
   })
 
   test(

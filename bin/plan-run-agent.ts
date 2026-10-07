@@ -16,7 +16,7 @@
 // Flags:
 //   --plan-id <id>       Plan id (e.g. "plan-1778347304").
 //   --notes-path <path>  Path to the user's rough notes.
-//   --model <id>         Optional Claude model id (e.g. "claude-opus-4-7").
+//   --model <id>         Optional Claude model id (e.g. "claude-opus-5-5").
 //                        When omitted, the SDK's default applies.
 //   --project-dir <dir>  Project root the plan is about. The agent reads
 //                        *that* CLAUDE.md and globs *that* tree, not

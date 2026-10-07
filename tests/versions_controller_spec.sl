@@ -16,7 +16,7 @@ end
 # Setup helper: ensure a project directory exists on disk so find_project() works.
 fn _ensure_project(name)
   root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec"
-  System.run_sync(["mkdir", "-p", root + "/" + name + "/tasks/todo"])
+  System.run_sync(["mkdir", "-p", root + "/" + name + "/tasks/todo", root + "/" + name + "/.git"])
   root + "/" + name
 end
 
@@ -145,28 +145,25 @@ describe("Feature.for_version", fn() {
       "status": "planned"
     })
     Feature.create({
-      "_key": "p--f1",
       "project": "p",
       "slug": "f1",
       "title": "F1",
       "status": "draft",
       "version_id": v._key
-    })
+    }, {"key": "p--f1"})
     Feature.create({
-      "_key": "p--f2",
       "project": "p",
       "slug": "f2",
       "title": "F2",
       "status": "draft",
       "version_id": v._key
-    })
+    }, {"key": "p--f2"})
     Feature.create({
-      "_key": "p--f3",
       "project": "p",
       "slug": "f3",
       "title": "F3",
       "status": "draft"
-    })
+    }, {"key": "p--f3"})
     feats = Feature.for_version(v._key)
     assert_eq(feats.length(), 2)
   })
@@ -179,12 +176,11 @@ describe("Feature.for_version", fn() {
     "existing features without version_id continue to work",
     fn() {
       f = Feature.create({
-        "_key": "p--noversion",
         "project": "p",
         "slug": "noversion",
         "title": "No version",
         "status": "draft"
-      })
+      }, {"key": "p--noversion"})
       assert(f._errors.nil?)
       assert_null(f.version_id)
     }

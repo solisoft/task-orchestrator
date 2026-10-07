@@ -37,6 +37,7 @@
           <% end %>
           <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>" class="flex-1 min-w-0">
             <div class="text-sm text-slate-100 leading-snug"><%= task.title %></div>
+            <%- partial("tasks/labels", {"labels": task.source_labels, "size": "xs"}) %>
             <div class="text-xs font-mono text-slate-500 mt-0.5 truncate"><%= task.slug %></div>
             <% _author = (task.author ?? "").trim() %>
             <% if _author != "" %>
@@ -45,6 +46,16 @@
           </a>
           <% if agents != nil and agents[task.slug] != nil %>
             <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-slate-800/80 border border-white/5 text-slate-400 px-2 py-0.5 flex-shrink-0" title="agent that runs /do-task"><%= agents[task.slug] %></span>
+          <% end %>
+          <% _pr_badge = (locals["pr_badges"] ?? {})[task.slug] %>
+          <% if _pr_badge == "merged" %>
+            <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-purple-500/15 border border-purple-400/30 text-purple-300 px-2 py-0.5 flex-shrink-0" title="PR merged">merged</span>
+          <% elsif _pr_badge == "open" %>
+            <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 px-2 py-0.5 flex-shrink-0" title="PR open">PR open</span>
+          <% elsif _pr_badge == "draft" %>
+            <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-slate-700/60 border border-white/10 text-slate-400 px-2 py-0.5 flex-shrink-0" title="PR is a draft">draft</span>
+          <% elsif _pr_badge == "closed" %>
+            <span class="text-[10px] font-mono uppercase tracking-wide rounded-md bg-red-500/15 border border-red-400/30 text-red-300 px-2 py-0.5 flex-shrink-0" title="PR closed without merge">closed</span>
           <% end %>
           <% if indicators[task.slug] != nil %>
             <a href="/projects/<%= project["name"] %>/tasks/<%= task.slug %>" title="View run log" class="px-2 py-1 text-sm text-slate-400 hover:text-indigo-300 hover:bg-indigo-400/15 rounded opacity-0 group-hover:opacity-100 transition-opacity">📜</a>

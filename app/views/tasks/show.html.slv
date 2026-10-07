@@ -19,6 +19,12 @@
       <div>
         <h1 class="text-2xl font-bold gradient-text"><%= task.title %></h1>
         <p class="text-xs text-slate-500 mt-1 font-mono"><%= task.slug %></p>
+        <% if (task.source_url ?? "") != "" %>
+          <p class="text-xs text-slate-500 mt-1">
+            <a href="<%= _safe_link_url(task.source_url) %>" target="_blank" rel="noopener" class="text-indigo-300 hover:text-indigo-200"><%= task.source ?? "ticket" %> <%= task.source_ref ?? "" %> ↗</a>
+          </p>
+        <% end %>
+        <%- partial("tasks/labels", {"labels": task.source_labels, "size": "sm"}) %>
         <p class="text-xs text-slate-500 mt-1 flex items-center flex-wrap gap-2">
           <span>
             Status:
@@ -50,6 +56,16 @@
               Open PR
               <svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V8h1v6H2V2h6v1H3zm6.5 0h3.5v3.5h-1V4.7L8.4 9.3l-.7-.7L12.3 4H9.5V3z"/></svg>
             </a>
+            <% _pr_state = (task.pr_state ?? "") != "" ? task.pr_state : "open" %>
+            <% if _pr_state == "merged" %>
+              <span class="inline-block rounded-full bg-purple-500/15 border border-purple-400/30 text-purple-300 px-2.5 py-0.5 text-xs font-medium" title="PR merged">merged</span>
+            <% elsif _pr_state == "draft" %>
+              <span class="inline-block rounded-full bg-slate-700/60 border border-white/10 text-slate-400 px-2.5 py-0.5 text-xs font-medium" title="PR is a draft">draft</span>
+            <% elsif _pr_state == "closed" %>
+              <span class="inline-block rounded-full bg-red-500/15 border border-red-400/30 text-red-300 px-2.5 py-0.5 text-xs font-medium" title="PR closed without merge">closed</span>
+            <% else %>
+              <span class="inline-block rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 px-2.5 py-0.5 text-xs font-medium" title="PR open">open</span>
+            <% end %>
           <% end %>
         </p>
       </div>

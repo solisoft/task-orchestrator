@@ -30,12 +30,11 @@ describe("CommentsController", fn() {
       User.register("commenter@test.com", "password", "Commenter")
       login("commenter@test.com", "password")
       Feature.create({
-        "_key": "proj--feat",
         "project": "proj",
         "slug": "feat",
         "title": "Feature",
         "status": "draft"
-      })
+      }, {"key": "proj--feat"})
       response = post(
         "/features/proj--feat/comments",
         {"body": "Great feature!"},
@@ -53,12 +52,11 @@ describe("CommentsController", fn() {
         User.register("commenter@test.com", "password", "Commenter")
         login("commenter@test.com", "password")
         Feature.create({
-          "_key": "proj--feat",
           "project": "proj",
           "slug": "feat",
           "title": "Feature",
           "status": "draft"
-        })
+        }, {"key": "proj--feat"})
         response = post(
           "/features/proj--feat/comments",
           {"body": "Header check"},
@@ -77,12 +75,11 @@ describe("CommentsController", fn() {
         User.register("commenter@test.com", "password", "Commenter")
         login("commenter@test.com", "password")
         Feature.create({
-          "_key": "proj--empty-body",
           "project": "proj",
           "slug": "empty-body",
           "title": "Empty",
           "status": "draft"
-        })
+        }, {"key": "proj--empty-body"})
         response = post(
           "/features/proj--empty-body/comments",
           {"body": ""},
@@ -99,12 +96,11 @@ describe("CommentsController", fn() {
         User.register("commenter@test.com", "password", "Commenter")
         login("commenter@test.com", "password")
         Feature.create({
-          "_key": "proj--ws-body",
           "project": "proj",
           "slug": "ws-body",
           "title": "WS",
           "status": "draft"
-        })
+        }, {"key": "proj--ws-body"})
         response = post(
           "/features/proj--ws-body/comments",
           {"body": "   \n  "},
@@ -130,12 +126,11 @@ describe("CommentsController", fn() {
         User.register("owner@test.com", "password", "Owner")
         User.register("intruder@test.com", "password", "Intruder")
         Feature.create({
-          "_key": "proj--shared",
           "project": "proj",
           "slug": "shared",
           "title": "Shared",
           "status": "draft"
-        })
+        }, {"key": "proj--shared"})
         Comment.create_comment("proj--shared", "owner@test.com", "Mine")
         key = Comment.for_feature("proj--shared")[0]._key
         login("intruder@test.com", "password")
@@ -152,12 +147,11 @@ describe("CommentsController", fn() {
         User.register("owner@test.com", "password", "Owner")
         login("owner@test.com", "password")
         Feature.create({
-          "_key": "proj--mine",
           "project": "proj",
           "slug": "mine",
           "title": "Mine",
           "status": "draft"
-        })
+        }, {"key": "proj--mine"})
         Comment.create_comment("proj--mine", "owner@test.com", "Going away")
         key = Comment.for_feature("proj--mine")[0]._key
         response = post("/comments/" + key + "/delete", {}, {"headers": {"Origin": _comments_origin()}})

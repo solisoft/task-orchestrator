@@ -49,12 +49,11 @@ end
 
 fn _psn_seed_plan(plan_id, status)
   Plan.create({
-    "_key": "psn--" + plan_id,
     "project": "psn",
     "plan_id": plan_id,
     "status": status,
     "prompt": "prompt for " + plan_id
-  })
+  }, {"key": "psn--" + plan_id})
 end
 
 fn _psn_reset
@@ -120,13 +119,12 @@ describe("Plan status-change notification", fn() {
 
   test("URL links to task when task_slug is set", fn() {
     Plan.create({
-      "_key": "psn--with-task",
       "project": "psn",
       "plan_id": "with-task",
       "status": "starting",
       "task_slug": "SEC-100",
       "prompt": "prompt with task"
-    })
+    }, {"key": "psn--with-task"})
     Plan.append_status("psn--with-task", "done")
     payloads = _psn_my_payloads()
     assert_eq(payloads.length(), 1)
@@ -137,13 +135,12 @@ describe("Plan status-change notification", fn() {
     "URL links to feature when feature_slug is set and task_slug is not",
     fn() {
       Plan.create({
-        "_key": "psn--with-feat",
         "project": "psn",
         "plan_id": "with-feat",
         "status": "starting",
         "feature_slug": "feat-42",
         "prompt": "prompt with feature"
-      })
+      }, {"key": "psn--with-feat"})
       Plan.append_status("psn--with-feat", "done")
       payloads = _psn_my_payloads()
       assert_eq(payloads.length(), 1)

@@ -46,12 +46,11 @@ class Comment < Model
     existing = Comment.for_feature(feature_slug)
     next_num = existing.length() + 1
     Comment.create({
-      "_key": feature_slug + "--" + str(next_num),
       "feature_slug": feature_slug,
       "author": author,
       "body": body,
       "created_at": DateTime.now().to_iso()
-    })
+    }, {"key": feature_slug + "--" + str(next_num)})
   end
 
   # Comments for a given feature, ordered oldest-first.

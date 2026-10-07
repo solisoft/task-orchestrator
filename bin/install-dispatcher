@@ -45,8 +45,10 @@ if [[ -n "$existing" ]]; then
   sleep 1
 fi
 
-cp "$template_src" "$template_dst"
-echo "installed unit at $template_dst"
+# The template refers to the checkout as @ORCHESTRATOR_DIR@ so the unit
+# works wherever the repo lives (~/workspace/soli, ~/Work/soli, …).
+sed "s#@ORCHESTRATOR_DIR@#$orchestrator_dir#g" "$template_src" > "$template_dst"
+echo "installed unit at $template_dst (orchestrator: $orchestrator_dir)"
 
 systemctl --user daemon-reload
 systemctl --user enable --now task-dispatch.service

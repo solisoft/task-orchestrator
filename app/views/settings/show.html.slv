@@ -5,10 +5,33 @@
       <a href="/" class="text-sm text-slate-400 hover:text-indigo-300">← Home</a>
     </header>
 
-    <form method="post" action="/settings" class="space-y-8">
-      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-1">
-        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent</legend>
-        <p class="mt-2 text-sm text-slate-400">Active runner used when a task has no per-task <code>agent_type</code>.</p>
+    <nav aria-label="Settings sections" class="sticky top-0 z-10 -mx-2 mb-8 flex gap-1 overflow-x-auto rounded-xl bg-slate-950/80 px-2 py-2 backdrop-blur">
+      <a href="#agents" class="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100">Agents</a>
+      <a href="#models" class="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100">Models</a>
+      <a href="#integrations" class="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100">Integrations</a>
+      <a href="#appearance" class="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100">Appearance</a>
+      <a href="#notifications" class="whitespace-nowrap rounded-lg px-3 py-1.5 text-sm text-slate-400 hover:bg-white/5 hover:text-slate-100">Notifications</a>
+    </nav>
+
+    <% if settings_notice %>
+      <div role="status"
+           class="mb-6 rounded-lg border px-4 py-2 text-sm <%= settings_notice["kind"] == "error" ? "border-rose-400/30 bg-rose-500/10 text-rose-200" : "border-emerald-400/30 bg-emerald-500/10 text-emerald-200" %>">
+        <%= settings_notice["text"] %>
+      </div>
+    <% end %>
+
+    <!-- One form for every section except Notifications (per-browser, JS
+         only). The Bonfire "Test connection" button submits the separate
+         form below via form="bonfire-check-form" (forms can't nest). -->
+    <form method="post" action="/settings" class="space-y-12">
+    <section id="agents" class="scroll-mt-20 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Agents</h2>
+        <p class="text-sm text-slate-500">Which runner picks up tasks, and how much it may run.</p>
+      </div>
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Default agent</legend>
+        <p class="mt-2 text-sm text-slate-400">Runner used when a task has no per-task <code>agent_type</code>.</p>
         <div class="mt-4">
           <label for="agent_type" class="block text-xs font-medium text-slate-300 mb-1">Agent type</label>
           <select id="agent_type" name="agent_type"
@@ -18,9 +41,62 @@
             <% end %>
           </select>
         </div>
+      </fieldset>
+
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Enabled agents</legend>
+        <p class="mt-2 text-sm text-slate-400">Enable or disable agents available for dispatch.</p>
+        <div class="mt-4 space-y-3">
+          <% for a in agents %>
+            <div class="flex items-center gap-3">
+              <input type="hidden" name="enabled_<%= a %>" value="0">
+              <input type="checkbox" id="enabled_<%= a %>" name="enabled_<%= a %>" value="1"
+                     <%= agents_config[a] != false ? "checked" : "" %>
+                     class="h-4 w-4 rounded border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
+              <label for="enabled_<%= a %>" class="text-sm font-mono text-slate-200"><%= a %></label>
+            </div>
+          <% end %>
+        </div>
+      </fieldset>
+
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Run limits</legend>
+        <p class="mt-2 text-sm text-slate-400">Cap how many runs an agent may start per rolling 24h / 7d window. <code>0</code> means unlimited.</p>
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-slate-400">
+          <div></div>
+          <div class="text-right pr-2">Daily cap</div>
+          <div class="text-right pr-2">Weekly cap</div>
+        </div>
+        <% for a in agents %>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+            <div class="text-sm font-mono text-slate-200"><%= a %></div>
+            <div>
+              <input type="number" min="0" step="1"
+                     name="limit_daily_<%= a %>"
+                     value="<%= limits[a]["daily"] %>"
+                     class="w-full text-right rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+            </div>
+            <div>
+              <input type="number" min="0" step="1"
+                     name="limit_weekly_<%= a %>"
+                     value="<%= limits[a]["weekly"] %>"
+                     class="w-full text-right rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+            </div>
+          </div>
+        <% end %>
+      </fieldset>
+    </section>
+
+    <section id="models" class="scroll-mt-20 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Models</h2>
+        <p class="text-sm text-slate-500">Defaults for planning and code review, and the models offered in pickers.</p>
+      </div>
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Default models</legend>
         <div class="mt-5">
           <label for="plan_model" class="block text-xs font-medium text-slate-300 mb-1">Plan model</label>
-          <p class="text-xs text-slate-500 mb-2">Default model used by the feature-brief planner. Per-feature and per-run dropdowns can override this. Only models in the allowlist below show up here.</p>
+          <p class="text-xs text-slate-500 mb-2">Default model used by the feature-brief planner. Per-feature and per-run dropdowns can override this. Only models ticked under <em>Available models</em> show up here.</p>
           <%- partial("features/plan_model_select", {
             "name":             "plan_model",
             "current":          plan_model,
@@ -33,7 +109,7 @@
         </div>
         <div class="mt-5">
           <label for="review_model" class="block text-xs font-medium text-slate-300 mb-1">Review model</label>
-          <p class="text-xs text-slate-500 mb-2">Default model used for code reviews. Per-run dropdowns can override this. Only models in the allowlist below show up here.</p>
+          <p class="text-xs text-slate-500 mb-2">Default model used for code reviews. Per-run dropdowns can override this. Only models ticked under <em>Available models</em> show up here.</p>
           <%- partial("features/plan_model_select", {
             "name":             "review_model",
             "current":          review_model,
@@ -46,7 +122,7 @@
         </div>
       </fieldset>
 
-      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-2">
+      <fieldset class="rounded-2xl glass-card p-6">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Available models</legend>
         <p class="mt-2 text-sm text-slate-400">Tick the models you want offered everywhere a plan model can be picked (settings, per-feature, per-run). Untick all to remove the filter and surface every detected model.</p>
         <input type="hidden" name="allowed_models_present" value="1">
@@ -114,24 +190,57 @@
           </div>
         <% end %>
       </fieldset>
+    </section>
 
-      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-3">
-        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Agent options</legend>
-        <p class="mt-2 text-sm text-slate-400">Enable or disable agents available for dispatch. Changes take effect immediately.</p>
-        <div class="mt-4 space-y-3">
-          <% for a in agents %>
-            <div class="flex items-center gap-3">
-              <input type="hidden" name="enabled_<%= a %>" value="0">
-              <input type="checkbox" id="enabled_<%= a %>" name="enabled_<%= a %>" value="1"
-                     <%= agents_config[a] != false ? "checked" : "" %>
-                     class="h-4 w-4 rounded border-white/20 bg-slate-900 text-indigo-500 focus:ring-indigo-400/40">
-              <label for="enabled_<%= a %>" class="text-sm font-mono text-slate-200"><%= a %></label>
-            </div>
+    <section id="integrations" class="scroll-mt-20 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Integrations</h2>
+        <p class="text-sm text-slate-500">Ticket sources shared by every project. GitLab and GitHub use <code>glab</code> / <code>gh</code> logins — nothing to set here.</p>
+      </div>
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Bonfire</legend>
+        <p class="mt-2 text-sm text-slate-400">Ticket source for projects set to <em>Bonfire</em> in their project settings (cards of one column, e.g. <em>Backlog</em>). Create a token in Bonfire under <code>Account → API tokens</code>.</p>
+        <input type="hidden" name="bonfire_present" value="1">
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <% if bonfire["token_set"] %>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-200">
+              <span aria-hidden="true">●</span> Token saved<% if bonfire["token_hint"] != "" %> · ends in <span class="font-mono">…<%= bonfire["token_hint"] %></span><% end %>
+            </span>
+            <button type="submit" form="bonfire-check-form"
+                    class="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-slate-200 text-xs transition-colors">Test connection</button>
+          <% else %>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+              <span aria-hidden="true">○</span> No token saved
+            </span>
+          <% end %>
+        </div>
+        <div class="mt-4">
+          <label for="bonfire_url" class="block text-xs font-medium text-slate-300 mb-1">Bonfire URL</label>
+          <input type="url" id="bonfire_url" name="bonfire_url" value="<%= bonfire["url"] %>"
+                 autocomplete="off" spellcheck="false"
+                 class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+        </div>
+        <div class="mt-4">
+          <label for="bonfire_token" class="block text-xs font-medium text-slate-300 mb-1"><%= bonfire["token_set"] ? "Replace token" : "API token" %></label>
+          <input type="password" id="bonfire_token" name="bonfire_token" value=""
+                 autocomplete="new-password" spellcheck="false"
+                 placeholder="<%= bonfire["token_set"] ? "leave empty to keep the saved token" : "bonfire_pat_…" %>"
+                 class="w-full rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
+          <% if bonfire["token_set"] %>
+            <label class="mt-2 flex items-center gap-2 text-xs text-slate-400">
+              <input type="checkbox" name="bonfire_token_clear" value="1"> Remove the saved token
+            </label>
           <% end %>
         </div>
       </fieldset>
+    </section>
 
-      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-4">
+    <section id="appearance" class="scroll-mt-20 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Appearance</h2>
+        <p class="text-sm text-slate-500">Colour presets for the whole app.</p>
+      </div>
+      <fieldset class="rounded-2xl glass-card p-6">
         <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Theme</legend>
         <p class="mt-2 text-sm text-slate-400">Pick a preset or create your own. Saved server-side so the page renders in the correct theme on first paint.</p>
         <p class="mt-1 text-xs text-slate-500">Click a card to apply.</p>
@@ -256,35 +365,9 @@
 
         <input type="hidden" name="theme" id="selected-theme" value="<%= theme %>">
       </fieldset>
+    </section>
 
-      <fieldset class="rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-5">
-        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Run limits</legend>
-        <p class="mt-2 text-sm text-slate-400">Cap how many runs an agent may start per rolling 24h / 7d window. <code>0</code> means unlimited.</p>
-        <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-medium text-slate-400">
-          <div></div>
-          <div class="text-right pr-2">Daily cap</div>
-          <div class="text-right pr-2">Weekly cap</div>
-        </div>
-        <% for a in agents %>
-          <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-            <div class="text-sm font-mono text-slate-200"><%= a %></div>
-            <div>
-              <input type="number" min="0" step="1"
-                     name="limit_daily_<%= a %>"
-                     value="<%= limits[a]["daily"] %>"
-                     class="w-full text-right rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
-            </div>
-            <div>
-              <input type="number" min="0" step="1"
-                     name="limit_weekly_<%= a %>"
-                     value="<%= limits[a]["weekly"] %>"
-                     class="w-full text-right rounded-md bg-slate-900 border border-white/10 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/40">
-            </div>
-          </div>
-        <% end %>
-      </fieldset>
-
-      <div class="flex items-center justify-end gap-3">
+      <div class="sticky bottom-0 z-10 -mx-2 flex items-center justify-end gap-3 rounded-xl bg-slate-950/80 px-2 py-3 backdrop-blur">
         <a href="/" class="px-4 py-2 text-sm text-slate-400 hover:text-slate-200">Cancel</a>
         <button type="submit"
                 class="px-5 py-2 rounded-md bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors">
@@ -293,8 +376,15 @@
       </div>
     </form>
 
-    <fieldset class="mt-8 rounded-2xl glass-card p-6 animate-fade-in animate-fade-in-6">
-      <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Browser notifications</legend>
+    <form id="bonfire-check-form" method="post" action="/settings/bonfire/check" class="hidden"></form>
+
+    <section id="notifications" class="mt-12 scroll-mt-20 space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Notifications</h2>
+        <p class="text-sm text-slate-500">Per browser — subscribe on every device.</p>
+      </div>
+      <fieldset class="rounded-2xl glass-card p-6">
+        <legend class="px-2 text-sm font-semibold uppercase tracking-wider text-slate-300">Browser notifications</legend>
       <p class="mt-2 text-sm text-slate-400">
         Get a desktop notification when a task flips status (review / done / failed)
         even if the dashboard tab is closed. Per-browser; subscribe on every device.
@@ -310,7 +400,8 @@
         </button>
         <span id="push-state" class="text-sm text-slate-400">checking…</span>
       </div>
-    </fieldset>
+      </fieldset>
+    </section>
 
     <script>
       (function () {

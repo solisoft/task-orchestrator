@@ -9,6 +9,13 @@ get("/logout", "auth#logout")
 # Health probe stays open for monitoring (k8s liveness, uptime checks).
 get("/health", "home#health")
 
+# ── Webhooks (unscoped) ──────────────
+# GitHub/GitLab PR events. No session — each delivery authenticates
+# itself against a Setting-stored secret (HMAC signature for GitHub,
+# shared token for GitLab) inside the controller.
+post("/webhooks/github", "webhooks#github")
+post("/webhooks/gitlab", "webhooks#gitlab")
+
 # ── Streams (WebSocket — unscoped) ───
 # Soli's WS dispatcher doesn't run HTTP middleware on these routes, so
 # they each authenticate themselves via per-stream tokens echoed by the
@@ -39,6 +46,10 @@ middleware("authenticate", fn() {
   # ── Projects ─────────────────────────
   get("/projects", "projects#index")
   get("/projects/:name", "projects#show")
+  # Project settings modal (per-project webhook secrets, …)
+  post("/projects/:name/settings", "projects#update_settings")
+  # Pull tickets from the project's tracker (GitLab / GitHub / Bonfire)
+  post("/projects/:name/tickets/import", "projects#import_tickets")
 
   # ── Tasks ────────────────────────────
   get("/projects/:name/tasks/new", "tasks#new")
@@ -87,6 +98,8 @@ middleware("authenticate", fn() {
   # Lightweight theme-only endpoint — used by the header toggle to flip
   # dark↔light without round-tripping the full settings form.
   post("/settings/theme", "settings#set_theme")
+  # Verify the saved Bonfire token (GET /api/v1/me) and report back.
+  post("/settings/bonfire/check", "settings#check_bonfire")
   post("/settings/presets", "settings#create_preset")
   put("/settings/presets/:name", "settings#update_preset")
   delete("/settings/presets/:name", "settings#delete_preset")

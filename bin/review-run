@@ -40,7 +40,9 @@ task_model=$3
 review_id=$4
 
 ROOT=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
-project_path="$ROOT/$repo_name"
+# Projects may sit one group deeper ($ROOT/<group>/<repo>) — resolve the
+# name with the same rules the web app uses (bin/project-path).
+project_path=$(TASK_ORCH_ROOT="$ROOT" "$script_dir/project-path" "$repo_name" || echo "$ROOT/$repo_name")
 if [[ ! -d "$project_path" ]]; then
   echo "review-run: project path not found: $project_path" >&2
   exit 65

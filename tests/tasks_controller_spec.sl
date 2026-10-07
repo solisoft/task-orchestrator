@@ -18,7 +18,7 @@ fn _tq_setup_workspace
   # would only affect the runner process — the test server child
   # already inherited TASK_ORCH_ROOT at spawn time.
   root = getenv("TASK_ORCH_ROOT") ?? "/tmp/task-orch-spec-fixture"
-  System.run_sync(["mkdir", "-p", root + "/proj/tasks/todo"])
+  System.run_sync(["mkdir", "-p", root + "/proj/tasks/todo", root + "/proj/.git"])
   return root
 end
 
@@ -31,12 +31,11 @@ end
 # Seed a fresh todo task and return its slug. The task can be queued.
 fn _tq_seed_todo
   Task.create({
-    "_key": "proj--ready",
     "project": "proj",
     "slug": "ready",
     "title": "ready to queue",
     "status": "todo"
-  })
+  }, {"key": "proj--ready"})
   return "ready"
 end
 
@@ -82,14 +81,13 @@ end
 # to (or past) the cap before queuing the test subject.
 fn _tq_seed_consumed(suffix, started_at_iso, agent_type)
   Task.create({
-    "_key": "proj--" + suffix,
     "project": "proj",
     "slug": suffix,
     "title": "consumed " + suffix,
     "status": "inprogress",
     "started_at": started_at_iso,
     "agent_type": agent_type
-  })
+  }, {"key": "proj--" + suffix})
 end
 
 describe("TasksController#queue", fn() {
@@ -254,13 +252,12 @@ describe(
       fn() {
         _tq_setup_git_proj("done-task")
         Task.create({
-          "_key": "proj--done-task",
           "project": "proj",
           "slug": "done-task",
           "title": "Done task",
           "status": "review",
           "outcome": "local-branch"
-        })
+        }, {"key": "proj--done-task"})
         response = get("/projects/proj/tasks/done-task")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -281,13 +278,12 @@ describe(
           + "merge --no-ff --no-edit -q task/already-merged"
         ])
         Task.create({
-          "_key": "proj--already-merged",
           "project": "proj",
           "slug": "already-merged",
           "title": "Already merged",
           "status": "done",
           "outcome": "local-branch"
-        })
+        }, {"key": "proj--already-merged"})
         response = get("/projects/proj/tasks/already-merged")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -303,13 +299,12 @@ describe(
       fn() {
         _tq_setup_git_proj("no-commit-task")
         Task.create({
-          "_key": "proj--no-commit-task",
           "project": "proj",
           "slug": "no-commit-task",
           "title": "No commit",
           "status": "done",
           "outcome": "no-commit"
-        })
+        }, {"key": "proj--no-commit-task"})
         response = get("/projects/proj/tasks/no-commit-task")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -325,12 +320,11 @@ describe(
       fn() {
         _tq_setup_git_proj("drifted")
         Task.create({
-          "_key": "019e2cc2-0ce8-7c1f-8dc7-deadbeef0001",
           "project": "proj",
           "slug": "drifted-key-task",
           "title": "Drifted key task",
           "status": "todo"
-        })
+        }, {"key": "019e2cc2-0ce8-7c1f-8dc7-deadbeef0001"})
         response = get("/projects/proj/tasks/drifted-key-task")
         assert_eq(res_status(response), 200)
         assert_contains(res_body(response), "Drifted key task")
@@ -345,20 +339,18 @@ describe(
         Feature.delete_all()
         _tq_setup_git_proj("with-feature")
         Feature.create({
-          "_key": "proj--my-brief",
           "project": "proj",
           "slug": "my-brief",
           "title": "My Brief Title",
           "status": "ready"
-        })
+        }, {"key": "proj--my-brief"})
         Task.create({
-          "_key": "proj--with-feature",
           "project": "proj",
           "slug": "with-feature",
           "title": "Linked task",
           "status": "todo",
           "feature_slug": "proj--my-brief"
-        })
+        }, {"key": "proj--with-feature"})
         response = get("/projects/proj/tasks/with-feature")
         assert_eq(res_status(response), 200)
         assert_contains(res_body(response), "My Brief Title")
@@ -373,13 +365,12 @@ describe(
       fn() {
         _tq_setup_git_proj("offline-show")
         Task.create({
-          "_key": "proj--offline-show",
           "project": "proj",
           "slug": "offline-show",
           "title": "Offline show",
           "status": "review",
           "outcome": "no-commit"
-        })
+        }, {"key": "proj--offline-show"})
         response = get("/projects/proj/tasks/offline-show")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -393,14 +384,13 @@ describe(
       fn() {
         _tq_setup_git_proj("no-remote-push")
         Task.create({
-          "_key": "proj--no-remote-push",
           "project": "proj",
           "slug": "no-remote-push",
           "title": "No remote push",
           "status": "review",
           "outcome": "local-branch",
           "pr_url": "https://github.com/owner/repo/pull/1"
-        })
+        }, {"key": "proj--no-remote-push"})
         response = get("/projects/proj/tasks/no-remote-push")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -425,13 +415,12 @@ describe("TasksController#merge_branch", fn() {
     fn() {
       proj = _tq_setup_git_proj("merge-me")
       Task.create({
-        "_key": "proj--merge-me",
         "project": "proj",
         "slug": "merge-me",
         "title": "Merge me",
         "status": "done",
         "outcome": "local-branch"
-      })
+      }, {"key": "proj--merge-me"})
       response = _tq_post("/projects/proj/tasks/merge-me/merge", {})
       assert_eq(res_status(response), 302)
       check = System.run_sync([
@@ -455,13 +444,12 @@ describe("TasksController#merge_branch", fn() {
       # eligibility check actually bites.
       _tq_setup_git_proj_with_remote("not-eligible")
       Task.create({
-        "_key": "proj--not-eligible",
         "project": "proj",
         "slug": "not-eligible",
         "title": "Not eligible",
         "status": "done",
         "outcome": "no-commit"
-      })
+      }, {"key": "proj--not-eligible"})
       response = _tq_post("/projects/proj/tasks/not-eligible/merge", {})
       assert_eq(res_status(response), 422)
     }
@@ -480,13 +468,12 @@ describe("TasksController#merge_branch", fn() {
         "task/ghost"
       ])
       Task.create({
-        "_key": "proj--ghost",
         "project": "proj",
         "slug": "ghost",
         "title": "Ghost",
         "status": "done",
         "outcome": "local-branch"
-      })
+      }, {"key": "proj--ghost"})
       response = _tq_post("/projects/proj/tasks/ghost/merge", {})
       assert_eq(res_status(response), 422)
       assert_contains(res_body(response), "not found")
@@ -497,13 +484,12 @@ describe("TasksController#merge_branch", fn() {
     proj = _tq_setup_git_proj("dirty-tree")
     System.run_sync(["bash", "-c", "cd " + proj + " && echo dirty > untracked.txt"])
     Task.create({
-      "_key": "proj--dirty-tree",
       "project": "proj",
       "slug": "dirty-tree",
       "title": "Dirty",
       "status": "done",
       "outcome": "local-branch"
-    })
+    }, {"key": "proj--dirty-tree"})
     response = _tq_post("/projects/proj/tasks/dirty-tree/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "uncommitted changes")
@@ -515,13 +501,12 @@ describe("TasksController#merge_branch", fn() {
     proj = _tq_setup_git_proj("wrong-branch")
     System.run_sync(["git", "-C", proj, "checkout", "-q", "task/wrong-branch"])
     Task.create({
-      "_key": "proj--wrong-branch",
       "project": "proj",
       "slug": "wrong-branch",
       "title": "Wrong branch",
       "status": "done",
       "outcome": "local-branch"
-    })
+    }, {"key": "proj--wrong-branch"})
     response = _tq_post("/projects/proj/tasks/wrong-branch/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "Checkout main first")
@@ -534,13 +519,12 @@ describe("TasksController#merge_branch", fn() {
     proj = _tq_setup_git_proj("offline-merge")
     # outcome = "no-commit" deliberately NOT "local-branch"
     Task.create({
-      "_key": "proj--offline-merge",
       "project": "proj",
       "slug": "offline-merge",
       "title": "Offline merge",
       "status": "done",
       "outcome": "no-commit"
-    })
+    }, {"key": "proj--offline-merge"})
     response = _tq_post("/projects/proj/tasks/offline-merge/merge", {})
     assert_eq(res_status(response), 302)
     check = System.run_sync([
@@ -558,13 +542,12 @@ describe("TasksController#merge_branch", fn() {
   test("rejects non-local-branch merge when project has a remote", fn() {
     _tq_setup_git_proj_with_remote("remote-reject")
     Task.create({
-      "_key": "proj--remote-reject",
       "project": "proj",
       "slug": "remote-reject",
       "title": "Remote reject",
       "status": "done",
       "outcome": "no-commit"
-    })
+    }, {"key": "proj--remote-reject"})
     response = _tq_post("/projects/proj/tasks/remote-reject/merge", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available")
@@ -584,12 +567,11 @@ describe("TasksController#mark_done", fn() {
     "transitions review task to done when no pr_url is set",
     fn() {
       Task.create({
-        "_key": "proj--no-pr-review",
         "project": "proj",
         "slug": "no-pr-review",
         "title": "No PR review task",
         "status": "review"
-      })
+      }, {"key": "proj--no-pr-review"})
       response = _tq_post("/projects/proj/tasks/no-pr-review/mark-done", {})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "no-pr-review")
@@ -602,13 +584,12 @@ describe("TasksController#mark_done", fn() {
     fn() {
       Run.set_pr_merged_mock(true)
       Task.create({
-        "_key": "proj--merged-pr",
         "project": "proj",
         "slug": "merged-pr",
         "title": "Merged PR task",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--merged-pr"})
       response = _tq_post("/projects/proj/tasks/merged-pr/mark-done", {})
       Run.set_pr_merged_mock(nil)
       assert_eq(res_status(response), 302)
@@ -620,13 +601,12 @@ describe("TasksController#mark_done", fn() {
   test("returns 422 when the linked PR is not merged", fn() {
     Run.set_pr_merged_mock(false)
     Task.create({
-      "_key": "proj--open-pr",
       "project": "proj",
       "slug": "open-pr",
       "title": "Open PR task",
       "status": "review",
       "pr_url": "https://github.com/owner/repo/pull/2"
-    })
+    }, {"key": "proj--open-pr"})
     response = _tq_post("/projects/proj/tasks/open-pr/mark-done", {})
     Run.set_pr_merged_mock(nil)
     assert_eq(res_status(response), 422)
@@ -640,13 +620,12 @@ describe("TasksController#mark_done", fn() {
     fn() {
       Run.set_pr_merged_mock(false)
       Task.create({
-        "_key": "proj--force-pr",
         "project": "proj",
         "slug": "force-pr",
         "title": "Force PR task",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/3"
-      })
+      }, {"key": "proj--force-pr"})
       response = _tq_post("/projects/proj/tasks/force-pr/mark-done", {"force": "true"})
       Run.set_pr_merged_mock(nil)
       assert_eq(res_status(response), 302)
@@ -657,12 +636,11 @@ describe("TasksController#mark_done", fn() {
 
   test("returns 422 for non-review status", fn() {
     Task.create({
-      "_key": "proj--todo-task",
       "project": "proj",
       "slug": "todo-task",
       "title": "Todo task",
       "status": "todo"
-    })
+    }, {"key": "proj--todo-task"})
     response = _tq_post("/projects/proj/tasks/todo-task/mark-done", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for review tasks")
@@ -675,20 +653,18 @@ describe("TasksController#mark_done", fn() {
     fn() {
       Feature.delete_all()
       Feature.create({
-        "_key": "proj--brief",
         "project": "proj",
         "slug": "brief",
         "title": "Test brief",
         "status": "in-progress"
-      })
+      }, {"key": "proj--brief"})
       Task.create({
-        "_key": "proj--linked",
         "project": "proj",
         "slug": "linked",
         "title": "linked review",
         "status": "review",
         "feature_slug": "proj--brief"
-      })
+      }, {"key": "proj--linked"})
       response = _tq_post("/projects/proj/tasks/linked/mark-done", {})
       assert_eq(res_status(response), 302)
       f = Feature.find_by_slug("proj", "brief")
@@ -708,12 +684,11 @@ describe("TasksController#archive", fn() {
 
   test("archives a done task", fn() {
     Task.create({
-      "_key": "proj--archive-done",
       "project": "proj",
       "slug": "archive-done",
       "title": "Archive done",
       "status": "done"
-    })
+    }, {"key": "proj--archive-done"})
     response = _tq_post("/projects/proj/tasks/archive-done/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-done")
@@ -722,12 +697,11 @@ describe("TasksController#archive", fn() {
 
   test("archives a failed task", fn() {
     Task.create({
-      "_key": "proj--archive-failed",
       "project": "proj",
       "slug": "archive-failed",
       "title": "Archive failed",
       "status": "failed"
-    })
+    }, {"key": "proj--archive-failed"})
     response = _tq_post("/projects/proj/tasks/archive-failed/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-failed")
@@ -736,12 +710,11 @@ describe("TasksController#archive", fn() {
 
   test("archives a todo task", fn() {
     Task.create({
-      "_key": "proj--archive-todo",
       "project": "proj",
       "slug": "archive-todo",
       "title": "Archive todo",
       "status": "todo"
-    })
+    }, {"key": "proj--archive-todo"})
     response = _tq_post("/projects/proj/tasks/archive-todo/archive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "archive-todo")
@@ -760,12 +733,11 @@ describe("TasksController#unarchive", fn() {
 
   test("unarchives a task back to todo", fn() {
     Task.create({
-      "_key": "proj--unarchive-me",
       "project": "proj",
       "slug": "unarchive-me",
       "title": "Unarchive me",
       "status": "archived"
-    })
+    }, {"key": "proj--unarchive-me"})
     response = _tq_post("/projects/proj/tasks/unarchive-me/unarchive", {})
     assert_eq(res_status(response), 302)
     t = Task.find_by_slug("proj", "unarchive-me")
@@ -774,12 +746,11 @@ describe("TasksController#unarchive", fn() {
 
   test("returns 422 for non-archived status", fn() {
     Task.create({
-      "_key": "proj--unarchive-queued",
       "project": "proj",
       "slug": "unarchive-queued",
       "title": "Unarchive queued",
       "status": "queued"
-    })
+    }, {"key": "proj--unarchive-queued"})
     response = _tq_post("/projects/proj/tasks/unarchive-queued/unarchive", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for archived")
@@ -801,7 +772,6 @@ describe("TasksController#unarchive", fn() {
 
 fn _tq_seed_plan(plan_id, status, log_text, body_text, pending_question)
   Plan.create({
-    "_key": plan_id,
     "project": "proj",
     "plan_id": plan_id,
     "status": status,
@@ -812,7 +782,7 @@ fn _tq_seed_plan(plan_id, status, log_text, body_text, pending_question)
     "log": log_text,
     "pending_question": pending_question,
     "zombie": false
-  })
+  }, {"key": plan_id})
 end
 
 describe("TasksController#create author stamping", fn() {
@@ -854,13 +824,12 @@ describe("TasksController#create author stamping", fn() {
 
   test("persists Task.author when create receives one", fn() {
     task = Task.create({
-      "_key": "proj--by-author",
       "project": "proj",
       "slug": "by-author",
       "title": "By author",
       "author": "alice@example.com",
       "status": "todo"
-    })
+    }, {"key": "proj--by-author"})
     assert(task._errors.nil?)
     reloaded = Task.find_by_slug("proj", "by-author")
     assert_eq(reloaded.author, "alice@example.com")
@@ -1058,13 +1027,12 @@ describe("TasksController#save model persistence", fn() {
     "persists plan_model on task.model when the form carries one",
     fn() {
       Task.create({
-        "_key": "proj--save-model",
         "project": "proj",
         "slug": "save-model",
         "title": "Save model",
         "body_md": "# original",
         "status": "todo"
-      })
+      }, {"key": "proj--save-model"})
       response = _tq_post(
         "/projects/proj/tasks/save-model/save",
         {
@@ -1085,13 +1053,12 @@ describe("TasksController#save model persistence", fn() {
     "stitches plan_variant onto an opencode plan_model",
     fn() {
       Task.create({
-        "_key": "proj--save-stitched",
         "project": "proj",
         "slug": "save-stitched",
         "title": "Stitched",
         "body_md": "# x",
         "status": "todo"
-      })
+      }, {"key": "proj--save-stitched"})
       response = _tq_post(
         "/projects/proj/tasks/save-stitched/save",
         {
@@ -1110,14 +1077,13 @@ describe("TasksController#save model persistence", fn() {
     "leaves task.model untouched when no plan_model is submitted",
     fn() {
       Task.create({
-        "_key": "proj--save-keep",
         "project": "proj",
         "slug": "save-keep",
         "title": "Keep",
         "body_md": "# x",
         "model": "claude-opus-4-7",
         "status": "todo"
-      })
+      }, {"key": "proj--save-keep"})
       response = _tq_post("/projects/proj/tasks/save-keep/save", {"body_md": "# updated"})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "save-keep")
@@ -1140,12 +1106,11 @@ describe("TasksController#queue model override", fn() {
     "persists plan_model and transitions to queued in one request",
     fn() {
       Task.create({
-        "_key": "proj--queue-with-model",
         "project": "proj",
         "slug": "queue-with-model",
         "title": "Queue with model",
         "status": "todo"
-      })
+      }, {"key": "proj--queue-with-model"})
       response = _tq_post(
         "/projects/proj/tasks/queue-with-model/queue",
         {"plan_model": "claude-opus-4-7", "plan_variant": "default"}
@@ -1161,13 +1126,12 @@ describe("TasksController#queue model override", fn() {
     "queues normally and preserves task.model when no override is sent",
     fn() {
       Task.create({
-        "_key": "proj--queue-no-model",
         "project": "proj",
         "slug": "queue-no-model",
         "title": "Queue without override",
         "model": "claude-haiku-4-5-20251001",
         "status": "todo"
-      })
+      }, {"key": "proj--queue-no-model"})
       response = _tq_post("/projects/proj/tasks/queue-no-model/queue", {})
       assert_eq(res_status(response), 302)
       t = Task.find_by_slug("proj", "queue-no-model")
@@ -1190,13 +1154,12 @@ describe("TasksController#show model picker", fn() {
     "renders model picker pre-selected to task.model on todo tasks",
     fn() {
       Task.create({
-        "_key": "proj--show-picker",
         "project": "proj",
         "slug": "show-picker",
         "title": "Show picker",
         "model": "claude-opus-4-7",
         "status": "todo"
-      })
+      }, {"key": "proj--show-picker"})
       response = get("/projects/proj/tasks/show-picker")
       assert_eq(res_status(response), 200)
       body = res_body(response)
@@ -1219,12 +1182,11 @@ describe("TasksController#show run-state locals", fn() {
 
   test("todo task renders the single-column brief, no run panel", fn() {
     Task.create({
-      "_key": "proj--no-run",
       "project": "proj",
       "slug": "no-run",
       "title": "No run yet",
       "status": "todo"
-    })
+    }, {"key": "proj--no-run"})
     response = get("/projects/proj/tasks/no-run")
     assert_eq(res_status(response), 200)
     body = res_body(response)
@@ -1241,12 +1203,11 @@ describe("TasksController#show run-state locals", fn() {
 
   test("inprogress task renders the inline run panel beside the brief", fn() {
     Task.create({
-      "_key": "proj--with-run",
       "project": "proj",
       "slug": "with-run",
       "title": "With run",
       "status": "inprogress"
-    })
+    }, {"key": "proj--with-run"})
     response = get("/projects/proj/tasks/with-run")
     assert_eq(res_status(response), 200)
     body = res_body(response)
@@ -1264,12 +1225,11 @@ describe("TasksController#show run-state locals", fn() {
 
   test("tail ending mid-line marks the final span as data-partial", fn() {
     Task.create({
-      "_key": "proj--mid-line",
       "project": "proj",
       "slug": "mid-line",
       "title": "Mid-line tail",
       "status": "inprogress"
-    })
+    }, {"key": "proj--mid-line"})
     # Write a log whose tail ends WITHOUT a trailing newline — the partial
     # last line is the one the agent is still writing.
     state_root = Run.run_state_root() + "/proj"
@@ -1288,12 +1248,11 @@ describe("TasksController#show run-state locals", fn() {
 
   test("tail ending in newline emits no data-partial marker", fn() {
     Task.create({
-      "_key": "proj--clean-line",
       "project": "proj",
       "slug": "clean-line",
       "title": "Clean tail",
       "status": "inprogress"
-    })
+    }, {"key": "proj--clean-line"})
     state_root = Run.run_state_root() + "/proj"
     System.run_sync(["mkdir", "-p", state_root])
     Trusted.write(state_root + "/clean-line.log", "first line\nsecond line\n")
@@ -1318,13 +1277,12 @@ describe("TasksController#sidebar", fn() {
     "returns 200 with the sidebar fragment for an existing task",
     fn() {
       Task.create({
-        "_key": "proj--sidebar-task",
         "project": "proj",
         "slug": "sidebar-task",
         "title": "Sidebar task",
         "body_md": "# Sidebar task\n\nMarkdown body content.",
         "status": "todo"
-      })
+      }, {"key": "proj--sidebar-task"})
       response = get("/projects/proj/tasks/sidebar-task/sidebar")
       assert_eq(res_status(response), 200)
       body = res_body(response)
@@ -1371,13 +1329,12 @@ describe("TasksController#commit_push", fn() {
         "cd " + worktree + " && echo 'review fix' > dirty.txt"
       ])
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "Push me",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--" + slug})
       response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 302)
       log = System.run_sync([
@@ -1399,12 +1356,11 @@ describe("TasksController#commit_push", fn() {
     worktree = _tq_worktree_path(slug)
     System.run_sync(["bash", "-c", "cd " + worktree + " && echo 'fix' > dirty.txt"])
     Task.create({
-      "_key": "proj--" + slug,
       "project": "proj",
       "slug": slug,
       "title": "No PR",
       "status": "review"
-    })
+    }, {"key": "proj--" + slug})
     response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
     assert_eq(res_status(response), 422)
     assert_contains(res_body(response), "only available for tasks with an open PR")
@@ -1416,13 +1372,12 @@ describe("TasksController#commit_push", fn() {
       slug = "clean-tree"
       _tq_setup_worktree_repo(slug)
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "Clean tree",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--" + slug})
       response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "working tree has no uncommitted changes")
@@ -1441,13 +1396,12 @@ describe("TasksController#commit_push", fn() {
         "cd " + worktree + " && echo 'fix' > dirty.txt"
       ])
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "Push fail",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--" + slug})
       response = _tq_post("/projects/proj/tasks/" + slug + "/commit-push", {})
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), slug)
@@ -1468,13 +1422,12 @@ describe("TasksController#show tags badge", fn() {
     "renders the Follow-up badge when tags contain follow_up",
     fn() {
       Task.create({
-        "_key": "proj--tagged-task",
         "project": "proj",
         "slug": "tagged-task",
         "title": "Tagged task",
         "status": "todo",
         "tags": ["follow_up"]
-      })
+      }, {"key": "proj--tagged-task"})
       response = get("/projects/proj/tasks/tagged-task")
       assert_eq(res_status(response), 200)
       assert_contains(res_body(response), "Follow-up")
@@ -1483,12 +1436,11 @@ describe("TasksController#show tags badge", fn() {
 
   test("omits the Follow-up badge when tags is absent", fn() {
     Task.create({
-      "_key": "proj--untagged-task",
       "project": "proj",
       "slug": "untagged-task",
       "title": "Untagged task",
       "status": "todo"
-    })
+    }, {"key": "proj--untagged-task"})
     response = get("/projects/proj/tasks/untagged-task")
     assert_eq(res_status(response), 200)
     assert_not(res_body(response).contains("Follow-up"))
@@ -1496,13 +1448,12 @@ describe("TasksController#show tags badge", fn() {
 
   test("omits the Follow-up badge when tags is empty", fn() {
     Task.create({
-      "_key": "proj--empty-tags-task",
       "project": "proj",
       "slug": "empty-tags-task",
       "title": "Empty tags task",
       "status": "todo",
       "tags": []
-    })
+    }, {"key": "proj--empty-tags-task"})
     response = get("/projects/proj/tasks/empty-tags-task")
     assert_eq(res_status(response), 200)
     assert_not(res_body(response).contains("Follow-up"))
@@ -1510,13 +1461,12 @@ describe("TasksController#show tags badge", fn() {
 
   test("persists tags through create and read-back", fn() {
     task = Task.create({
-      "_key": "proj--readback-task",
       "project": "proj",
       "slug": "readback-task",
       "title": "Readback task",
       "status": "todo",
       "tags": ["follow_up"]
-    })
+    }, {"key": "proj--readback-task"})
     assert(task._errors.nil?)
     reloaded = Task.find_by_slug("proj", "readback-task")
     assert(reloaded.tags.present?)
@@ -1551,13 +1501,12 @@ describe("TasksController#code_review", fn() {
       slug = "review-me"
       _tq_setup_run_worktree(slug)
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "Review me",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--" + slug})
       response = _tq_post(
         "/projects/proj/tasks/" + slug + "/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
@@ -1584,12 +1533,11 @@ describe("TasksController#code_review", fn() {
     "rejects with 422 when the task is not in review status",
     fn() {
       Task.create({
-        "_key": "proj--cr-not-review",
         "project": "proj",
         "slug": "cr-not-review",
         "title": "Not in review",
         "status": "todo"
-      })
+      }, {"key": "proj--cr-not-review"})
       response = _tq_post(
         "/projects/proj/tasks/cr-not-review/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
@@ -1608,13 +1556,12 @@ describe("TasksController#code_review", fn() {
       # request — `bin/review-run` decides the mode at runtime and falls
       # back to `gh pr diff` review.
       Task.create({
-        "_key": "proj--cr-no-tree",
         "project": "proj",
         "slug": "cr-no-tree",
         "title": "No worktree, has PR",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--cr-no-tree"})
       response = _tq_post(
         "/projects/proj/tasks/cr-no-tree/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
@@ -1628,12 +1575,11 @@ describe("TasksController#code_review", fn() {
     "rejects with 422 when there is neither a worktree nor a PR",
     fn() {
       Task.create({
-        "_key": "proj--cr-no-tree-no-pr",
         "project": "proj",
         "slug": "cr-no-tree-no-pr",
         "title": "No worktree, no PR",
         "status": "review"
-      })
+      }, {"key": "proj--cr-no-tree-no-pr"})
       response = _tq_post(
         "/projects/proj/tasks/cr-no-tree-no-pr/code-review",
         {"plan_model": "claude-sonnet-4-6", "plan_variant": "default"}
@@ -1657,12 +1603,11 @@ describe("TasksController#show code-review panel", fn() {
     "renders the code-review form when the task is in review",
     fn() {
       Task.create({
-        "_key": "proj--cr-panel",
         "project": "proj",
         "slug": "cr-panel",
         "title": "CR panel",
         "status": "review"
-      })
+      }, {"key": "proj--cr-panel"})
       response = get("/projects/proj/tasks/cr-panel")
       assert_eq(res_status(response), 200)
       body = res_body(response)
@@ -1677,12 +1622,11 @@ describe("TasksController#show code-review panel", fn() {
       Setting.set("review_model", "claude-haiku-4-5-20251001")
       Setting.set("plan_model", "claude-sonnet-4-6")
       Task.create({
-        "_key": "proj--cr-review-default",
         "project": "proj",
         "slug": "cr-review-default",
         "title": "CR review default",
         "status": "review"
-      })
+      }, {"key": "proj--cr-review-default"})
       response = get("/projects/proj/tasks/cr-review-default")
       assert_eq(res_status(response), 200)
       body = res_body(response)
@@ -1696,13 +1640,12 @@ describe("TasksController#show code-review panel", fn() {
     "code-review form keeps task.model when it is set",
     fn() {
       Task.create({
-        "_key": "proj--cr-task-model",
         "project": "proj",
         "slug": "cr-task-model",
         "title": "CR task model",
         "model": "claude-opus-4-7",
         "status": "review"
-      })
+      }, {"key": "proj--cr-task-model"})
       response = get("/projects/proj/tasks/cr-task-model")
       assert_eq(res_status(response), 200)
       body = res_body(response)
@@ -1716,13 +1659,12 @@ describe("TasksController#show code-review panel", fn() {
       slug = "cr-submitted-model"
       _tq_setup_run_worktree(slug)
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "CR submitted model",
         "status": "review",
         "pr_url": "https://github.com/owner/repo/pull/1"
-      })
+      }, {"key": "proj--" + slug})
       response = _tq_post(
         "/projects/proj/tasks/" + slug + "/code-review",
         {"plan_model": "claude-opus-4-7", "plan_variant": "default"}
@@ -1744,12 +1686,11 @@ describe("TasksController#show code-review panel", fn() {
       slug = "cr-omit-" + status
       Task.delete_all()
       Task.create({
-        "_key": "proj--" + slug,
         "project": "proj",
         "slug": slug,
         "title": "CR omit " + status,
         "status": status
-      })
+      }, {"key": "proj--" + slug})
       response = get("/projects/proj/tasks/" + slug)
       assert_eq(res_status(response), 200)
       body = res_body(response)

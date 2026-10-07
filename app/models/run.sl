@@ -561,6 +561,74 @@ class Run
     res["exit_code"] == 0
   end
 
+  # The `origin` remote URL string, or nil when the path has no remote
+  # (or isn't a git repo). String counterpart to `project_has_remote`.
+  static def project_remote_url(project_path)
+    let res = System.run_sync([
+      "git",
+      "-C",
+      project_path,
+      "remote",
+      "get-url",
+      "origin"
+    ])
+    return nil if res["exit_code"] != 0;
+    (res["stdout"] ?? "").trim()
+  end
+
+  # Normalise a git remote URL to "owner/repo" (lowercased, no .git, no
+  # scheme/host). Handles both ssh (`git@host:owner/repo.git`) and http
+  # (`https://host/owner/repo`) forms; GitLab subgroups keep their full
+  # path (`group/subgroup/repo`). Returns "" when unparseable.
+  static def _remote_repo_path(url)
+    return "" if url.nil? || url == ""
+    s = url.trim()
+    # ssh form: git@host:owner/repo(.git)
+    at = s.index_of("@")
+    if !s.contains("://") && at >= 0
+      colon = s.index_of(":")
+      s = s.substring(colon + 1, s.length()) if colon > at
+    end
+    # http(s)/ssh-url form: scheme://host/owner/repo(.git)
+    scheme_end = s.index_of("://")
+    if scheme_end >= 0
+      rest = s.substring(scheme_end + 3, s.length())
+      slash = rest.index_of("/")
+      return "" if slash < 0
+      s = rest.substring(slash + 1, s.length())
+    end
+    s = s.substring(0, s.length() - 4) if s.ends_with(".git")
+    s = s.substring(1, s.length()) if s.starts_with("/")
+    s.downcase()
+  end
+
+  # Map an incoming webhook repo identity to a local project name by
+  # comparing each project's `origin` against the payload's repo path
+  # ("owner/repo") and clone URLs. Shells one `git remote get-url` per
+  # project, so callers should only reach for this on the branch-match
+  # fallback — pr_url lookups never need it.
+  #
+  # Test seam: a `_project_for_repo_mock` Setting (same idea as
+  # `_pr_merged_mock`) short-circuits the git walk so specs don't need
+  # real remotes.
+  static def project_for_repo(repo_full_name, clone_urls)
+    let mock = Setting.get("_project_for_repo_mock") rescue nil
+    return mock if mock.present? && mock != ""
+    wanted = [(repo_full_name ?? "").downcase()]
+    for clone_url in (clone_urls ?? [])
+      repo_path = Run._remote_repo_path(clone_url)
+      wanted.push(repo_path) if repo_path != ""
+    end
+    for proj in Project.list_projects()
+      url = Run.project_remote_url(proj["path"])
+      next if url.nil? || url == ""
+      local = Run._remote_repo_path(url)
+      next if local == ""
+      return proj["name"] if wanted.includes?(local)
+    end
+    nil
+  end
+
   # Merge `task/<slug>` into the project's main branch with `--no-ff`
   # so the per-task branch stays visible in `git log --graph`. Refuses
   # to act unless main is currently checked out AND the working tree

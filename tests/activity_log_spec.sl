@@ -102,12 +102,11 @@ describe("Task → ActivityLog integration", fn() {
 
   test("creates a row when a Task status flips", fn() {
     Task.create({
-      "_key": "al--t1",
       "project": "al",
       "slug": "t1",
       "title": "alpha",
       "status": "todo"
-    })
+    }, {"key": "al--t1"})
     assert_eq(_al_for_task("al--t1").length(), 0)
     t = Task.find_by_slug("al", "t1")
     t.change_author = "alice@example.com"
@@ -122,12 +121,11 @@ describe("Task → ActivityLog integration", fn() {
 
   test("does not write a row on initial Task create", fn() {
     Task.create({
-      "_key": "al--fresh",
       "project": "al",
       "slug": "fresh",
       "title": "fresh",
       "status": "todo"
-    })
+    }, {"key": "al--fresh"})
     assert_eq(_al_for_task("al--fresh").length(), 0)
   })
 
@@ -135,12 +133,11 @@ describe("Task → ActivityLog integration", fn() {
     "does not write a row when save() does not change status",
     fn() {
       Task.create({
-        "_key": "al--same",
         "project": "al",
         "slug": "same",
         "title": "same",
         "status": "todo"
-      })
+      }, {"key": "al--same"})
       t = Task.find_by_slug("al", "same")
       t.title = "renamed"
       t.change_author = "alice@example.com"
@@ -153,12 +150,11 @@ describe("Task → ActivityLog integration", fn() {
     "stamps an empty changed_by when no change_author is set",
     fn() {
       Task.create({
-        "_key": "al--anon",
         "project": "al",
         "slug": "anon",
         "title": "anon",
         "status": "todo"
-      })
+      }, {"key": "al--anon"})
       t = Task.find_by_slug("al", "anon")
       t.status = "queued"
       t.save()
@@ -172,13 +168,12 @@ describe("Task → ActivityLog integration", fn() {
     "logs the feature_key on the row when the task is linked to a feature",
     fn() {
       Task.create({
-        "_key": "al--linked",
         "project": "al",
         "slug": "linked",
         "title": "linked",
         "status": "todo",
         "feature_slug": "al--brief"
-      })
+      }, {"key": "al--linked"})
       t = Task.find_by_slug("al", "linked")
       t.change_author = "bob@example.com"
       t.status = "queued"
@@ -199,12 +194,11 @@ describe("Feature → ActivityLog integration", fn() {
 
   test("creates a row when a Feature status flips", fn() {
     Feature.create({
-      "_key": "fa--f1",
       "project": "fa",
       "slug": "f1",
       "title": "F1",
       "status": "draft"
-    })
+    }, {"key": "fa--f1"})
     assert_eq(ActivityLog.for_feature("fa--f1").length(), 0)
     f = Feature.find_by_slug("fa", "f1")
     f.change_author = "carol@example.com"
@@ -219,12 +213,11 @@ describe("Feature → ActivityLog integration", fn() {
 
   test("does not write a row on initial Feature create", fn() {
     Feature.create({
-      "_key": "fa--fresh",
       "project": "fa",
       "slug": "fresh",
       "title": "F",
       "status": "draft"
-    })
+    }, {"key": "fa--fresh"})
     assert_eq(ActivityLog.for_feature("fa--fresh").length(), 0)
   })
 })

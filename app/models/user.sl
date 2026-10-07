@@ -30,11 +30,10 @@ class User < Model
   static def register(email, password, display_name)
     normalized = email.trim().downcase()
     User.create({
-      "_key": normalized,
       "email": normalized,
       "password_hash": User._hash_password(password),
       "display_name": display_name
-    })
+    }, {"key": normalized})
   end
 
   # Simple hash: prepend a salt prefix then compute a simple checksum.

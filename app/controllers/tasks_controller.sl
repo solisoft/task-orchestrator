@@ -34,7 +34,7 @@ class TasksController < ApplicationController
     # Phase 5: the standalone planner is gone — `/projects/:name/tasks/new`
     # is now a plain title+body form. Feature briefs are the planning
     # surface (see /features/<id>/generate_tasks).
-    default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+    default_model = Plan.default_plan_model()
     picker = plan_model_picker_data(default_model)
     @title = "New task — " + project["name"]
     @project = project
@@ -77,7 +77,6 @@ class TasksController < ApplicationController
     # on `req["current_user"]`.
     author = session_get("user_email") ?? ""
     task = Task.create({
-      "_key": Task.key_for(project["name"], slug),
       "project": project["name"],
       "slug": slug,
       "title": title,
@@ -85,9 +84,9 @@ class TasksController < ApplicationController
       "model": model,
       "author": author,
       "status": "todo"
-    })
+    }, {"key": Task.key_for(project["name"], slug)})
     if task._errors
-      _picker = plan_model_picker_data(model == "" ? Setting.get_or("plan_model", "claude-sonnet-4-6") : model)
+      _picker = plan_model_picker_data(model == "" ? Plan.default_plan_model() : model)
       @title = "New task — " + project["name"]
       @project = project
       @task = task
@@ -109,18 +108,9 @@ class TasksController < ApplicationController
     ""
   end
 
-  # Append `-N` to `base` until no row in solidb's `tasks` collection
-  # has the same (project, slug) pair. Caps at 100 attempts to avoid
-  # pathological loops.
+  # Collision-free slug for the (project, slug) pair — see Task.unique_slug_for.
   def _unique_slug_for(project_name, base)
-    base = "task" if base == ""
-    candidate = base
-    n = 2
-    while Task.find_by_slug(project_name, candidate).present? && n <= 100
-      candidate = base + "-" + str(n)
-      n = n + 1
-    end
-    candidate
+    Task.unique_slug_for(project_name, base)
   end
 
   def show(req)
@@ -140,7 +130,7 @@ class TasksController < ApplicationController
     # Pre-compute the model-picker locals for todo tasks so the Queue and
     # Save forms can let the user pick a model before enqueuing. View
     # scope can't resolve Plan.X, so the partitioning has to happen here.
-    default_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+    default_model = Plan.default_plan_model()
     picker_current = (task.model ?? "") == "" ? default_model : task.model
     picker = plan_model_picker_data(picker_current)
     # Pre-load past code reviews for the panel's history list. View scope
@@ -443,7 +433,7 @@ class TasksController < ApplicationController
     worktree_path = Run.run_worktree_path(project["name"], task.slug)
     result = Run.commit_and_push(worktree_path, task.slug)
     if !result["ok"]
-      picker = plan_model_picker_data(Setting.get_or("plan_model", "claude-sonnet-4-6"))
+      picker = plan_model_picker_data(Plan.default_plan_model())
       run_locals = this._run_locals_for(task, project)
       @title = task.slug
       @project = project
@@ -451,7 +441,7 @@ class TasksController < ApplicationController
       @feature = this._feature_for_task(task)
       @branch_info = _branch_info_for(task, project)
       @can_commit_push = this._can_commit_push(task, project)
-      @default_plan_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+      @default_plan_model = Plan.default_plan_model()
       @default_review_model = Plan.default_review_model()
       @claude_options = picker["claude_options"]
       @opencode_options = picker["opencode_options"]
@@ -576,7 +566,6 @@ class TasksController < ApplicationController
     # / log / body back into this same row via its review_id.
     review_id = "rev-" + str(DateTime.now().to_unix() rescue 0)
     review = CodeReview.create({
-      "_key": CodeReview.key_for(project["name"], task.slug, review_id),
       "project": project["name"],
       "slug": task.slug,
       "review_id": review_id,
@@ -586,7 +575,7 @@ class TasksController < ApplicationController
       "body": "",
       "model": model,
       "pending": false
-    })
+    }, {"key": CodeReview.key_for(project["name"], task.slug, review_id)})
     if review._errors
       return {"status": 500, "body": "Failed to create review row"}
     end
@@ -841,6 +830,7 @@ class TasksController < ApplicationController
             "indicators": indicators_for(project["name"], columns),
             "totals": totals_for(project["name"], columns),
             "agents": agents_for(columns),
+            "pr_badges": pr_badges_for(columns),
             "statuses": Task.kanban_statuses(),
             "active_tab": active,
             "limit_error": msg
@@ -899,6 +889,7 @@ class TasksController < ApplicationController
             "indicators": indicators_for(project["name"], columns),
             "totals": totals_for(project["name"], columns),
             "agents": agents_for(columns),
+            "pr_badges": pr_badges_for(columns),
             "statuses": Task.kanban_statuses(),
             "active_tab": active
           }
@@ -928,7 +919,9 @@ fn plan_model_picker_data(current)
   claude_all = Plan.claude_model_ids()
   labels = Plan.claude_model_labels()
   claude_set = {}
-  for c in claude_all
+  # Legacy ids join the set so a stored legacy choice is grouped (and
+  # labelled) as Claude rather than misfiled under opencode.
+  for c in (claude_all + Plan.legacy_claude_model_ids())
     claude_set[c] = true
   end
   claude_ids = []
@@ -1139,7 +1132,6 @@ fn spawn_plan_agent(notes, model, project_path)
   # do not use this field (their HTTP counterparts are already public).
   token_nonce = str(DateTime.now().to_unix_millis() rescue 0) + "-" + str(Math.random() * 1000000 rescue 0)
   plan = Plan.create({
-    "_key": plan_id,
     "project": project,
     "plan_id": plan_id,
     "status": "starting",
@@ -1151,7 +1143,7 @@ fn spawn_plan_agent(notes, model, project_path)
     "pending_question": nil,
     "zombie": false,
     "stream_token": token_nonce
-  })
+  }, {"key": plan_id})
   line = "nohup ./bin/plan-run " + plan_id + " " + notes_path + " " + model + " " + project_path
   + " >/dev/null 2>&1 & disown"
   res = System.run_sync([
@@ -1166,18 +1158,16 @@ end
 # Allowlist plan-step models. The value reaches a shell command line via
 # `spawn_plan_agent`, so we MUST refuse anything that didn't come from
 # the dropdown. Two shapes are valid:
-#   - Claude SDK ids ("claude-opus-4-7", "claude-sonnet-4-6", ...)
+#   - Claude SDK ids (`Plan.claude_model_ids` + `Plan.legacy_claude_model_ids`)
 #   - opencode "provider/model" ids whose segments use a narrow charset
 # Returns the canonical default when the input doesn't match — never
 # raises, never echoes the bad value back.
 fn _allow_plan_model(value)
   v = (value ?? "").trim()
-  claude_allowed = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
-  for a in claude_allowed
-    return v if v == a
-  end
+  return v if Plan.claude_model_ids().includes?(v)
+  return v if Plan.legacy_claude_model_ids().includes?(v)
   return v if _looks_like_opencode_model(v)
-  "claude-sonnet-4-6"
+  Plan.default_claude_model()
 end
 
 # Stitch the form's plan_model with its plan_variant ("low" / "medium" /

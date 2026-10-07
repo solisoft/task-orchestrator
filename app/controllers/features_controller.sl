@@ -155,7 +155,6 @@ class FeaturesController < ApplicationController
     author = req["current_user"].email ?? "" if req["current_user"].present?
     version_id = (form["version_id"] ?? "").trim()
     feature = Feature.create({
-      "_key": Feature.key_for(project, slug),
       "project": project,
       "slug": slug,
       "title": title,
@@ -164,7 +163,7 @@ class FeaturesController < ApplicationController
       "plan_model": plan_model,
       "version_id": version_id,
       "author": author
-    })
+    }, {"key": Feature.key_for(project, slug)})
     if feature._errors
       @title = "New Feature"
       @feature = feature
@@ -306,7 +305,6 @@ class FeaturesController < ApplicationController
     author = ""
     author = req["current_user"].email ?? "" if req["current_user"].present?
     parent = Task.create({
-      "_key": Task.key_for(feature.project, slug),
       "project": feature.project,
       "slug": slug,
       "title": feature.title,
@@ -315,7 +313,7 @@ class FeaturesController < ApplicationController
       "feature_slug": feature._key,
       "model": feature.plan_model ?? "",
       "author": author
-    })
+    }, {"key": Task.key_for(feature.project, slug)})
     if parent._errors
       return {
         "status": 422,
@@ -761,7 +759,6 @@ class FeaturesController < ApplicationController
       slug = this._unique_slug_local(taken, section["title"].slugify())
       taken[slug] = true
       task = Task.create({
-        "_key": Task.key_for(feature.project, slug),
         "project": feature.project,
         "slug": slug,
         "title": section["title"],
@@ -769,7 +766,7 @@ class FeaturesController < ApplicationController
         "status": "proposed",
         "feature_slug": feature._key,
         "author": author
-      })
+      }, {"key": Task.key_for(feature.project, slug)})
       count = count + 1 if !task._errors
     end
     if count > 0 && feature.status == "draft"

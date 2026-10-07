@@ -28,12 +28,11 @@ end
 
 fn _rs_seed_done_task(repo, slug)
   Task.create({
-    "_key": Task.key_for(repo, slug),
     "project": repo,
     "slug": slug,
     "title": "run spec task",
     "status": "done"
-  })
+  }, {"key": Task.key_for(repo, slug)})
 end
 
 fn _rs_write_status(repo, slug, token)

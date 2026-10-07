@@ -31,6 +31,7 @@
         "indicators": indicators,
         "totals":     totals,
         "agents":     agents,
+        "pr_badges":  locals["pr_badges"] ?? {},
         "statuses":   statuses,
         "active_tab": active_tab
     }) %>
@@ -75,6 +76,7 @@
                         <a href="/projects/<%= h(project["name"]) %>/tasks/<%= h(t.slug) %>"
                            class="block rounded-md bg-white/[0.03] hover:bg-white/[0.07] border border-white/5 px-2 py-1.5 transition-colors group">
                           <div class="text-xs text-slate-200 group-hover:text-white leading-snug truncate"><%= h(t.title) %></div>
+                          <%- partial("tasks/labels", {"labels": t.source_labels, "size": "xs"}) %>
                           <% if indicators[t.slug] != nil %>
                             <div class="flex items-center gap-1 mt-1">
                               <% if indicators[t.slug] == "running" %>

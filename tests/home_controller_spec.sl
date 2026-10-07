@@ -56,13 +56,12 @@ describe("HomeController", fn() {
       "surfaces a task in review with a link to its task page",
       fn() {
         Task.create({
-          "_key": "wkspc--rev",
           "project": "wkspc",
           "slug": "rev",
           "title": "Needs review",
           "status": "review",
           "updated_at": _home_iso_seconds_ago(60)
-        })
+        }, {"key": "wkspc--rev"})
         response = get("/")
         body = res_body(response)
         assert_contains(body, "Needs review")
@@ -74,23 +73,21 @@ describe("HomeController", fn() {
       "shows a recently failed task and skips one outside the 24h window",
       fn() {
         Task.create({
-          "_key": "wkspc--fail-recent",
           "project": "wkspc",
           "slug": "fail-recent",
           "title": "Just failed",
           "status": "failed",
           "finished_at": _home_iso_seconds_ago(300),
           "updated_at": _home_iso_seconds_ago(300)
-        })
+        }, {"key": "wkspc--fail-recent"})
         Task.create({
-          "_key": "wkspc--fail-old",
           "project": "wkspc",
           "slug": "fail-old",
           "title": "Old failure",
           "status": "failed",
           "finished_at": _home_iso_seconds_ago(200000),
           "updated_at": _home_iso_seconds_ago(200000)
-        })
+        }, {"key": "wkspc--fail-old"})
         response = get("/")
         body = res_body(response)
         assert_contains(body, "Just failed")
@@ -101,23 +98,21 @@ describe("HomeController", fn() {
       "flags an in-progress task running longer than 30 minutes",
       fn() {
         Task.create({
-          "_key": "wkspc--long",
           "project": "wkspc",
           "slug": "long",
           "title": "Long agent",
           "status": "inprogress",
           "started_at": _home_iso_seconds_ago(2400),
           "updated_at": _home_iso_seconds_ago(2400)
-        })
+        }, {"key": "wkspc--long"})
         Task.create({
-          "_key": "wkspc--short",
           "project": "wkspc",
           "slug": "short",
           "title": "Short agent",
           "status": "inprogress",
           "started_at": _home_iso_seconds_ago(120),
           "updated_at": _home_iso_seconds_ago(120)
-        })
+        }, {"key": "wkspc--short"})
         response = get("/")
         body = res_body(response)
         assert_contains(body, "Long agent")
@@ -128,7 +123,6 @@ describe("HomeController", fn() {
       "renders a PR link on a shipped task with pr_url",
       fn() {
         Task.create({
-          "_key": "wkspc--shipped",
           "project": "wkspc",
           "slug": "shipped",
           "title": "Shipped one",
@@ -136,7 +130,7 @@ describe("HomeController", fn() {
           "finished_at": _home_iso_seconds_ago(120),
           "updated_at": _home_iso_seconds_ago(120),
           "pr_url": "https://github.com/acme/repo/pull/9"
-        })
+        }, {"key": "wkspc--shipped"})
         response = get("/")
         body = res_body(response)
         assert_contains(body, "Shipped one")

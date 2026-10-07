@@ -61,16 +61,33 @@ class Plan < Model
   # Single source of truth — the settings view, the plan-model partial,
   # and `allow_plan_model` all read from this list.
   static def claude_model_ids()
-    ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+    ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001"]
   end
 
-  # Friendly labels for `claude_model_ids`, in the same order. Used by
-  # the settings checkbox panel and the plan-model `<select>`.
+  # Retired Claude ids: no longer offered in the pickers, but still
+  # accepted by `allow_plan_model` so tasks, features and settings that
+  # stored one keep dispatching to it instead of silently collapsing to
+  # the default.
+  static def legacy_claude_model_ids()
+    ["claude-opus-4-7", "claude-sonnet-4-6"]
+  end
+
+  # The fallback when nothing is persisted or a value fails validation.
+  static def default_claude_model()
+    "claude-sonnet-5-5"
+  end
+
+  # Friendly labels for `claude_model_ids` (plus the legacy ids, so a
+  # stored legacy choice still reads well in a dropdown). Used by the
+  # settings checkbox panel and the plan-model `<select>`.
   static def claude_model_labels()
     {
-      "claude-opus-4-7": "Opus 4.7",
-      "claude-sonnet-4-6": "Sonnet 4.6",
-      "claude-haiku-4-5-20251001": "Haiku 4.5"
+      "claude-fable-5-1": "Fable 5.1",
+      "claude-opus-5-5": "Opus 5.5",
+      "claude-sonnet-5-5": "Sonnet 5.5",
+      "claude-haiku-4-5-20251001": "Haiku 4.5",
+      "claude-opus-4-7": "Opus 4.7 (legacy)",
+      "claude-sonnet-4-6": "Sonnet 4.6 (legacy)"
     }
   end
 
@@ -120,7 +137,7 @@ class Plan < Model
   # Global default model used when nothing more specific is set.
   # Persisted under the `plan_model` Setting key by the settings page.
   static def default_plan_model()
-    Setting.get_or("plan_model", "claude-sonnet-4-6")
+    Setting.get_or("plan_model", Plan.default_claude_model())
   end
 
   # Global default model used for code reviews. Defaults to a fast/cheap
@@ -133,7 +150,7 @@ class Plan < Model
   # Resolve the plan model id for a feature run. Precedence:
   #   1. form override (`plan_model` + optional `plan_variant`)
   #   2. per-feature `plan_model` field
-  #   3. global Setting "plan_model" (falls back to "claude-sonnet-4-6")
+  #   3. global Setting "plan_model" (falls back to `default_claude_model`)
   # Every branch passes through `allow_plan_model` so the result is
   # safe to splice into the `bin/plan-run` shell command line.
   static def resolve_plan_model(feature, form)
@@ -156,19 +173,19 @@ class Plan < Model
   end
 
   # Shell-safe allowlist for plan-step models. Two shapes are valid:
-  #   - Claude SDK ids ("claude-opus-4-7", "claude-sonnet-4-6", ...)
+  #   - Claude SDK ids ("claude-opus-5-5", "claude-sonnet-5-5", ...),
+  #     current or legacy
   #   - opencode "provider/model[:variant]" ids whose segments use a
   #     narrow charset.
   # Anything else collapses to the canonical default — never raises,
   # never echoes the bad value back.
   static def allow_plan_model(value)
     v = (value ?? "").trim()
-    for a in Plan.claude_model_ids()
-      return v if v == a
-    end
+    return v if Plan.claude_model_ids().includes?(v)
+    return v if Plan.legacy_claude_model_ids().includes?(v)
     return v if Plan._is_codex_model_id(v)
     return v if Plan._is_opencode_model_id(v)
-    "claude-sonnet-4-6"
+    Plan.default_claude_model()
   end
 
   static def _is_codex_model_id(s)
@@ -335,7 +352,7 @@ fn read_plan_state(plan_id)
       "log": "",
       "body": "",
       "pending_question": nil,
-      "model": "claude-sonnet-4-6",
+      "model": Plan.default_claude_model(),
       "prompt": "",
       "stream_token": ""
     }
@@ -346,7 +363,7 @@ fn read_plan_state(plan_id)
     "log": plan.log ?? "",
     "body": plan.body ?? "",
     "pending_question": plan.pending_question,
-    "model": (plan.model ?? "") == "" ? "claude-sonnet-4-6" : plan.model,
+    "model": (plan.model ?? "") == "" ? Plan.default_claude_model() : plan.model,
     "prompt": plan.prompt ?? "",
     "stream_token": plan.stream_token ?? ""
   }

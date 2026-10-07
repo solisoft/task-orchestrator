@@ -46,12 +46,11 @@ end
 
 fn _crn_seed_review(review_id, slug, status)
   CodeReview.create({
-    "_key": "crn--" + slug + "--" + review_id,
     "project": "crn",
     "slug": slug,
     "review_id": review_id,
     "status": status
-  })
+  }, {"key": "crn--" + slug + "--" + review_id})
 end
 
 fn _crn_reset

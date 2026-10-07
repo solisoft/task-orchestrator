@@ -99,6 +99,44 @@ tail -f ~/.local/state/task-orchestrator/lang/SEC-095-foo.log
         </tbody>
       </table>
 
+      <h2>PR / MR webhooks (GitHub &amp; GitLab)</h2>
+      <p>
+        Cards can track PR state live instead of waiting for a manual
+        <strong>Mark as done</strong>. Two unscoped endpoints ingest
+        provider events — GitHub verifies an HMAC-SHA256 signature over
+        the raw body (<code>X-Hub-Signature-256</code>), GitLab a shared
+        token (<code>X-Gitlab-Token</code>). Each endpoint answers
+        <code>401</code> until at least one secret is configured.
+      </p>
+      <p>
+        <strong>Per project</strong>: open the project page and click
+        <strong>⚙ Settings</strong> — the modal holds the GitHub /
+        GitLab secrets for that repo and shows the exact webhook URLs to
+        paste. An empty field falls back to the global secrets:
+      </p>
+      <pre><code>Setting.set("github_webhook_secret", "&lt;random hex&gt;")   # global fallback
+Setting.set("gitlab_webhook_secret", "&lt;random hex&gt;")</code></pre>
+      <p>
+        Then add a repo webhook pointing at
+        <code>https://&lt;host&gt;/webhooks/github</code> (or
+        <code>/webhooks/gitlab</code>), content type
+        <code>application/json</code>, with the same secret. Enable
+        <em>Pull requests</em> events on GitHub, <em>Merge request
+        events</em> on GitLab.
+      </p>
+      <ul>
+        <li><strong>Status badge</strong> — an <code>open</code> / <code>draft</code> / <code>merged</code> / <code>closed</code> pill on the kanban card and the task page.</li>
+        <li><strong>Merged</strong> → the card auto-moves to <code>done</code> from <code>review</code> or <code>inprogress</code>, with the usual notification.</li>
+        <li><strong>Closed without merge</strong> → the card flips to <code>failed</code> with a <code>failure_reason</code>.</li>
+        <li><strong>Opened</strong> — a PR on a <code>task/&lt;slug&gt;</code> branch auto-links to its card (repo matched against each project's <code>origin</code> remote).</li>
+      </ul>
+      <p>
+        Matching is by <code>pr_url</code> first, branch fallback second;
+        unmatched and duplicate deliveries are acked with <code>200</code>.
+        The manual <strong>Mark as done</strong> path still works for
+        repos without webhooks.
+      </p>
+
       <h2>Failure mode</h2>
       <p>If <code>/review-task</code> rejects the fix or the agent exits non-zero:</p>
       <ul>

@@ -75,8 +75,40 @@ class Task < Model
     rows.length() > 0 ? rows[0] : nil
   end
 
+  # Append `-N` to `base` until no task of `project` has that slug. Caps
+  # at 100 attempts to avoid pathological loops.
+  static def unique_slug_for(project, base)
+    base = "task" if base == ""
+    candidate = base
+    n = 2
+    while Task.find_by_slug(project, candidate).present? && n <= 100
+      candidate = base + "-" + str(n)
+      n = n + 1
+    end
+    candidate
+  end
+
   static def for_project(project)
     Task.where({"project": project}).order("slug", "asc").all()
+  end
+
+  # Soft lookup by the PR/MR web URL a webhook delivery carries. Returns
+  # nil on miss — webhook handlers ack unknown PRs with 200 rather than
+  # erroring, so they want the "or nil" shape.
+  static def find_by_pr_url(pr_url)
+    return nil if pr_url.nil? || pr_url == ""
+    rows = Task.where({"pr_url": pr_url}).all() rescue []
+    rows.length() > 0 ? rows[0] : nil
+  end
+
+  # PR badge token for a task: nil | "open" | "draft" | "merged" | "closed".
+  # Rows that predate webhook ingestion have a pr_url but no pr_state —
+  # default those to "open" so the badge still renders.
+  static def pr_badge(t)
+    url = t.pr_url ?? ""
+    return nil if url == ""
+    return t.pr_state if t.pr_state.present? && t.pr_state != ""
+    "open"
   end
 
   # { status -> [Task, ...] } for the project. Every kanban status is
@@ -391,8 +423,56 @@ class Task < Model
     this.started_at = null
     this.finished_at = null
     this.pr_url = null
+    this.pr_state = null
+    this.pr_number = null
+    this.pr_host = null
+    this.pr_event_id = null
     this.outcome = null
     this.failure_reason = null
+    this.save()
+  end
+
+  # ── Webhook-driven PR transitions ──
+  # Each helper ends in save() so the touch_timestamps before_save fires
+  # _notify_if_status_changed — exactly one Web Push + ActivityLog entry
+  # per real status flip, and none when only pr_state changes.
+
+  # A PR/MR was opened (or reopened) for this task. Also the auto-link
+  # path: a PR opened manually on `task/<slug>` attaches itself here.
+  def pr_opened!(pr_url, pr_number, pr_host, draft)
+    this.pr_url = pr_url
+    this.pr_number = pr_number
+    this.pr_host = pr_host
+    this.pr_state = draft ? "draft" : "open"
+    this.save()
+  end
+
+  # Draft/ready flips — records the new pr_state without moving status.
+  def pr_state!(state)
+    this.pr_state = state
+    this.save()
+  end
+
+  # PR merged. Auto-move to done from `review` or `inprogress` (a human
+  # may merge before the agent finishes); other statuses only record the
+  # state so a late duplicate delivery can't resurrect a done/archived row.
+  def pr_merged_done!()
+    this.pr_state = "merged"
+    if this.status == "review" || this.status == "inprogress"
+      this.status = "done"
+      this.finished_at = DateTime.now().to_iso()
+    end
+    this.save()
+  end
+
+  # PR closed without merging — flag the card so the board surfaces it.
+  def pr_closed_failed!(reason)
+    this.pr_state = "closed"
+    if this.status == "review" || this.status == "inprogress"
+      this.status = "failed"
+      this.failure_reason = reason
+      this.finished_at = DateTime.now().to_iso()
+    end
     this.save()
   end
 

@@ -53,12 +53,11 @@ end
 
 fn _tsn_seed_task(slug, status)
   Task.create({
-    "_key": "tsn--" + slug,
     "project": "tsn",
     "slug": slug,
     "title": "title for " + slug,
     "status": status
-  })
+  }, {"key": "tsn--" + slug})
 end
 
 fn _tsn_reset

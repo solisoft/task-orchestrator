@@ -13,12 +13,11 @@ describe("Feature model", fn() {
   describe("Feature#stage", fn() {
     test("draft brief with no tasks is in shape", fn() {
       f = Feature.create({
-        "_key": "myapp--idea",
         "project": "myapp",
         "slug": "idea",
         "title": "Idea",
         "status": "draft"
-      })
+      }, {"key": "myapp--idea"})
       assert_eq(f.stage({}), "shape")
     })
 
@@ -26,12 +25,11 @@ describe("Feature model", fn() {
       "ready brief with no tasks is on the betting table",
       fn() {
         f = Feature.create({
-          "_key": "myapp--ready1",
           "project": "myapp",
           "slug": "ready1",
           "title": "Ready",
           "status": "ready"
-        })
+        }, {"key": "myapp--ready1"})
         assert_eq(f.stage({}), "bet")
       }
     )
@@ -40,12 +38,11 @@ describe("Feature model", fn() {
       "feature with todo/queued/inprogress tasks moves to build",
       fn() {
         f = Feature.create({
-          "_key": "myapp--build1",
           "project": "myapp",
           "slug": "build1",
           "title": "Build",
           "status": "ready"
-        })
+        }, {"key": "myapp--build1"})
         assert_eq(f.stage({"todo": 1}), "build")
         assert_eq(f.stage({"queued": 2}), "build")
         assert_eq(f.stage({"inprogress": 1}), "build")
@@ -55,12 +52,11 @@ describe("Feature model", fn() {
 
     test("feature with tasks in review moves to ship", fn() {
       f = Feature.create({
-        "_key": "myapp--ship1",
         "project": "myapp",
         "slug": "ship1",
         "title": "Ship",
         "status": "in-progress"
-      })
+      }, {"key": "myapp--ship1"})
       assert_eq(f.stage({"review": 1}), "ship")
       assert_eq(f.stage({"done": 1}), "ship")
       assert_eq(f.stage({"review": 1, "todo": 3}), "ship")
@@ -68,12 +64,11 @@ describe("Feature model", fn() {
 
     test("done feature is always ship", fn() {
       f = Feature.create({
-        "_key": "myapp--done1",
         "project": "myapp",
         "slug": "done1",
         "title": "Done",
         "status": "done"
-      })
+      }, {"key": "myapp--done1"})
       assert_eq(f.stage({}), "ship")
       assert_eq(f.stage({"todo": 99}), "ship")
     })
@@ -82,12 +77,11 @@ describe("Feature model", fn() {
       "in-progress feature with no live tasks still reports build",
       fn() {
         f = Feature.create({
-          "_key": "myapp--ip1",
           "project": "myapp",
           "slug": "ip1",
           "title": "InP",
           "status": "in-progress"
-        })
+        }, {"key": "myapp--ip1"})
         assert_eq(f.stage({}), "build")
       }
     )
@@ -97,20 +91,18 @@ describe("Feature model", fn() {
       fn() {
         Task.delete_all()
         f = Feature.create({
-          "_key": "myapp--auto1",
           "project": "myapp",
           "slug": "auto1",
           "title": "Auto",
           "status": "ready"
-        })
+        }, {"key": "myapp--auto1"})
         Task.create({
-          "_key": "myapp--at1",
           "project": "myapp",
           "slug": "at1",
           "title": "T1",
           "status": "todo",
           "feature_slug": "myapp--auto1"
-        })
+        }, {"key": "myapp--at1"})
         assert_eq(f.stage(), "build")
       }
     )
@@ -130,24 +122,22 @@ describe("Feature model", fn() {
 
   test("validates status format", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test",
       "status": "invalid-status"
-    })
+    }, {"key": "myapp--feat1"})
     assert(f._errors.present?)
   })
 
   test("creates a feature with valid data", fn() {
     f = Feature.create({
-      "_key": "myapp--dark-mode",
       "project": "myapp",
       "slug": "dark-mode",
       "title": "Dark mode support",
       "description": "Add dark mode toggle to settings",
       "status": "draft"
-    })
+    }, {"key": "myapp--dark-mode"})
     assert(f._errors.nil?)
     assert_eq(f.title, "Dark mode support")
     assert_eq(f.project, "myapp")
@@ -157,12 +147,11 @@ describe("Feature model", fn() {
 
   test("sets created_at when a feature is created", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     assert(f._errors.nil?)
     assert_not_null(f.created_at)
     assert(f.created_at != "")
@@ -185,12 +174,11 @@ describe("Feature model", fn() {
 
   test("find_by_slug returns feature or nil", fn() {
     Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     f = Feature.find_by_slug("myapp", "feat1")
     assert_not_null(f)
     missing = Feature.find_by_slug("myapp", "nonexistent")
@@ -199,26 +187,23 @@ describe("Feature model", fn() {
 
   test("for_project returns features for a project", fn() {
     Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Feature One",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     Feature.create({
-      "_key": "myapp--feat2",
       "project": "myapp",
       "slug": "feat2",
       "title": "Feature Two",
       "status": "ready"
-    })
+    }, {"key": "myapp--feat2"})
     Feature.create({
-      "_key": "other--feat3",
       "project": "other",
       "slug": "feat3",
       "title": "Other Feature",
       "status": "draft"
-    })
+    }, {"key": "other--feat3"})
     myapp_features = Feature.for_project("myapp")
     assert_eq(myapp_features.length(), 2)
     other_features = Feature.for_project("other")
@@ -227,42 +212,38 @@ describe("Feature model", fn() {
 
   test("tasks returns linked tasks", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     Task.create({
-      "_key": "myapp--task1",
       "project": "myapp",
       "slug": "task1",
       "title": "A task",
       "status": "todo",
       "feature_slug": "myapp--feat1",
       "author": "test@example.com"
-    })
+    }, {"key": "myapp--task1"})
     Task.create({
-      "_key": "myapp--task2",
       "project": "myapp",
       "slug": "task2",
       "title": "Another task",
       "status": "todo",
       "feature_slug": "myapp--feat1",
       "author": "test@example.com"
-    })
+    }, {"key": "myapp--task2"})
     tasks = f.tasks()
     assert_eq(tasks.length(), 2)
   })
 
   test("comments returns associated comments", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     Comment.create_comment("myapp--feat1", "user@test.com", "Nice feature!")
     Comment.create_comment("myapp--feat1", "user2@test.com", "I agree")
     comments = f.comments()
@@ -273,12 +254,11 @@ describe("Feature model", fn() {
 
   test("updates feature fields and saves", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Old Title",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     f.title = "New Title"
     f.description = "Updated description"
     f.status = "ready"
@@ -291,12 +271,11 @@ describe("Feature model", fn() {
 
   test("delete removes the feature", fn() {
     Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "To Delete",
       "status": "draft"
-    })
+    }, {"key": "myapp--feat1"})
     f = Feature.find_by_slug("myapp", "feat1")
     assert_not_null(f)
     f.delete()
@@ -306,14 +285,13 @@ describe("Feature model", fn() {
 
   test("task has feature_slug and author fields", fn() {
     task = Task.create({
-      "_key": "myapp--task1",
       "project": "myapp",
       "slug": "task1",
       "title": "A task linked to a feature",
       "status": "todo",
       "feature_slug": "myapp--feat1",
       "author": "user@example.com"
-    })
+    }, {"key": "myapp--task1"})
     assert(task._errors.nil?)
     assert_eq(task.feature_slug, "myapp--feat1")
     assert_eq(task.author, "user@example.com")
@@ -323,28 +301,25 @@ describe("Feature model", fn() {
     "recompute_status! flips to done when every linked task is done",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "Test Feature",
         "status": "in-progress"
-      })
+      }, {"key": "myapp--feat1"})
       Task.create({
-        "_key": "myapp--a",
         "project": "myapp",
         "slug": "a",
         "title": "a",
         "status": "done",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--a"})
       Task.create({
-        "_key": "myapp--b",
         "project": "myapp",
         "slug": "b",
         "title": "b",
         "status": "done",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--b"})
       assert(f.recompute_status!())
       reloaded = Feature.find_by_slug("myapp", "feat1")
       assert_eq(reloaded.status, "done")
@@ -355,28 +330,25 @@ describe("Feature model", fn() {
     "recompute_status! is a no-op when a linked task is still open",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "Test Feature",
         "status": "in-progress"
-      })
+      }, {"key": "myapp--feat1"})
       Task.create({
-        "_key": "myapp--a",
         "project": "myapp",
         "slug": "a",
         "title": "a",
         "status": "done",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--a"})
       Task.create({
-        "_key": "myapp--b",
         "project": "myapp",
         "slug": "b",
         "title": "b",
         "status": "review",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--b"})
       assert(!f.recompute_status!())
       reloaded = Feature.find_by_slug("myapp", "feat1")
       assert_eq(reloaded.status, "in-progress")
@@ -385,28 +357,25 @@ describe("Feature model", fn() {
 
   test("recompute_status! ignores archived tasks", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "in-progress"
-    })
+    }, {"key": "myapp--feat1"})
     Task.create({
-      "_key": "myapp--a",
       "project": "myapp",
       "slug": "a",
       "title": "a",
       "status": "done",
       "feature_slug": "myapp--feat1"
-    })
+    }, {"key": "myapp--a"})
     Task.create({
-      "_key": "myapp--b",
       "project": "myapp",
       "slug": "b",
       "title": "b",
       "status": "archived",
       "feature_slug": "myapp--feat1"
-    })
+    }, {"key": "myapp--b"})
     assert(f.recompute_status!())
     reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.status, "done")
@@ -416,20 +385,18 @@ describe("Feature model", fn() {
     "recompute_status! refuses to complete a feature with no done task",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "Test Feature",
         "status": "ready"
-      })
+      }, {"key": "myapp--feat1"})
       Task.create({
-        "_key": "myapp--a",
         "project": "myapp",
         "slug": "a",
         "title": "a",
         "status": "archived",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--a"})
       assert(!f.recompute_status!())
       reloaded = Feature.find_by_slug("myapp", "feat1")
       assert_eq(reloaded.status, "ready")
@@ -440,12 +407,11 @@ describe("Feature model", fn() {
     "recompute_status! does nothing for a feature already done",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "Test Feature",
         "status": "done"
-      })
+      }, {"key": "myapp--feat1"})
       assert(!f.recompute_status!())
     }
   )
@@ -454,20 +420,18 @@ describe("Feature model", fn() {
     "refresh_for_task auto-completes the parent feature",
     fn() {
       Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "Test Feature",
         "status": "in-progress"
-      })
+      }, {"key": "myapp--feat1"})
       t = Task.create({
-        "_key": "myapp--solo",
         "project": "myapp",
         "slug": "solo",
         "title": "solo",
         "status": "done",
         "feature_slug": "myapp--feat1"
-      })
+      }, {"key": "myapp--solo"})
       refreshed = Feature.refresh_for_task(t)
       assert_not_null(refreshed)
       reloaded = Feature.find_by_slug("myapp", "feat1")
@@ -479,25 +443,23 @@ describe("Feature model", fn() {
     "refresh_for_task returns nil for a task with no feature_slug",
     fn() {
       t = Task.create({
-        "_key": "myapp--orphan",
         "project": "myapp",
         "slug": "orphan",
         "title": "orphan",
         "status": "done"
-      })
+      }, {"key": "myapp--orphan"})
       assert_null(Feature.refresh_for_task(t))
     }
   )
 
   test("persists plan_model on the feature row", fn() {
     f = Feature.create({
-      "_key": "myapp--feat1",
       "project": "myapp",
       "slug": "feat1",
       "title": "Test Feature",
       "status": "draft",
       "plan_model": "claude-opus-4-7"
-    })
+    }, {"key": "myapp--feat1"})
     assert(f._errors.nil?)
     reloaded = Feature.find_by_slug("myapp", "feat1")
     assert_eq(reloaded.plan_model, "claude-opus-4-7")
@@ -508,29 +470,26 @@ describe("Feature model", fn() {
       assert_test_db()
       Feature.delete_all()
       Feature.create({
-        "_key": "proj1--dark-mode",
         "project": "proj1",
         "slug": "dark-mode",
         "title": "Dark mode support",
         "description": "Add dark mode toggle across the app",
         "status": "draft"
-      })
+      }, {"key": "proj1--dark-mode"})
       Feature.create({
-        "_key": "proj1--search-bar",
         "project": "proj1",
         "slug": "search-bar",
         "title": "Search bar component",
         "description": "Build a reusable search bar",
         "status": "draft"
-      })
+      }, {"key": "proj1--search-bar"})
       Feature.create({
-        "_key": "proj2--dark-theme",
         "project": "proj2",
         "slug": "dark-theme",
         "title": "Dark theme for dashboard",
         "description": "Implement dark mode on the dashboard page",
         "status": "ready"
-      })
+      }, {"key": "proj2--dark-theme"})
     })
 
     test("returns results matching title", fn() {
@@ -599,26 +558,23 @@ describe("Feature model", fn() {
     fn() {
       Feature.delete_all()
       Feature.create({
-        "_key": "p1--f1",
         "project": "p1",
         "slug": "f1",
         "title": "F1",
         "status": "draft"
-      })
+      }, {"key": "p1--f1"})
       Feature.create({
-        "_key": "p1--f2",
         "project": "p1",
         "slug": "f2",
         "title": "F2",
         "status": "draft"
-      })
+      }, {"key": "p1--f2"})
       Feature.create({
-        "_key": "p2--f3",
         "project": "p2",
         "slug": "f3",
         "title": "F3",
         "status": "draft"
-      })
+      }, {"key": "p2--f3"})
       features = Feature.for_project("p1")
       assert_eq(features.length(), 2)
     }
@@ -638,28 +594,25 @@ describe("Feature model", fn() {
     Feature.delete_all()
     Task.delete_all()
     f = Feature.create({
-      "_key": "proj--with-tasks",
       "project": "proj",
       "slug": "with-tasks",
       "title": "With tasks",
       "status": "draft"
-    })
+    }, {"key": "proj--with-tasks"})
     Task.create({
-      "_key": "proj--t1",
       "project": "proj",
       "slug": "t1",
       "title": "T1",
       "status": "todo",
       "feature_slug": "proj--with-tasks"
-    })
+    }, {"key": "proj--t1"})
     Task.create({
-      "_key": "proj--t2",
       "project": "proj",
       "slug": "t2",
       "title": "T2",
       "status": "done",
       "feature_slug": "proj--with-tasks"
-    })
+    }, {"key": "proj--t2"})
     tasks = f.tasks()
     assert_eq(tasks.length(), 2)
   })
@@ -668,12 +621,11 @@ describe("Feature model", fn() {
     Feature.delete_all()
     Comment.delete_all()
     f = Feature.create({
-      "_key": "proj--with-comments",
       "project": "proj",
       "slug": "with-comments",
       "title": "With comments",
       "status": "draft"
-    })
+    }, {"key": "proj--with-comments"})
     Comment.create_comment("proj--with-comments", "user@test.com", "First!")
     Comment.create_comment("proj--with-comments", "user@test.com", "Second!")
     comments = f.comments()
@@ -687,12 +639,11 @@ describe("Feature model", fn() {
     fn() {
       Feature.delete_all()
       f = Feature.create({
-        "_key": "proj--already-done",
         "project": "proj",
         "slug": "already-done",
         "title": "Done",
         "status": "done"
-      })
+      }, {"key": "proj--already-done"})
       assert(!f.recompute_status!())
     }
   )
@@ -703,20 +654,18 @@ describe("Feature model", fn() {
       Feature.delete_all()
       Task.delete_all()
       f = Feature.create({
-        "_key": "proj--archived-only",
         "project": "proj",
         "slug": "archived-only",
         "title": "Archived only",
         "status": "in-progress"
-      })
+      }, {"key": "proj--archived-only"})
       Task.create({
-        "_key": "proj--arch",
         "project": "proj",
         "slug": "arch",
         "title": "Arch",
         "status": "archived",
         "feature_slug": "proj--archived-only"
-      })
+      }, {"key": "proj--arch"})
       assert(!f.recompute_status!())
     }
   )
@@ -738,13 +687,12 @@ describe("Feature row author column", fn() {
     "persists author when Feature.create receives one",
     fn() {
       f = Feature.create({
-        "_key": "myapp--by-author",
         "project": "myapp",
         "slug": "by-author",
         "title": "By author",
         "status": "draft",
         "author": "author@example.com"
-      })
+      }, {"key": "myapp--by-author"})
       assert(f._errors.nil?)
       reloaded = Feature.find_by_slug("myapp", "by-author")
       assert_eq(reloaded.author, "author@example.com")
@@ -788,22 +736,20 @@ describe("FeaturesController#publish", fn() {
     "seeds the combined task with feature.plan_model so the agent inherits the choice",
     fn() {
       Feature.create({
-        "_key": "proj--brief",
         "project": "proj",
         "slug": "brief",
         "title": "Brief with model",
         "status": "ready",
         "plan_model": "claude-opus-4-7"
-      })
+      }, {"key": "proj--brief"})
       Task.create({
-        "_key": "proj--proposed-one",
         "project": "proj",
         "slug": "proposed-one",
         "title": "Proposed one",
         "body_md": "## Task 1\n\nDo a thing.",
         "status": "proposed",
         "feature_slug": "proj--brief"
-      })
+      }, {"key": "proj--proposed-one"})
       response = post("/features/proj--brief/publish", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
       assert_eq(res_status(response), 302)
       # The bundled parent task inherits feature.plan_model so the agent
@@ -819,21 +765,19 @@ describe("FeaturesController#publish", fn() {
     "leaves the combined task model empty when the feature has none set",
     fn() {
       Feature.create({
-        "_key": "proj--brief-no-model",
         "project": "proj",
         "slug": "brief-no-model",
         "title": "Brief no model",
         "status": "ready"
-      })
+      }, {"key": "proj--brief-no-model"})
       Task.create({
-        "_key": "proj--proposed-x",
         "project": "proj",
         "slug": "proposed-x",
         "title": "Proposed x",
         "body_md": "## Task 1\n\nWork.",
         "status": "proposed",
         "feature_slug": "proj--brief-no-model"
-      })
+      }, {"key": "proj--proposed-x"})
       response = post(
         "/features/proj--brief-no-model/publish",
         {},
@@ -874,13 +818,12 @@ describe("Plan model resolution", fn() {
     fn() {
       Setting.set("plan_model", "claude-sonnet-4-6")
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "F",
         "status": "draft",
         "plan_model": "claude-haiku-4-5-20251001"
-      })
+      }, {"key": "myapp--feat1"})
       resolved = Plan.resolve_plan_model(f, {"plan_model": "claude-opus-4-7"})
       assert_eq(resolved, "claude-opus-4-7")
     }
@@ -891,13 +834,12 @@ describe("Plan model resolution", fn() {
     fn() {
       Setting.set("plan_model", "claude-sonnet-4-6")
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "F",
         "status": "draft",
         "plan_model": "claude-opus-4-7"
-      })
+      }, {"key": "myapp--feat1"})
       resolved = Plan.resolve_plan_model(f, {"plan_model": ""})
       assert_eq(resolved, "claude-opus-4-7")
     }
@@ -908,12 +850,11 @@ describe("Plan model resolution", fn() {
     fn() {
       Setting.set("plan_model", "claude-opus-4-7")
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "F",
         "status": "draft"
-      })
+      }, {"key": "myapp--feat1"})
       resolved = Plan.resolve_plan_model(f, {})
       assert_eq(resolved, "claude-opus-4-7")
     }
@@ -923,12 +864,11 @@ describe("Plan model resolution", fn() {
     "resolve_plan_model falls back to the canonical default when nothing is set anywhere",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "F",
         "status": "draft"
-      })
+      }, {"key": "myapp--feat1"})
       resolved = Plan.resolve_plan_model(f, {})
       assert_eq(resolved, "claude-sonnet-4-6")
     }
@@ -938,12 +878,11 @@ describe("Plan model resolution", fn() {
     "resolve_plan_model rejects an unknown form model and falls back to the default",
     fn() {
       f = Feature.create({
-        "_key": "myapp--feat1",
         "project": "myapp",
         "slug": "feat1",
         "title": "F",
         "status": "draft"
-      })
+      }, {"key": "myapp--feat1"})
 
       # Shell-injection attempt — must be scrubbed by `allow_plan_model`.
       resolved = Plan.resolve_plan_model(f, {"plan_model": "evil; rm -rf /"})
@@ -1007,12 +946,11 @@ describe("Feature model status transitions", fn() {
     "a feature with no tasks stays in its initial status",
     fn() {
       f = Feature.create({
-        "_key": "proj--empty",
         "project": "proj",
         "slug": "empty",
         "title": "Empty",
         "status": "draft"
-      })
+      }, {"key": "proj--empty"})
       assert(!f.recompute_status!())
       reloaded = Feature.find_by_slug("proj", "empty")
       assert_eq(reloaded.status, "draft")
@@ -1021,56 +959,50 @@ describe("Feature model status transitions", fn() {
 
   test("a feature with all tasks done becomes done", fn() {
     f = Feature.create({
-      "_key": "proj--all-done",
       "project": "proj",
       "slug": "all-done",
       "title": "All Done",
       "status": "in-progress"
-    })
+    }, {"key": "proj--all-done"})
     Task.create({
-      "_key": "proj--t1",
       "project": "proj",
       "slug": "t1",
       "title": "T1",
       "status": "done",
       "feature_slug": "proj--all-done"
-    })
+    }, {"key": "proj--t1"})
     Task.create({
-      "_key": "proj--t2",
       "project": "proj",
       "slug": "t2",
       "title": "T2",
       "status": "done",
       "feature_slug": "proj--all-done"
-    })
+    }, {"key": "proj--t2"})
     assert(f.recompute_status!())
     assert_eq(Feature.find_by_slug("proj", "all-done").status, "done")
   })
 
   test("a feature with mixed status stays in-progress", fn() {
     f = Feature.create({
-      "_key": "proj--mixed",
       "project": "proj",
       "slug": "mixed",
       "title": "Mixed",
       "status": "in-progress"
-    })
+    }, {"key": "proj--mixed"})
     Task.create({
-      "_key": "proj--m1",
       "project": "proj",
       "slug": "m1",
       "title": "M1",
       "status": "done",
       "feature_slug": "proj--mixed"
-    })
+    }, {"key": "proj--m1"})
     Task.create({
-      "_key": "proj--m2",
       "project": "proj",
       "slug": "m2",
       "title": "M2",
       "status": "todo",
       "feature_slug": "proj--mixed"
-    })
+    }, {"key": "proj--m2"})
     assert(!f.recompute_status!())
     assert_eq(Feature.find_by_slug("proj", "mixed").status, "in-progress")
   })
@@ -1139,12 +1071,11 @@ describe("FeaturesController CRUD", fn() {
       "status": "planned"
     })
     Feature.create({
-      "_key": "proj--reassign",
       "project": "proj",
       "slug": "reassign",
       "title": "Reassign",
       "status": "draft"
-    })
+    }, {"key": "proj--reassign"})
     response = post(
       "/features/proj--reassign/update",
       {"title": "Reassign", "version_id": v._key},
@@ -1165,12 +1096,11 @@ describe("FeaturesController CRUD", fn() {
         "status": "active"
       })
       Feature.create({
-        "_key": "proj--inline",
         "project": "proj",
         "slug": "inline",
         "title": "Inline",
         "status": "draft"
-      })
+      }, {"key": "proj--inline"})
       response = post(
         "/features/proj--inline/assign-cycle",
         {"version_id": v._key},
@@ -1192,13 +1122,12 @@ describe("FeaturesController CRUD", fn() {
         "status": "active"
       })
       Feature.create({
-        "_key": "proj--clear",
         "project": "proj",
         "slug": "clear",
         "title": "Clear",
         "status": "draft",
         "version_id": v._key
-      })
+      }, {"key": "proj--clear"})
       response = post(
         "/features/proj--clear/assign-cycle",
         {"version_id": ""},
@@ -1214,12 +1143,11 @@ describe("FeaturesController CRUD", fn() {
     "POST /features/:id/assign-cycle rejects unknown cycle",
     fn() {
       Feature.create({
-        "_key": "proj--badcycle",
         "project": "proj",
         "slug": "badcycle",
         "title": "Bad",
         "status": "draft"
-      })
+      }, {"key": "proj--badcycle"})
       response = post(
         "/features/proj--badcycle/assign-cycle",
         {"version_id": "no--such--cycle"},
@@ -1239,12 +1167,11 @@ describe("FeaturesController CRUD", fn() {
         "status": "active"
       })
       Feature.create({
-        "_key": "proj--mismatch",
         "project": "proj",
         "slug": "mismatch",
         "title": "Mismatch",
         "status": "draft"
-      })
+      }, {"key": "proj--mismatch"})
       response = post(
         "/features/proj--mismatch/assign-cycle",
         {"version_id": other._key},
@@ -1256,12 +1183,11 @@ describe("FeaturesController CRUD", fn() {
 
   test("POST /features/:id/promote flips draft to ready", fn() {
     Feature.create({
-      "_key": "proj--prom",
       "project": "proj",
       "slug": "prom",
       "title": "Prom",
       "status": "draft"
-    })
+    }, {"key": "proj--prom"})
     response = post("/features/proj--prom/promote", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
     assert_eq(res_status(response), 302)
     f = Feature.find_by_slug("proj", "prom")
@@ -1272,12 +1198,11 @@ describe("FeaturesController CRUD", fn() {
     "POST /features/:id/promote is a no-op when already ready",
     fn() {
       Feature.create({
-        "_key": "proj--prom-r",
         "project": "proj",
         "slug": "prom-r",
         "title": "PromR",
         "status": "ready"
-      })
+      }, {"key": "proj--prom-r"})
       response = post("/features/proj--prom-r/promote", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
       assert_eq(res_status(response), 302)
       f = Feature.find_by_slug("proj", "prom-r")
@@ -1295,12 +1220,11 @@ describe("FeaturesController CRUD", fn() {
         "status": "planned"
       })
       Feature.create({
-        "_key": "proj--prom-c",
         "project": "proj",
         "slug": "prom-c",
         "title": "PromC",
         "status": "draft"
-      })
+      }, {"key": "proj--prom-c"})
       response = post(
         "/features/proj--prom-c/promote",
         {"version_id": v._key},
@@ -1343,12 +1267,11 @@ describe("FeaturesController CRUD", fn() {
 
   test("POST /features/:id/update updates the feature", fn() {
     Feature.create({
-      "_key": "proj--update-me",
       "project": "proj",
       "slug": "update-me",
       "title": "Original",
       "status": "draft"
-    })
+    }, {"key": "proj--update-me"})
     response = post(
       "/features/proj--update-me/update",
       {"title": "Updated Title"},
@@ -1362,12 +1285,11 @@ describe("FeaturesController CRUD", fn() {
 
   test("POST /features/:id/destroy deletes the feature", fn() {
     Feature.create({
-      "_key": "proj--delete-me",
       "project": "proj",
       "slug": "delete-me",
       "title": "Delete Me",
       "status": "draft"
-    })
+    }, {"key": "proj--delete-me"})
     response = post("/features/proj--delete-me/destroy", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
     assert_eq(res_status(response), 302)
     assert_null(Feature.find_by_slug("proj", "delete-me"))
@@ -1385,20 +1307,18 @@ describe("FeaturesController CRUD", fn() {
     "POST /features/:id/tasks/:slug/remove removes proposed task",
     fn() {
       Feature.create({
-        "_key": "proj--remove-f",
         "project": "proj",
         "slug": "remove-f",
         "title": "Remove F",
         "status": "draft"
-      })
+      }, {"key": "proj--remove-f"})
       Task.create({
-        "_key": "proj--remove-t",
         "project": "proj",
         "slug": "remove-t",
         "title": "Remove T",
         "status": "proposed",
         "feature_slug": "proj--remove-f"
-      })
+      }, {"key": "proj--remove-t"})
       response = post(
         "/features/proj--remove-f/tasks/remove-t/remove",
         {},
@@ -1413,20 +1333,18 @@ describe("FeaturesController CRUD", fn() {
     "POST /features/:id/tasks/:slug/remove returns 422 for non-proposed task",
     fn() {
       Feature.create({
-        "_key": "proj--remove-f2",
         "project": "proj",
         "slug": "remove-f2",
         "title": "Remove F2",
         "status": "draft"
-      })
+      }, {"key": "proj--remove-f2"})
       Task.create({
-        "_key": "proj--remove-t2",
         "project": "proj",
         "slug": "remove-t2",
         "title": "Remove T2",
         "status": "todo",
         "feature_slug": "proj--remove-f2"
-      })
+      }, {"key": "proj--remove-t2"})
       response = post(
         "/features/proj--remove-f2/tasks/remove-t2/remove",
         {},
@@ -1440,12 +1358,11 @@ describe("FeaturesController CRUD", fn() {
     "POST /features/:id/tasks/:slug/remove returns 404 for unknown task",
     fn() {
       Feature.create({
-        "_key": "proj--remove-f3",
         "project": "proj",
         "slug": "remove-f3",
         "title": "Remove F3",
         "status": "draft"
-      })
+      }, {"key": "proj--remove-f3"})
       response = post(
         "/features/proj--remove-f3/tasks/no-such-task/remove",
         {},
@@ -1468,12 +1385,11 @@ describe("FeaturesController GET routes", fn() {
 
   test("GET /features/:id shows a feature", fn() {
     Feature.create({
-      "_key": "proj--show-me",
       "project": "proj",
       "slug": "show-me",
       "title": "Show Me",
       "status": "draft"
-    })
+    }, {"key": "proj--show-me"})
     response = get("/features/proj--show-me")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Show Me")
@@ -1495,12 +1411,11 @@ describe("FeaturesController GET routes", fn() {
 
   test("GET /features/:id/edit shows edit form", fn() {
     Feature.create({
-      "_key": "proj--edit-me",
       "project": "proj",
       "slug": "edit-me",
       "title": "Edit Me",
       "status": "draft"
-    })
+    }, {"key": "proj--edit-me"})
     response = get("/features/proj--edit-me/edit")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Edit Me")
@@ -1510,14 +1425,12 @@ describe("FeaturesController GET routes", fn() {
     "POST /features/:id/cancel_plan cancels active plan",
     fn() {
       f = Feature.create({
-        "_key": "proj--cancel-f",
         "project": "proj",
         "slug": "cancel-f",
         "title": "Cancel F",
         "status": "draft"
-      })
+      }, {"key": "proj--cancel-f"})
       Plan.create({
-        "_key": "plan--cancel",
         "project": "proj",
         "plan_id": "plan--cancel",
         "feature_slug": "proj--cancel-f",
@@ -1525,7 +1438,7 @@ describe("FeaturesController GET routes", fn() {
         "prompt": "Feature brief: Cancel F",
         "pid": nil,
         "tasks_imported": false
-      })
+      }, {"key": "plan--cancel"})
       response = post(
         "/features/proj--cancel-f/cancel_plan",
         {},
@@ -1542,12 +1455,11 @@ describe("FeaturesController GET routes", fn() {
     "POST /features/:id/publish redirects when no proposed tasks",
     fn() {
       Feature.create({
-        "_key": "proj--no-proposed",
         "project": "proj",
         "slug": "no-proposed",
         "title": "No Proposed",
         "status": "ready"
-      })
+      }, {"key": "proj--no-proposed"})
       response = post("/features/proj--no-proposed/publish", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
       assert_eq(res_status(response), 302)
     }
@@ -1557,12 +1469,11 @@ describe("FeaturesController GET routes", fn() {
     "POST /features/:id/refine_tasks returns 422 with empty refinement",
     fn() {
       Feature.create({
-        "_key": "proj--refine",
         "project": "proj",
         "slug": "refine",
         "title": "Refine",
         "status": "draft"
-      })
+      }, {"key": "proj--refine"})
       response = post(
         "/features/proj--refine/refine_tasks",
         {"refinement": ""},
@@ -1587,12 +1498,11 @@ describe("FeaturesController WS stream access control", fn() {
 
       # Plan._key IS the plan_id (set to "plan-NNN" by spawn_plan_agent).
       plan = Plan.create({
-        "_key": "plan-token-test",
         "project": "proj",
         "plan_id": "plan-token-test",
         "status": "running",
         "stream_token": "secret-token-abc"
-      })
+      }, {"key": "plan-token-test"})
       state = read_plan_state("plan-token-test")
       assert_eq(state["stream_token"], "secret-token-abc")
     }
@@ -1602,11 +1512,10 @@ describe("FeaturesController WS stream access control", fn() {
     "read_plan_state returns empty stream_token for a plan without one",
     fn() {
       plan = Plan.create({
-        "_key": "plan-no-token",
         "project": "proj",
         "plan_id": "plan-no-token",
         "status": "running"
-      })
+      }, {"key": "plan-no-token"})
       state = read_plan_state("plan-no-token")
       assert_eq(state["stream_token"], "")
     }
@@ -1616,22 +1525,20 @@ describe("FeaturesController WS stream access control", fn() {
     "generate_tasks_log renders data-stream-token from the plan",
     fn() {
       f = Feature.create({
-        "_key": "proj--feat-log-token",
         "project": "proj",
         "slug": "feat-log-token",
         "title": "Log Token Feature",
         "status": "ready"
-      })
+      }, {"key": "proj--feat-log-token"})
 
       # _key must match what spawn_plan_agent sets: just the plan_id.
       plan = Plan.create({
-        "_key": "plan-log-token",
         "project": "proj",
         "plan_id": "plan-log-token",
         "status": "running",
         "feature_slug": f._key,
         "stream_token": "visible-token-xyz"
-      })
+      }, {"key": "plan-log-token"})
       User.register("test@example.com", "password123", "Test User")
       login("test@example.com", "password123")
       response = get(
@@ -1671,12 +1578,11 @@ describe("FeaturesController#update edge cases", fn() {
     "POST /features/:id/update returns 422 when title is empty",
     fn() {
       Feature.create({
-        "_key": "proj--blank-title",
         "project": "proj",
         "slug": "blank-title",
         "title": "Original",
         "status": "draft"
-      })
+      }, {"key": "proj--blank-title"})
       response = post(
         "/features/proj--blank-title/update",
         {"title": ""},
@@ -1715,12 +1621,11 @@ describe("FeaturesController#generate_tasks 404 + 422", fn() {
 
   test("returns 422 when the feature has no description", fn() {
     Feature.create({
-      "_key": "proj--no-desc",
       "project": "proj",
       "slug": "no-desc",
       "title": "No Desc",
       "status": "draft"
-    })
+    }, {"key": "proj--no-desc"})
     response = post(
       "/features/proj--no-desc/generate_tasks",
       {},
@@ -1783,12 +1688,11 @@ describe("FeaturesController#cancel_plan edges", fn() {
     "redirects without changes when no plan exists for the feature",
     fn() {
       Feature.create({
-        "_key": "proj--no-plan",
         "project": "proj",
         "slug": "no-plan",
         "title": "No Plan",
         "status": "draft"
-      })
+      }, {"key": "proj--no-plan"})
       response = post("/features/proj--no-plan/cancel_plan", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
       assert_eq(res_status(response), 302)
     }
@@ -1798,20 +1702,18 @@ describe("FeaturesController#cancel_plan edges", fn() {
     "leaves a done plan's status alone but stamps tasks_imported",
     fn() {
       Feature.create({
-        "_key": "proj--done-plan",
         "project": "proj",
         "slug": "done-plan",
         "title": "Done Plan",
         "status": "draft"
-      })
+      }, {"key": "proj--done-plan"})
       Plan.create({
-        "_key": "plan-cancel-done",
         "project": "proj",
         "plan_id": "plan-cancel-done",
         "status": "done",
         "feature_slug": "proj--done-plan",
         "tasks_imported": false
-      })
+      }, {"key": "plan-cancel-done"})
       response = post(
         "/features/proj--done-plan/cancel_plan",
         {},
@@ -1843,14 +1745,12 @@ describe("FeaturesController#generate_tasks_log", fn() {
 
   test("renders streaming progress for a running plan", fn() {
     Feature.create({
-      "_key": "proj--polling",
       "project": "proj",
       "slug": "polling",
       "title": "Polling",
       "status": "ready"
-    })
+    }, {"key": "proj--polling"})
     Plan.create({
-      "_key": "plan-poll",
       "project": "proj",
       "plan_id": "plan-poll",
       "status": "running",
@@ -1858,7 +1758,7 @@ describe("FeaturesController#generate_tasks_log", fn() {
       "pid": 1,
       "log": "doing work",
       "stream_token": "tk"
-    })
+    }, {"key": "plan-poll"})
     response = get("/features/proj--polling/generate_tasks_log/plan-poll")
     assert_eq(res_status(response), 200)
     body = res_body(response)
@@ -1868,20 +1768,18 @@ describe("FeaturesController#generate_tasks_log", fn() {
 
   test("renders failed state when the plan has failed", fn() {
     Feature.create({
-      "_key": "proj--boom-f",
       "project": "proj",
       "slug": "boom-f",
       "title": "Boom",
       "status": "ready"
-    })
+    }, {"key": "proj--boom-f"})
     Plan.create({
-      "_key": "plan-boom",
       "project": "proj",
       "plan_id": "plan-boom",
       "status": "failed:exit-1",
       "feature_slug": "proj--boom-f",
       "log": "broke"
-    })
+    }, {"key": "plan-boom"})
     response = get("/features/proj--boom-f/generate_tasks_log/plan-boom")
     assert_eq(res_status(response), 200)
     assert_contains(res_body(response), "Plan failed")
@@ -1891,22 +1789,20 @@ describe("FeaturesController#generate_tasks_log", fn() {
     "imports proposed tasks and signals reload when the plan is done",
     fn() {
       Feature.create({
-        "_key": "proj--done-import",
         "project": "proj",
         "slug": "done-import",
         "title": "Done Import",
         "description": "yes",
         "status": "ready"
-      })
+      }, {"key": "proj--done-import"})
       Plan.create({
-        "_key": "plan-done-import",
         "project": "proj",
         "plan_id": "plan-done-import",
         "status": "done",
         "feature_slug": "proj--done-import",
         "body": "## Task 1: First import\n\nDo this.\n\n## Task 2: Second import\n\nAnd this.",
         "tasks_imported": false
-      })
+      }, {"key": "plan-done-import"})
       response = get("/features/proj--done-import/generate_tasks_log/plan-done-import")
       assert_eq(res_status(response), 200)
       proposed = Task.where({"feature_slug": "proj--done-import", "status": "proposed"}).all()
@@ -1918,14 +1814,12 @@ describe("FeaturesController#generate_tasks_log", fn() {
 
   test("renders single-select pending question form", fn() {
     Feature.create({
-      "_key": "proj--qs",
       "project": "proj",
       "slug": "qs",
       "title": "Q Single",
       "status": "ready"
-    })
+    }, {"key": "proj--qs"})
     Plan.create({
-      "_key": "plan-q-single",
       "project": "proj",
       "plan_id": "plan-q-single",
       "status": "awaiting",
@@ -1943,7 +1837,7 @@ describe("FeaturesController#generate_tasks_log", fn() {
         }]}
       },
       "pid": 1
-    })
+    }, {"key": "plan-q-single"})
     response = get("/features/proj--qs/generate_tasks_log/plan-q-single")
     assert_eq(res_status(response), 200)
     body = res_body(response)
@@ -1954,14 +1848,12 @@ describe("FeaturesController#generate_tasks_log", fn() {
 
   test("renders multi-select pending question form", fn() {
     Feature.create({
-      "_key": "proj--qm",
       "project": "proj",
       "slug": "qm",
       "title": "Q Multi",
       "status": "ready"
-    })
+    }, {"key": "proj--qm"})
     Plan.create({
-      "_key": "plan-q-multi",
       "project": "proj",
       "plan_id": "plan-q-multi",
       "status": "awaiting",
@@ -1979,7 +1871,7 @@ describe("FeaturesController#generate_tasks_log", fn() {
         }]}
       },
       "pid": 1
-    })
+    }, {"key": "plan-q-multi"})
     response = get("/features/proj--qm/generate_tasks_log/plan-q-multi")
     assert_eq(res_status(response), 200)
     body = res_body(response)
@@ -1991,22 +1883,20 @@ describe("FeaturesController#generate_tasks_log", fn() {
     "imports a single-section plan body via the fallback heading parser",
     fn() {
       Feature.create({
-        "_key": "proj--solo-import",
         "project": "proj",
         "slug": "solo-import",
         "title": "Solo",
         "description": "x",
         "status": "ready"
-      })
+      }, {"key": "proj--solo-import"})
       Plan.create({
-        "_key": "plan-solo",
         "project": "proj",
         "plan_id": "plan-solo",
         "status": "done",
         "feature_slug": "proj--solo-import",
         "body": "# Just one heading\n\nbody content here",
         "tasks_imported": false
-      })
+      }, {"key": "plan-solo"})
       response = get("/features/proj--solo-import/generate_tasks_log/plan-solo")
       assert_eq(res_status(response), 200)
       proposed = Task.where({"feature_slug": "proj--solo-import", "status": "proposed"}).all()
@@ -2037,12 +1927,11 @@ describe("FeaturesController#plan_answer", fn() {
 
   test("returns 422 when qid is empty", fn() {
     Feature.create({
-      "_key": "proj--ans-empty",
       "project": "proj",
       "slug": "ans-empty",
       "title": "Ans Empty",
       "status": "ready"
-    })
+    }, {"key": "proj--ans-empty"})
     response = post(
       "/features/proj--ans-empty/plan-answer/plan-x",
       {"qid": "", "value": "ok"},
@@ -2053,12 +1942,11 @@ describe("FeaturesController#plan_answer", fn() {
 
   test("returns 422 when value is empty", fn() {
     Feature.create({
-      "_key": "proj--ans-value-empty",
       "project": "proj",
       "slug": "ans-value-empty",
       "title": "Ans Value Empty",
       "status": "ready"
-    })
+    }, {"key": "proj--ans-value-empty"})
     response = post(
       "/features/proj--ans-value-empty/plan-answer/plan-x",
       {"qid": "q", "value": ""},
@@ -2071,21 +1959,19 @@ describe("FeaturesController#plan_answer", fn() {
     "writes the answer onto a running plan and renders progress",
     fn() {
       Feature.create({
-        "_key": "proj--ans-running",
         "project": "proj",
         "slug": "ans-running",
         "title": "Ans Running",
         "status": "ready"
-      })
+      }, {"key": "proj--ans-running"})
       Plan.create({
-        "_key": "plan-ans-running",
         "project": "proj",
         "plan_id": "plan-ans-running",
         "status": "running",
         "feature_slug": "proj--ans-running",
         "pid": 1,
         "stream_token": "tk"
-      })
+      }, {"key": "plan-ans-running"})
       response = post(
         "/features/proj--ans-running/plan-answer/plan-ans-running",
         {"qid": "q1", "value": "yes"},
@@ -2102,21 +1988,19 @@ describe("FeaturesController#plan_answer", fn() {
     "imports tasks and redirects when the answer arrives after the plan finishes",
     fn() {
       Feature.create({
-        "_key": "proj--ans-done",
         "project": "proj",
         "slug": "ans-done",
         "title": "Ans Done",
         "status": "ready"
-      })
+      }, {"key": "proj--ans-done"})
       Plan.create({
-        "_key": "plan-ans-done",
         "project": "proj",
         "plan_id": "plan-ans-done",
         "status": "done",
         "feature_slug": "proj--ans-done",
         "body": "## Task 1: Late\n\nAfter the fact.",
         "tasks_imported": false
-      })
+      }, {"key": "plan-ans-done"})
       response = post(
         "/features/proj--ans-done/plan-answer/plan-ans-done",
         {"qid": "q1", "value": "yes"},
@@ -2145,29 +2029,26 @@ describe("FeaturesController#show wider state", fn() {
     "splits tasks into proposed and linked buckets in the show page",
     fn() {
       Feature.create({
-        "_key": "proj--mix",
         "project": "proj",
         "slug": "mix",
         "title": "Mix",
         "description": "x",
         "status": "ready"
-      })
+      }, {"key": "proj--mix"})
       Task.create({
-        "_key": "proj--mix-prop",
         "project": "proj",
         "slug": "mix-prop",
         "title": "Proposed One",
         "status": "proposed",
         "feature_slug": "proj--mix"
-      })
+      }, {"key": "proj--mix-prop"})
       Task.create({
-        "_key": "proj--mix-todo",
         "project": "proj",
         "slug": "mix-todo",
         "title": "Linked One",
         "status": "todo",
         "feature_slug": "proj--mix"
-      })
+      }, {"key": "proj--mix-todo"})
       Comment.create_comment("proj--mix", "show@test.com", "Looks nice")
       response = get("/features/proj--mix")
       assert_eq(res_status(response), 200)
@@ -2182,22 +2063,20 @@ describe("FeaturesController#show wider state", fn() {
     "finalizes a done-but-unimported plan when the feature page is rendered",
     fn() {
       Feature.create({
-        "_key": "proj--finalize",
         "project": "proj",
         "slug": "finalize",
         "title": "Finalize Plan",
         "description": "yep",
         "status": "ready"
-      })
+      }, {"key": "proj--finalize"})
       Plan.create({
-        "_key": "plan-finalize",
         "project": "proj",
         "plan_id": "plan-finalize",
         "status": "done",
         "feature_slug": "proj--finalize",
         "body": "## Task 1: From plan\n\nDetails.",
         "tasks_imported": false
-      })
+      }, {"key": "plan-finalize"})
       response = get("/features/proj--finalize")
       assert_eq(res_status(response), 200)
       plan = Plan.find_by_plan_id("plan-finalize")
@@ -2211,25 +2090,23 @@ describe("FeaturesController#show wider state", fn() {
     "finalizes a done plan matched by prompt prefix when feature_slug is unset",
     fn() {
       Feature.create({
-        "_key": "proj--prefix-match",
         "project": "proj",
         "slug": "prefix-match",
         "title": "Prefix Match",
         "description": "yes",
         "status": "ready"
-      })
+      }, {"key": "proj--prefix-match"})
 
       # Older plans don't carry feature_slug — they match by the
       # "Feature brief: <title>" prompt prefix instead.
       Plan.create({
-        "_key": "plan-prefix",
         "project": "proj",
         "plan_id": "plan-prefix",
         "status": "done",
         "prompt": "Feature brief: Prefix Match\n\nyes",
         "body": "## Task 1: Prefix Imported\n\nbody.",
         "tasks_imported": false
-      })
+      }, {"key": "plan-prefix"})
       response = get("/features/proj--prefix-match")
       assert_eq(res_status(response), 200)
       plan = Plan.find_by_plan_id("plan-prefix")
@@ -2291,12 +2168,11 @@ describe(
       "POST /features/:id/update accepts a plan_model field",
       fn() {
         Feature.create({
-          "_key": "proj--upd-model",
           "project": "proj",
           "slug": "upd-model",
           "title": "Upd Model",
           "status": "draft"
-        })
+        }, {"key": "proj--upd-model"})
         response = post(
           "/features/proj--upd-model/update",
           {"title": "Upd Model", "plan_model": "claude-haiku-4-5-20251001"},
@@ -2324,22 +2200,20 @@ describe("FeaturesController#publish with description", fn() {
     "renders the feature description as a header in the combined task body",
     fn() {
       Feature.create({
-        "_key": "proj--with-desc",
         "project": "proj",
         "slug": "with-desc",
         "title": "Featured",
         "description": "Why we want it.",
         "status": "ready"
-      })
+      }, {"key": "proj--with-desc"})
       Task.create({
-        "_key": "proj--prop-desc-1",
         "project": "proj",
         "slug": "prop-desc-1",
         "title": "Build it",
         "body_md": "details",
         "status": "proposed",
         "feature_slug": "proj--with-desc"
-      })
+      }, {"key": "proj--prop-desc-1"})
       response = post("/features/proj--with-desc/publish", {}, {"headers": {"Origin": _publish_origin_for_worker()}})
       assert_eq(res_status(response), 302)
       parent = Task.find_by_slug("proj", "featured")
@@ -2369,15 +2243,13 @@ describe(
       "re-polling a done + already-imported plan is a no-op (no duplicate tasks)",
       fn() {
         Feature.create({
-          "_key": "proj--idem",
           "project": "proj",
           "slug": "idem",
           "title": "Idem",
           "description": "x",
           "status": "ready"
-        })
+        }, {"key": "proj--idem"})
         Plan.create({
-          "_key": "plan-idem",
           "project": "proj",
           "plan_id": "plan-idem",
           "status": "done",
@@ -2385,15 +2257,14 @@ describe(
           "body": "## Task 1: Once\n\nonly.",
           "tasks_imported": true,
           "imported_task_count": 1
-        })
+        }, {"key": "plan-idem"})
         Task.create({
-          "_key": "proj--once",
           "project": "proj",
           "slug": "once",
           "title": "Once",
           "status": "proposed",
           "feature_slug": "proj--idem"
-        })
+        }, {"key": "proj--once"})
         response = get("/features/proj--idem/generate_tasks_log/plan-idem")
         assert_eq(res_status(response), 200)
         # Already-imported plan must not re-import: still exactly one task.
@@ -2406,22 +2277,20 @@ describe(
       "uses a level-2 heading as the fallback title when the body has no '## Task' marker",
       fn() {
         Feature.create({
-          "_key": "proj--h2",
           "project": "proj",
           "slug": "h2",
           "title": "H2 Fallback",
           "description": "x",
           "status": "draft"
-        })
+        }, {"key": "proj--h2"})
         Plan.create({
-          "_key": "plan-h2",
           "project": "proj",
           "plan_id": "plan-h2",
           "status": "done",
           "feature_slug": "proj--h2",
           "body": "## Some subheading\n\nbody.",
           "tasks_imported": false
-        })
+        }, {"key": "plan-h2"})
         response = get("/features/proj--h2/generate_tasks_log/plan-h2")
         assert_eq(res_status(response), 200)
         proposed = Task.where({"feature_slug": "proj--h2", "status": "proposed"}).all()
@@ -2437,22 +2306,20 @@ describe(
       "uses the first non-blank line as a fallback title when no heading is present",
       fn() {
         Feature.create({
-          "_key": "proj--noheading",
           "project": "proj",
           "slug": "noheading",
           "title": "No Heading",
           "description": "x",
           "status": "draft"
-        })
+        }, {"key": "proj--noheading"})
         Plan.create({
-          "_key": "plan-nh",
           "project": "proj",
           "plan_id": "plan-nh",
           "status": "done",
           "feature_slug": "proj--noheading",
           "body": "just one short paragraph",
           "tasks_imported": false
-        })
+        }, {"key": "plan-nh"})
         response = get("/features/proj--noheading/generate_tasks_log/plan-nh")
         assert_eq(res_status(response), 200)
         proposed = Task.where({"feature_slug": "proj--noheading", "status": "proposed"}).all()
@@ -2465,25 +2332,23 @@ describe(
       "truncates an over-long first line in the fallback title",
       fn() {
         Feature.create({
-          "_key": "proj--long",
           "project": "proj",
           "slug": "long",
           "title": "Long Line",
           "description": "x",
           "status": "draft"
-        })
+        }, {"key": "proj--long"})
         long = "this is a deliberately very long single line that "
         + "should be truncated by the fallback title helper "
         + "because it exceeds sixty characters"
         Plan.create({
-          "_key": "plan-long",
           "project": "proj",
           "plan_id": "plan-long",
           "status": "done",
           "feature_slug": "proj--long",
           "body": long,
           "tasks_imported": false
-        })
+        }, {"key": "plan-long"})
         response = get("/features/proj--long/generate_tasks_log/plan-long")
         assert_eq(res_status(response), 200)
         proposed = Task.where({"feature_slug": "proj--long", "status": "proposed"}).all()
@@ -2498,14 +2363,12 @@ describe(
       "renders option descriptions when the multi-select question carries them",
       fn() {
         Feature.create({
-          "_key": "proj--qm-desc",
           "project": "proj",
           "slug": "qm-desc",
           "title": "Q Multi w/ desc",
           "status": "ready"
-        })
+        }, {"key": "proj--qm-desc"})
         Plan.create({
-          "_key": "plan-qm-desc",
           "project": "proj",
           "plan_id": "plan-qm-desc",
           "status": "awaiting",
@@ -2523,7 +2386,7 @@ describe(
             }]}
           },
           "pid": 1
-        })
+        }, {"key": "plan-qm-desc"})
         response = get("/features/proj--qm-desc/generate_tasks_log/plan-qm-desc")
         assert_eq(res_status(response), 200)
         body = res_body(response)
@@ -2549,25 +2412,23 @@ describe("FeaturesController#show with active plan", fn() {
     "surfaces an in-flight plan tied by feature_slug as the active plan",
     fn() {
       Feature.create({
-        "_key": "proj--with-active",
         "project": "proj",
         "slug": "with-active",
         "title": "Has Active",
         "description": "x",
         "status": "ready"
-      })
+      }, {"key": "proj--with-active"})
 
       # `pid: 1` (init) reliably reports alive on Linux test hosts, so
       # `effective_status` returns "running" instead of synthesizing a zombie.
       Plan.create({
-        "_key": "plan-active",
         "project": "proj",
         "plan_id": "plan-active",
         "status": "running",
         "feature_slug": "proj--with-active",
         "pid": 1,
         "stream_token": "tk"
-      })
+      }, {"key": "plan-active"})
       response = get("/features/proj--with-active")
       assert_eq(res_status(response), 200)
     }
@@ -2577,27 +2438,25 @@ describe("FeaturesController#show with active plan", fn() {
     "falls back to prompt-prefix matching when an in-flight plan lacks feature_slug",
     fn() {
       Feature.create({
-        "_key": "proj--prefix-active",
         "project": "proj",
         "slug": "prefix-active",
         "title": "Prefix Active",
         "description": "x",
         "status": "ready"
-      })
+      }, {"key": "proj--prefix-active"})
 
       # No feature_slug — must be matched via the "Feature brief: <title>"
       # prompt prefix instead. Plan is still running so _finalize_done_plans
       # leaves it alone and _latest_plan_for / _active_plan_for traverse
       # the second (prompt-based) lookup loop.
       Plan.create({
-        "_key": "plan-prefix-active",
         "project": "proj",
         "plan_id": "plan-prefix-active",
         "status": "running",
         "prompt": "Feature brief: Prefix Active\n\nx",
         "pid": 1,
         "stream_token": "tk"
-      })
+      }, {"key": "plan-prefix-active"})
       response = get("/features/proj--prefix-active")
       assert_eq(res_status(response), 200)
     }
@@ -2621,32 +2480,29 @@ describe(
       "import picks a numbered slug when the derived base collides",
       fn() {
         Feature.create({
-          "_key": "proj--collide-f",
           "project": "proj",
           "slug": "collide-f",
           "title": "Collide F",
           "description": "x",
           "status": "draft"
-        })
+        }, {"key": "proj--collide-f"})
 
         # Pre-seed a task whose slug matches what the parser would derive
         # from the plan section title — forces _unique_slug_local to bump.
         Task.create({
-          "_key": "proj--collide-task",
           "project": "proj",
           "slug": "collide-task",
           "title": "Existing",
           "status": "todo"
-        })
+        }, {"key": "proj--collide-task"})
         Plan.create({
-          "_key": "plan-collide",
           "project": "proj",
           "plan_id": "plan-collide",
           "status": "done",
           "feature_slug": "proj--collide-f",
           "body": "## Task 1: Collide task\n\nbody.",
           "tasks_imported": false
-        })
+        }, {"key": "plan-collide"})
         response = get("/features/proj--collide-f/generate_tasks_log/plan-collide")
         assert_eq(res_status(response), 200)
         proposed = Task.where({"feature_slug": "proj--collide-f", "status": "proposed"}).all()
@@ -2674,29 +2530,26 @@ describe(
       "POST /features/:id/tasks/:slug/remove returns 422 when the task belongs to a different feature",
       fn() {
         Feature.create({
-          "_key": "proj--alpha",
           "project": "proj",
           "slug": "alpha",
           "title": "Alpha",
           "status": "draft"
-        })
+        }, {"key": "proj--alpha"})
         Feature.create({
-          "_key": "proj--beta",
           "project": "proj",
           "slug": "beta",
           "title": "Beta",
           "status": "draft"
-        })
+        }, {"key": "proj--beta"})
 
         # Task is linked to alpha but the request targets beta.
         Task.create({
-          "_key": "proj--alpha-task",
           "project": "proj",
           "slug": "alpha-task",
           "title": "Alpha Task",
           "status": "proposed",
           "feature_slug": "proj--alpha"
-        })
+        }, {"key": "proj--alpha-task"})
         response = post(
           "/features/proj--beta/tasks/alpha-task/remove",
           {},

@@ -2,7 +2,8 @@
 #
 # task-dashboard
 #
-# Walks every project under TASK_ORCH_ROOT (default ~/workspace/soli) and
+# Walks every project under TASK_ORCH_ROOT (default ~/workspace/soli, see
+# bin/project-path for the <root>/<group>/<repo> layout) and
 # prints per-column task counts. Quick situational awareness across all
 # repos without booting the web UI.
 
@@ -18,11 +19,11 @@ row_fmt="%-24s %5d %6d %11d %6d %5d  %s\n"
 printf "$header_fmt" "PROJECT" "todo" "queued" "in-progress" "review" "done" "RUNNING"
 printf '%.s-' {1..80}; printf '\n'
 
+script_dir=$(dirname "$(realpath "$0")")
+
 shopt -s nullglob
-for proj in "$root"/*/; do
-  proj=${proj%/}
+while IFS=$'\t' read -r name proj; do
   [[ -d "$proj/tasks" ]] || continue
-  name=$(basename "$proj")
 
   counts=()
   for status in "${statuses[@]}"; do
@@ -44,5 +45,5 @@ for proj in "$root"/*/; do
 
   printf "$row_fmt" "$name" "${counts[0]}" "${counts[1]}" "${counts[2]}" \
     "${counts[3]}" "${counts[4]}" "$running"
-done
+done < <(TASK_ORCH_ROOT="$root" "$script_dir/project-path" --list)
 shopt -u nullglob

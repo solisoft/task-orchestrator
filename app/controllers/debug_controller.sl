@@ -83,7 +83,6 @@ class DebugController < ApplicationController
         raw_slug = title.slugify()
         log.push("    slug_raw=" + raw_slug)
         task = Task.create({
-          "_key": Task.key_for(feature.project, raw_slug),
           "project": feature.project,
           "slug": raw_slug,
           "title": title,
@@ -91,7 +90,7 @@ class DebugController < ApplicationController
           "status": "proposed",
           "feature_slug": feature._key,
           "author": ""
-        })
+        }, {"key": Task.key_for(feature.project, raw_slug)})
         if task._errors
           log.push("    errors=" + str(task._errors))
         else

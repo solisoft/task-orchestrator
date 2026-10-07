@@ -8,7 +8,6 @@
 # `AgentConfig.get_or`, `AgentConfig.enabled_agents`) rather than
 # touching the inherited Model API directly.
 class AgentConfig < Model
-  validates("_key", {"presence": true})
 
   static def get(key)
     c = AgentConfig.find_by("_key", key)
@@ -26,9 +25,8 @@ class AgentConfig < Model
     existing = AgentConfig.find_by("_key", key)
     if existing.nil?
       return AgentConfig.create({
-        "_key": key,
         "value": value
-      })
+      }, {"key": key})
     end
 
     AgentConfig.update(key, {"value": value})

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# project-path — resolve orchestrator project names to directories.
+#
+#   project-path <name>   print the project's directory (exit 1 if unknown)
+#   project-path --list   print "<name>\t<path>" for every project
+#
+# Projects live up to two levels under $TASK_ORCH_ROOT, e.g. with
+# TASK_ORCH_ROOT=~/Work:
+#
+#   ~/Work/soli/<repo>   ~/Work/agsi/<repo>   ~/Work/<customer>/<repo>
+#
+# A directory is a project when it is a git repository (holds `.git`). A
+# top-level directory that is a project is used as-is (its subfolders are
+# not scanned); one that is not is a group, and its repositories are
+# listed. The project name is the directory's basename; when two share a
+# name, the first in byte-sorted path order wins.
+#
+# Keep in sync with `Project.discover` in app/models/project.sl — the app
+# and these runner scripts must resolve a name to the same directory.
+set -euo pipefail
+
+root=${TASK_ORCH_ROOT:-$HOME/workspace/soli}
+root=${root%/}
+
+list_projects() {
+  find "$root" -mindepth 2 -maxdepth 3 -name .git -printf '%h\n' 2>/dev/null \
+    | LC_ALL=C sort -u \
+    | awk -v root="$root" '
+        {
+          rel = substr($0, length(root) + 2)
+          n = split(rel, seg, "/")
+          for (i = 1; i <= n; i++) if (substr(seg[i], 1, 1) == ".") next
+          c++
+          paths[c] = $0
+          names[c] = seg[n]
+          parents[c] = (n == 2) ? seg[1] : ""
+          if (n == 1) top[seg[1]] = 1
+        }
+        END {
+          for (i = 1; i <= c; i++) {
+            if (parents[i] != "" && (parents[i] in top)) continue
+            if (names[i] in seen) continue
+            seen[names[i]] = 1
+            print names[i] "\t" paths[i]
+          }
+        }'
+}
+
+case "${1:-}" in
+  "" | -h | --help)
+    sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+    ;;
+  --list)
+    list_projects
+    ;;
+  *)
+    match=$(list_projects | awk -F'\t' -v want="$1" '$1 == want { print $2; exit }')
+    [[ -n "$match" ]] || exit 1
+    printf '%s\n' "$match"
+    ;;
+esac

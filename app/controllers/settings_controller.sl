@@ -19,10 +19,12 @@ class SettingsController < ApplicationController
   allowed_set: Any
   allowed_orphans: Any
   presets: Any
+  bonfire: Any
+  settings_notice: Any
 
   def show(req)
     _email = session_get("user_email") ?? ""
-    current_plan_model = Setting.get_or("plan_model", "claude-sonnet-4-6")
+    current_plan_model = Plan.default_plan_model()
     pmd = plan_model_picker_data(current_plan_model)
     # Settings is the only page that needs the full opencode universe (to
     # render the allowlist checkbox panel). The shell-out is paid here, not
@@ -46,6 +48,8 @@ class SettingsController < ApplicationController
     @codex_models = codex_all
     @claude_model_ids = claude_ids
     @claude_model_labels = Plan.claude_model_labels()
+    @bonfire = this._settings_bonfire_status()
+    @settings_notice = this._settings_notice(req)
     @allowed_set = this._settings_allowed_set(allowed)
     @allowed_orphans = this._settings_allowed_orphans(allowed, claude_ids, opencode_all, codex_all)
     @presets = ThemePreset.all_with_builtins()
@@ -110,7 +114,75 @@ class SettingsController < ApplicationController
       Setting.set("limit_daily_" + a, this._settings_parse_limit(form["limit_daily_" + a]))
       Setting.set("limit_weekly_" + a, this._settings_parse_limit(form["limit_weekly_" + a]))
     end
-    redirect("/settings")
+    if form["bonfire_present"] == "1"
+      bonfire_error = this._settings_apply_bonfire(form)
+      return {"status": 422, "body": bonfire_error} if bonfire_error.present?
+    end
+    redirect("/settings?saved=1")
+  end
+
+  # POST /settings/bonfire/check — call Bonfire's /api/v1/me with the
+  # saved token and come back with "connected as <email>" or the error.
+  def check_bonfire(req)
+    url = Setting.get_or("bonfire_url", TicketSource.default_bonfire_url())
+    token = str(Setting.get_or("bonfire_token", "")).trim
+    if token == ""
+      return redirect("/settings?bonfire_check=" + url_encode("No token saved yet") + "#integrations")
+    end
+
+    me = TicketSource._bonfire_get({"host": url, "token": token}, "/api/v1/me")
+    text = me["ok"] ? "ok:" + str(me["data"]["email"] ?? "") : (me["error"] ?? "failed")
+    redirect("/settings?bonfire_check=" + url_encode(text) + "#integrations")
+  end
+
+  # What the Integrations card shows: URL, whether a token is saved and its
+  # last 4 characters (enough to recognise it, never the token itself).
+  def _settings_bonfire_status()
+    token = str(Setting.get_or("bonfire_token", "")).trim
+    {
+      "url": Setting.get_or("bonfire_url", TicketSource.default_bonfire_url()),
+      "token_set": token != "",
+      "token_hint": token.length > 4 ? token.substring(token.length - 4, token.length) : ""
+    }
+  end
+
+  # Banner from the post-save / post-check redirect: nil or {"kind", "text"}.
+  def _settings_notice(req)
+    query = req["query"] ?? {}
+    check = query["bonfire_check"]
+    if check.present?
+      if check.starts_with("ok:")
+        return {"kind": "ok", "text": "Bonfire connected as " + check.substring(3, check.length) + "."}
+      end
+
+      return {"kind": "error", "text": "Bonfire check failed: " + check}
+    end
+    return {"kind": "ok", "text": "Settings saved."} if query["saved"] == "1"
+
+    nil
+  end
+
+  # Bonfire ticket source: base URL + API token (from Bonfire's
+  # /account/tokens). An empty token field keeps the stored token — it is
+  # never echoed back into the page — and `bonfire_token_clear` drops it.
+  # Returns an error message, or nil when everything was saved.
+  def _settings_apply_bonfire(form)
+    url = (form["bonfire_url"] ?? "").trim
+    while url.ends_with("/")
+      url = url.substring(0, url.length - 1)
+    end
+    url = TicketSource.default_bonfire_url() if url == ""
+    valid_url = Regex.matches("^https?://[A-Za-z0-9.-]+(:[0-9]+)?$", url)
+    return "Bonfire URL must look like https://host[:port]" if !valid_url
+
+    Setting.set("bonfire_url", url)
+    token = (form["bonfire_token"] ?? "").trim
+    if form["bonfire_token_clear"].present?
+      Setting.unset("bonfire_token")
+    elsif token != ""
+      Setting.set("bonfire_token", token)
+    end
+    nil
   end
 
   def set_theme(req)
@@ -139,10 +211,9 @@ class SettingsController < ApplicationController
     key = "custom:" + name
     Setting.set_theme_preset(key, css_vars)
     ThemePreset.create({
-      "_key": key,
       "name": name,
       "css_vars": css_vars
-    })
+    }, {"key": key})
     redirect("/settings")
   end
 

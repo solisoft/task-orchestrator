@@ -166,6 +166,57 @@ State files: `~/.local/state/task-orchestrator/<repo>/<slug>.{log,log.jsonl,stat
 plus `~/.local/state/task-orchestrator/dispatcher.log`. Active worktrees:
 `~/.cache/task-orchestrator/worktrees/<repo>/<slug>/`.
 
+## PR / MR webhooks (GitHub & GitLab)
+
+Cards can track PR state live instead of waiting for you to click
+**Mark as done** (which polls `gh pr view`). Two unscoped endpoints
+ingest provider events:
+
+| Provider | Endpoint                | Auth                                                 | Events to enable     |
+|----------|-------------------------|------------------------------------------------------|----------------------|
+| GitHub   | `POST /webhooks/github` | HMAC-SHA256 of the raw body (`X-Hub-Signature-256`)  | Pull requests        |
+| GitLab   | `POST /webhooks/gitlab` | Shared secret compare (`X-Gitlab-Token`)             | Merge request events |
+
+Configure the secrets first — each endpoint answers `401` until at
+least one secret is set; unsigned deliveries are never accepted.
+**Per project**: open the project page and click **⚙ Settings** — the
+modal holds the GitHub / GitLab secrets for that repo (stored as
+`github_webhook_secret:<project>` / `gitlab_webhook_secret:<project>`
+rows). An empty field falls back to the global secret:
+
+```soli
+Setting.set("github_webhook_secret", "<random hex>")   # global fallback
+Setting.set("gitlab_webhook_secret", "<random hex>")
+```
+
+A delivery signed with *any* configured secret (global or any
+project's) is accepted — the card is then matched by PR URL / branch,
+not by which secret signed it.
+
+Then add a webhook on the repo (GitHub: *Settings → Webhooks*, GitLab:
+*Settings → Webhooks*) pointing at `https://<host>/webhooks/github`
+(or `/gitlab`), content type `application/json`, with the same secret —
+the modal shows the exact URLs to paste.
+
+What a delivery does to the matching card:
+
+- **Status badge** — an `open` / `draft` / `merged` / `closed` pill on
+  the kanban card and on the task page next to the PR link.
+- **Merged** → the card auto-moves to `done` from `review` *or*
+  `inprogress` (covers a human merging before the agent settles), with
+  the usual Web Push + activity log (`change_author = "webhook:<provider>"`).
+- **Closed without merge** → the card flips to `failed` with a
+  `failure_reason`, so dropped work surfaces on the board.
+- **Opened** — if no card carries the PR URL yet, the head branch is
+  matched against `task/<slug>` and the payload's repo against each
+  project's `origin` remote, so a PR opened by hand auto-links to its
+  card.
+
+Matching is by `pr_url` first, branch fallback second. Deliveries that
+match no card are acked with `200` (providers stop retrying); duplicate
+deliveries dedup on the delivery id (`pr_event_id` on the row). The
+manual **Mark as done** path still works for repos without webhooks.
+
 ## Failure mode
 
 If the agent exits non-zero, /review-task rejects, or anything else trips

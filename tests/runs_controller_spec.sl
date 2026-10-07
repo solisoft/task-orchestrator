@@ -46,7 +46,7 @@ describe("RunsController", fn() {
       System.run_sync([
         "mkdir",
         "-p",
-        root + "/proj_run_test/tasks/todo"
+        root + "/proj_run_test/tasks/todo", root + "/proj_run_test/.git"
       ])
       response = get("/projects/proj_run_test/tasks/nonexistent/run")
       assert_eq(res_status(response), 404)
@@ -57,15 +57,14 @@ describe("RunsController", fn() {
       System.run_sync([
         "mkdir",
         "-p",
-        root + "/proj_run_ok/tasks/todo"
+        root + "/proj_run_ok/tasks/todo", root + "/proj_run_ok/.git"
       ])
       Task.create({
-        "_key": "proj_run_ok--task-run",
         "project": "proj_run_ok",
         "slug": "task-run",
         "title": "Task Run",
         "status": "todo"
-      })
+      }, {"key": "proj_run_ok--task-run"})
       response = get("/projects/proj_run_ok/tasks/task-run/run")
       assert_eq(res_status(response), 302)
       assert_eq(res_header(response, "Location"), "/projects/proj_run_ok/tasks/task-run")
@@ -92,7 +91,7 @@ describe("RunsController", fn() {
       System.run_sync([
         "mkdir",
         "-p",
-        root + "/proj_log_test/tasks/todo"
+        root + "/proj_log_test/tasks/todo", root + "/proj_log_test/.git"
       ])
       response = get("/projects/proj_log_test/tasks/nonexistent/run/log")
       assert_eq(res_status(response), 404)
@@ -103,15 +102,14 @@ describe("RunsController", fn() {
       System.run_sync([
         "mkdir",
         "-p",
-        root + "/proj_log_ok/tasks/todo"
+        root + "/proj_log_ok/tasks/todo", root + "/proj_log_ok/.git"
       ])
       Task.create({
-        "_key": "proj_log_ok--task-log",
         "project": "proj_log_ok",
         "slug": "task-log",
         "title": "Task Log",
         "status": "todo"
-      })
+      }, {"key": "proj_log_ok--task-log"})
       response = get("/projects/proj_log_ok/tasks/task-log/run/log")
       assert_eq(res_status(response), 200)
     })
@@ -125,15 +123,14 @@ describe("RunsController", fn() {
       System.run_sync([
         "mkdir",
         "-p",
-        root + "/proj_resume/tasks/todo"
+        root + "/proj_resume/tasks/todo", root + "/proj_resume/.git"
       ])
       Task.create({
-        "_key": "proj_resume--resume-me",
         "project": "proj_resume",
         "slug": "resume-me",
         "title": "Resume me",
         "status": "done"
-      })
+      }, {"key": "proj_resume--resume-me"})
       response = _runs_post("/projects/proj_resume/tasks/resume-me/run/resume", {})
       assert_eq(res_status(response), 422)
       assert_contains(res_body(response), "not in a resumable state")

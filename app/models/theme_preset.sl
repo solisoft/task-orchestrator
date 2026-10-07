@@ -8,7 +8,6 @@
 # settings page previews use them, and any CSS that opts into a
 # `var(--color-*)` reference picks them up across the app.
 class ThemePreset < Model
-  validates("_key", {"presence": true})
 
   static def _vars(
     bg,

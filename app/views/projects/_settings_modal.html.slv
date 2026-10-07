@@ -1,0 +1,148 @@
+<!-- Project settings modal — ticket source + per-project webhook secrets.
+     Locals: project, webhook_settings (github_secret / gitlab_secret /
+     github_global / gitlab_global), ticket_config (stored ticket-source
+     fields, blank = derived) and ticket_source (resolved: what an import
+     reads, plus ready / reason). Opened by the Settings button in
+     the project header via dialog.showModal(). -->
+<dialog id="project-settings-modal"
+        class="rounded-2xl glass-card border border-white/10 bg-slate-900/95 text-slate-200 p-0 w-full max-w-lg backdrop:bg-black/60 backdrop:backdrop-blur-sm">
+  <form method="post" action="/projects/<%= project["name"] %>/settings">
+    <div class="px-6 pt-5 pb-4 border-b border-white/10 flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-semibold text-slate-100">Project settings</h2>
+        <p class="text-xs font-mono text-slate-500 mt-0.5"><%= project["name"] %></p>
+      </div>
+      <button type="button" aria-label="Close settings"
+              onclick="document.getElementById('project-settings-modal').close()"
+              class="text-slate-500 hover:text-slate-200 text-xl leading-none px-2 py-1 transition-colors">&times;</button>
+    </div>
+
+    <div class="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+      <input type="hidden" name="ticket_source_form" value="1">
+      <div>
+        <h3 class="text-sm font-medium text-slate-200 mb-1">Tickets</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Where <em>Import tickets</em> reads from. GitLab and GitHub go through <code class="text-slate-300">glab</code> /
+          <code class="text-slate-300">gh</code> (log in with <code class="text-slate-300">glab auth login --hostname &lt;host&gt;</code>);
+          Bonfire uses the token from <a href="/settings" class="text-indigo-300 hover:text-indigo-200">Settings</a>.
+          Only open tickets are imported, once each.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label for="ticket-provider" class="block text-xs font-medium text-slate-400 mb-1">Provider</label>
+          <select id="ticket-provider" name="ticket_provider"
+                  class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm text-slate-200">
+            <option value="" <%= ticket_config["provider"] == "" ? "selected" : "" %>>Auto (from git remote)</option>
+            <option value="gitlab" <%= ticket_config["provider"] == "gitlab" ? "selected" : "" %>>GitLab</option>
+            <option value="github" <%= ticket_config["provider"] == "github" ? "selected" : "" %>>GitHub</option>
+            <option value="bonfire" <%= ticket_config["provider"] == "bonfire" ? "selected" : "" %>>Bonfire</option>
+          </select>
+        </div>
+        <div>
+          <label for="ticket-host" class="block text-xs font-medium text-slate-400 mb-1">Host <span class="text-slate-600">(GitLab / GitHub)</span></label>
+          <input type="text" id="ticket-host" name="ticket_host" value="<%= ticket_config["host"] %>"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="<%= ticket_source["provider"] != "bonfire" && ticket_source["host"] != "" ? ticket_source["host"] : "gitlab.example.com" %>"
+                 class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        </div>
+      </div>
+
+      <div>
+        <label for="ticket-repo" class="block text-xs font-medium text-slate-400 mb-1">Repository <span class="text-slate-600">— or Bonfire project id</span></label>
+        <input type="text" id="ticket-repo" name="ticket_repo" value="<%= ticket_config["repo"] %>"
+               autocomplete="off" spellcheck="false"
+               placeholder="<%= ticket_source["provider"] != "bonfire" && ticket_source["repo"] != "" ? ticket_source["repo"] : "group/repo" %>"
+               class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        <p class="text-[11px] text-slate-500 mt-1">Leave host and repository empty to use the <code>origin</code> remote.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label for="ticket-labels" class="block text-xs font-medium text-slate-400 mb-1">Required labels</label>
+          <input type="text" id="ticket-labels" name="ticket_labels" value="<%= ticket_config["labels"] %>"
+                 autocomplete="off" spellcheck="false" placeholder="P1, backend"
+                 class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        </div>
+        <div>
+          <label for="ticket-exclude-labels" class="block text-xs font-medium text-slate-400 mb-1">Excluded labels</label>
+          <input type="text" id="ticket-exclude-labels" name="ticket_exclude_labels" value="<%= ticket_config["exclude_labels"] %>"
+                 autocomplete="off" spellcheck="false" placeholder="en-cours, blocked"
+                 class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+        <div>
+          <label for="ticket-column" class="block text-xs font-medium text-slate-400 mb-1">Column <span class="text-slate-600">(Bonfire)</span></label>
+          <input type="text" id="ticket-column" name="ticket_column" value="<%= ticket_config["column"] %>"
+                 autocomplete="off" spellcheck="false" placeholder="Backlog"
+                 class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600">
+        </div>
+        <label class="flex items-center gap-2 text-sm text-slate-300 pb-2">
+          <input type="checkbox" name="ticket_assigned_to_me" value="1" <%= ticket_config["assigned_to_me"] ? "checked" : "" %>>
+          Only tickets assigned to me
+        </label>
+      </div>
+
+      <% if ticket_source["ready"] %>
+        <p class="text-[11px] text-slate-500">Reads <span class="font-mono text-slate-300"><%= ticket_source["provider"] %> · <%= ticket_source["host"] %>/<%= ticket_source["repo"] %></span>.</p>
+      <% else %>
+        <p class="text-[11px] text-amber-400/80"><%= ticket_source["reason"] %></p>
+      <% end %>
+
+      <div class="border-t border-white/10 pt-5">
+        <h3 class="text-sm font-medium text-slate-200 mb-1">PR / MR webhooks</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Point the repo's webhook at
+          <code class="text-slate-300 select-all"><span class="js-origin"></span>/webhooks/github</code>
+          (or <code class="text-slate-300 select-all"><span class="js-origin"></span>/webhooks/gitlab</code>),
+          content type <code class="text-slate-300">application/json</code>, with the matching
+          secret below. Merged PRs auto-move cards to <em>done</em>; closed-without-merge flags them <em>failed</em>.
+        </p>
+      </div>
+
+      <div>
+        <label for="github-webhook-secret" class="block text-xs font-medium text-slate-400 mb-1">GitHub webhook secret</label>
+        <input type="text" id="github-webhook-secret" name="github_webhook_secret"
+               value="<%= h(webhook_settings["github_secret"]) %>"
+               autocomplete="off" spellcheck="false" placeholder="leave empty to use the global secret"
+               class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        <% if webhook_settings["github_secret"] == "" and webhook_settings["github_global"] %>
+          <p class="text-[11px] text-slate-500 mt-1">Currently using the global GitHub secret.</p>
+        <% elsif webhook_settings["github_secret"] == "" and !webhook_settings["github_global"] %>
+          <p class="text-[11px] text-amber-400/80 mt-1">No secret configured — GitHub deliveries are rejected (401).</p>
+        <% end %>
+      </div>
+
+      <div>
+        <label for="gitlab-webhook-secret" class="block text-xs font-medium text-slate-400 mb-1">GitLab webhook secret</label>
+        <input type="text" id="gitlab-webhook-secret" name="gitlab_webhook_secret"
+               value="<%= h(webhook_settings["gitlab_secret"]) %>"
+               autocomplete="off" spellcheck="false" placeholder="leave empty to use the global secret"
+               class="w-full rounded-md bg-slate-950/60 border border-white/10 focus:border-indigo-400/60 outline-none px-3 py-2 text-sm font-mono text-slate-200 placeholder:text-slate-600">
+        <% if webhook_settings["gitlab_secret"] == "" and webhook_settings["gitlab_global"] %>
+          <p class="text-[11px] text-slate-500 mt-1">Currently using the global GitLab secret.</p>
+        <% elsif webhook_settings["gitlab_secret"] == "" and !webhook_settings["gitlab_global"] %>
+          <p class="text-[11px] text-amber-400/80 mt-1">No secret configured — GitLab deliveries are rejected (401).</p>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="px-6 py-4 border-t border-white/10 flex justify-end gap-2">
+      <button type="button"
+              onclick="document.getElementById('project-settings-modal').close()"
+              class="rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-medium px-4 py-2 transition-colors">Cancel</button>
+      <button type="submit"
+              class="rounded-lg bg-indigo-500/90 hover:bg-indigo-400 text-white text-sm font-medium px-4 py-2 transition-colors btn-glow">Save settings</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  // Fill the copyable webhook URLs with the real origin (the server
+  // doesn't know what host the user reaches it on).
+  document.querySelectorAll('#project-settings-modal .js-origin').forEach(function (el) {
+    el.textContent = window.location.origin;
+  });
+</script>
