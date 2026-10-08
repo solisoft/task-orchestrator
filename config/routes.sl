@@ -25,6 +25,13 @@ router_websocket("/ws/code-review-stream", "tasks#code_review_stream")
 router_websocket("/ws/feature-generate-stream", "features#generate_stream")
 router_websocket("/ws/run-stream", "runs#stream")
 
+# ── Agent-facing JSON API (X-Api-Key gated) ─
+# Headless agents (opencode, claude) create tasks without a session; the
+# scoped `api_key` middleware checks `X-Api-Key` against Setting("api_key").
+middleware("api_key", -> {
+  post("/api/projects/:name/tasks", "tasks#api_create")
+})
+
 # ── Auth-gated routes ─────────────────
 # Every HTML page and JSON action a signed-in user can reach lives here.
 # Unscoped exceptions above are the gate itself (/login, /logout) and the

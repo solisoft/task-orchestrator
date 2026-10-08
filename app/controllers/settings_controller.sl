@@ -21,6 +21,7 @@ class SettingsController < ApplicationController
   presets: Any
   bonfire: Any
   settings_notice: Any
+  api_key: Any
 
   def show(req)
     _email = session_get("user_email") ?? ""
@@ -49,6 +50,7 @@ class SettingsController < ApplicationController
     @claude_model_ids = claude_ids
     @claude_model_labels = Plan.claude_model_labels()
     @bonfire = this._settings_bonfire_status()
+    @api_key = Setting.get_or("api_key", "")
     @settings_notice = this._settings_notice(req)
     @allowed_set = this._settings_allowed_set(allowed)
     @allowed_orphans = this._settings_allowed_orphans(allowed, claude_ids, opencode_all, codex_all)
@@ -114,6 +116,11 @@ class SettingsController < ApplicationController
       Setting.set("limit_daily_" + a, this._settings_parse_limit(form["limit_daily_" + a]))
       Setting.set("limit_weekly_" + a, this._settings_parse_limit(form["limit_weekly_" + a]))
     end
+    # `api_key` rides the same form. Persist only when the field is
+    # actually present so callers that POST a partial form (theme-only,
+    # presets) don't blank an existing key.
+    raw_api_key = form["api_key"]
+    Setting.set("api_key", str(raw_api_key).trim()) if !raw_api_key.nil?
     if form["bonfire_present"] == "1"
       bonfire_error = this._settings_apply_bonfire(form)
       return {"status": 422, "body": bonfire_error} if bonfire_error.present?

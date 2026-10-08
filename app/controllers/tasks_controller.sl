@@ -113,6 +113,56 @@ class TasksController < ApplicationController
     Task.unique_slug_for(project_name, base)
   end
 
+  # POST /api/projects/:name/tasks — JSON-in / JSON-out endpoint for
+  # agent-driven task creation. Sits behind `middleware("api_key", ...)`
+  # so it can be hit without a session cookie. The body shape is:
+  #   { "title": "...", "body_md": "...", "model": "..."(optional),
+  #     "author": "..."(optional) }
+  # Either `title` or a leading `# heading` line in `body_md` is required;
+  # `Plan.allow_plan_model` validates `model` so anything outside the
+  # allowlist falls back to the canonical default.
+  def api_create(req)
+    project = Project.find_project(req["params"]["name"])
+    if project.nil?
+      return this._api_tasks_json(404, {"error": "Unknown project: " + req["params"]["name"].to_s})
+    end
+
+    body = req["json"] ?? req["all"] ?? {}
+    body_md = body["body_md"] ?? ""
+    title = (body["title"] ?? "").trim()
+    title = this._parse_title_from_body(body_md) if title == ""
+    if title == ""
+      return this._api_tasks_json(422, {
+        "error": "title is required (provide `title` or a `# heading` line in `body_md`)"
+      })
+    end
+
+    slug = this._unique_slug_for(project["name"], title.slugify())
+    task = Task.create({
+      "project": project["name"],
+      "slug": slug,
+      "title": title,
+      "body_md": body_md,
+      "model": Plan.allow_plan_model((body["model"] ?? "").trim()),
+      "author": (body["author"] ?? "agent").trim(),
+      "status": "todo"
+    }, {"key": Task.key_for(project["name"], slug)})
+    if task._errors
+      return this._api_tasks_json(422, {"error": "validation failed", "details": task._errors})
+    end
+    this._api_tasks_json(201, {"slug": task.slug, "url": "/projects/" + project["name"] + "/tasks/" + task.slug})
+  end
+
+  # JSON response with the conventional Content-Type, so every branch of
+  # api_create returns the same shape.
+  def _api_tasks_json(status, payload)
+    {
+      "status": status,
+      "headers": {"Content-Type": "application/json; charset=utf-8"},
+      "body": JSON.stringify(payload)
+    }
+  end
+
   def show(req)
     project = Project.find_project(req["params"]["name"])
     if project.nil?

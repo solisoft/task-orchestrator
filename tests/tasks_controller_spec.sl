@@ -1698,3 +1698,127 @@ describe("TasksController#show code-review panel", fn() {
     end
   })
 })
+
+# --- agent-facing JSON API -------------------------------------------
+#
+# `POST /api/projects/:name/tasks` is gated by the `api_key` scoped
+# middleware (X-Api-Key header → `Setting("api_key")`). The endpoint is
+# entirely separate from the cookie-auth `create` flow — agents
+# (opencode / claude) hit it without a session.
+
+# POST to the agent API with an `X-Api-Key` header — the valid spec key
+# unless `key` overrides it; `nil` sends no header at all.
+fn _tq_api_post(path, payload, key = "secret-key-123")
+  headers = key.nil? ? {} : {"x-api-key": key}
+  post(path, payload, {"headers": headers})
+end
+
+describe("TasksController#api_create", fn() {
+  before_each(fn() {
+    assert_test_db()
+    Task.delete_all()
+    Setting.delete_all()
+    _tq_setup_workspace()
+    as_guest()
+    Setting.set("api_key", "secret-key-123")
+  })
+
+  test("creates a task and returns 201 JSON when the API key is valid", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "From agent", "body_md": "spec body"})
+    assert_eq(res_status(response), 201)
+    body = res_body(response)
+    assert_contains(body, "\"slug\":\"from-agent\"")
+    assert_contains(body, "/projects/proj/tasks/from-agent")
+    t = Task.find_by_slug("proj", "from-agent")
+    assert_not_null(t)
+    assert_eq(t.title, "From agent")
+    assert_eq(t.body_md, "spec body")
+    assert_eq(t.status, "todo")
+  })
+
+  test("falls back to the first `# heading` line when title is omitted", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"body_md": "# Heading-derived title\n\nbody here"})
+    assert_eq(res_status(response), 201)
+    t = Task.find_by_slug("proj", "heading-derived-title")
+    assert_not_null(t)
+    assert_eq(t.title, "Heading-derived title")
+  })
+
+  test("returns 401 JSON when the X-Api-Key header is missing", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "Anon attempt", "body_md": "x"}, nil)
+    assert_eq(res_status(response), 401)
+    assert_contains(res_body(response), "Invalid or missing X-Api-Key")
+    # No row was inserted on the auth failure.
+    assert_null(Task.find_by_slug("proj", "anon-attempt"))
+  })
+
+  test("returns 401 JSON when the X-Api-Key header is wrong", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "Wrong key", "body_md": "x"}, "nope")
+    assert_eq(res_status(response), 401)
+    assert_contains(res_body(response), "Invalid or missing X-Api-Key")
+    assert_null(Task.find_by_slug("proj", "wrong-key"))
+  })
+
+  test("returns 401 JSON when the server has no api_key configured", fn() {
+    Setting.delete_all()
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "Server unset", "body_md": "x"}, "anything")
+    assert_eq(res_status(response), 401)
+    assert_contains(res_body(response), "not configured")
+  })
+
+  test("returns 422 JSON when title is empty AND no `# heading` is in body_md", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "", "body_md": "no heading here, just text"})
+    assert_eq(res_status(response), 422)
+    assert_contains(res_body(response), "title is required")
+  })
+
+  test("returns 404 JSON when the project does not exist", fn() {
+    response = _tq_api_post("/api/projects/no-such-proj/tasks", {"title": "Ghost project", "body_md": "x"})
+    assert_eq(res_status(response), 404)
+    assert_contains(res_body(response), "Unknown project")
+  })
+
+  test("appends -2 / -3 / … on slug collisions across repeated submissions", fn() {
+    r1 = _tq_api_post("/api/projects/proj/tasks", {"title": "Dup task", "body_md": "first"})
+    assert_eq(res_status(r1), 201)
+    r2 = _tq_api_post("/api/projects/proj/tasks", {"title": "Dup task", "body_md": "second"})
+    assert_eq(res_status(r2), 201)
+    assert_not_null(Task.find_by_slug("proj", "dup-task"))
+    assert_not_null(Task.find_by_slug("proj", "dup-task-2"))
+  })
+
+  test("validates the optional `model` field against the allowlist", fn() {
+    response = _tq_api_post(
+      "/api/projects/proj/tasks",
+      {"title": "Picked model", "body_md": "x", "model": "claude-opus-4-7"}
+    )
+    assert_eq(res_status(response), 201)
+    assert_eq(Task.find_by_slug("proj", "picked-model").model, "claude-opus-4-7")
+  })
+
+  test("rejects an unknown model by falling back to the canonical default", fn() {
+    # No slash → not an opencode shape; not in the Claude SDK allowlist
+    # either, so `Plan.allow_plan_model` rewrites it to the default.
+    response = _tq_api_post(
+      "/api/projects/proj/tasks",
+      {"title": "Bogus model", "body_md": "x", "model": "not-a-real-model"}
+    )
+    assert_eq(res_status(response), 201)
+    assert_eq(Task.find_by_slug("proj", "bogus-model").model, Plan.allow_plan_model("not-a-real-model"))
+  })
+
+  test("stamps the optional `author` field on the created task", fn() {
+    response = _tq_api_post(
+      "/api/projects/proj/tasks",
+      {"title": "Author stamp", "body_md": "x", "author": "opencode@bot"}
+    )
+    assert_eq(res_status(response), 201)
+    assert_eq(Task.find_by_slug("proj", "author-stamp").author, "opencode@bot")
+  })
+
+  test("defaults author to `agent` when the field is omitted", fn() {
+    response = _tq_api_post("/api/projects/proj/tasks", {"title": "No author", "body_md": "x"})
+    assert_eq(res_status(response), 201)
+    assert_eq(Task.find_by_slug("proj", "no-author").author, "agent")
+  })
+})
